@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brutalusine</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23EFE5D3'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%232E1C70'/%3E%3Ccircle cx='8' cy='8' r='2.5' fill='%23FFC24A'/%3E%3C/svg%3E">
+</head>
+<body>
+  <canvas id="game" aria-label="Brutalusine"></canvas>
+  <div id="tilt-top" class="tilt"></div>
+  <div id="tilt-bottom" class="tilt"></div>
+
+  <div id="hud" hidden>
+    <section id="quota" class="slab" aria-live="polite"></section>
+    <section id="topbar"></section>
+    <section id="stock" class="slab"></section>
+    <section id="alerts"></section>
+    <section id="panel" class="slab" hidden></section>
+    <nav id="buildbar" aria-label="Construction"></nav>
+    <div id="hint"></div>
+    <div id="toast" role="status"></div>
+    <div id="banner" class="slab" hidden></div>
+  </div>
+
+  <div id="codex" class="overlay" hidden>
+    <div class="slab sheet">
+      <header><h2>Atlas</h2><input id="codex-search" type="search" placeholder="Chercher un objet, un bâtiment, une réaction…" aria-label="Chercher dans l’Atlas"><button class="x" data-close="codex" aria-label="Fermer">✕</button></header>
+      <div class="cols"><div id="codex-list"></div><div id="codex-entry"><p class="meta">Tout ce que tu as découvert est ici. Chaque objet dit d’où il vient et à quoi il sert.</p></div></div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay" hidden>
+    <div class="slab sheet narrow">
+      <header><h2>Pause</h2><button class="x" data-menu="resume" aria-label="Reprendre">✕</button></header>
+      <div class="stack">
+        <button class="big" data-menu="resume">Reprendre</button>
+        <button class="big" data-menu="save">Sauvegarder</button>
+        <button class="big" data-menu="load">Charger la sauvegarde</button>
+        <button class="big" data-menu="new">Nouvelle planète</button>
+      </div>
+      <div class="eyebrow">Options</div>
+      <label class="opt">Volume <input id="opt-volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+      <label class="opt"><input id="opt-tilt" type="checkbox" checked> Effet maquette (flou des bords)</label>
+      <div class="eyebrow">Bâtisseurs</div>
+      <ul id="players"></ul>
+      <p class="meta">Coop locale : appuyez sur <b>A</b> sur une manette pour rejoindre, <b>Select</b> pour partir.</p>
+      <div class="eyebrow">Commandes</div>
+      <table class="keys">
+        <tr><td>ZQSD / flèches</td><td>Se déplacer</td><td>Stick gauche</td></tr>
+        <tr><td>Clic gauche (glisser)</td><td>Poser · inspecter</td><td>A</td></tr>
+        <tr><td>Clic droit (glisser)</td><td>Démolir (remboursé)</td><td>B</td></tr>
+        <tr><td>R</td><td>Pivoter</td><td>X</td></tr>
+        <tr><td>E (pipette)</td><td>Copier ce qui est sous le curseur</td><td>Y</td></tr>
+        <tr><td>F (maintenir)</td><td>Défricher la canopée</td><td>LT</td></tr>
+        <tr><td>1…9, 0</td><td>Choisir un bâtiment</td><td>LB / RB</td></tr>
+        <tr><td>Molette · M</td><td>Zoom · vue d’ensemble</td><td>Croix ↑ ↓</td></tr>
+        <tr><td>Ctrl+Z</td><td>Annuler le dernier geste</td><td></td></tr>
+        <tr><td>Tab</td><td>Atlas</td><td></td></tr>
+        <tr><td>Échap</td><td>Lâcher l’outil · pause</td><td>Start</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div id="title" class="overlay">
+    <div class="titlecard">
+      <div class="eyebrow">Une usine d’os dans une jungle qui respire</div>
+      <h1>BRUTALUSINE</h1>
+      <p>Rien ne se perd : chaque réaction est une vraie équation. La dalle est ta fondation, ton réseau et ta frontière. Le soleil tourne, les ombres aussi. Et la jungle répond.</p>
+      <div class="stack row">
+        <button class="big" id="btn-continue" hidden>Continuer</button>
+        <button class="big" id="btn-new">Se poser</button>
+      </div>
+      <p class="meta">Clavier + souris, et jusqu’à 3 manettes pour jouer à plusieurs sur le même écran.</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

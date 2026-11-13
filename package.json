@@ -1,0 +1,23 @@
+{
+  "name": "brutalusine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Brutalusine — une usine d'os dans une jungle qui respire. Jeu d'automatisation vue du dessus, coop local.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/inter": "^5.3.0"
+  }
+}
