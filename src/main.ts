@@ -1,360 +1,355 @@
-// Brutalusine — boucle principale : entrées des joueurs, simulation à pas fixe, rendu, interface, son.
+// Brutalusine — boucle principale : entrées, simulation à pas fixe, scène 3D, interface, son.
+// Prise en main : la souris fait tout. Clic = poser ou inspecter, glisser = tracer ou déplacer la vue.
 
 import './ui/style.css';
-import { B, BUILD_BAR, BELT_SPEED, TILE_U, DX, DY, type Dir } from './sim/data';
-import { Game, type PlaceResult } from './sim/game';
+import { B, BUILDINGS, DEPOSITS, DX, DY, ITEMS, R, type Dir, type Place, type Step } from './sim/data';
+import { Game } from './sim/game';
 import type { Ent } from './sim/ent';
-import { GROUND_WATER } from './sim/world';
 import { serialize, deserialize, writeSave, readSave } from './sim/save';
-import { Renderer, type Camera, type PlayerView, type Ring, type View } from './render/renderer';
-import { PAL } from './render/terrain';
+import { Scene3D, type FxRing } from './render/scene';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
 
 interface UndoOp { type: 'place' | 'remove'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 
-const COLORS = ['#FF5A1F', '#3FD0FF', '#B9F24A', '#F0559A'];
+const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
+const MIN_DIST = 12, MAX_DIST = 80;
 
-class Player implements PlayerView {
-  x = 0.5; y = 3.6; vx = 0; vy = 0; fx = 0; fy = 1;
-  tool: string | null = null; rot = 0; cx = 0; cy = 5;
-  aimX = 0; aimY = 2;
+/** Un bâtisseur : la souris (id 0) ou une manette. */
+class Actor {
+  tool: string | null = null;
+  rot = 0;
+  cellX = 0; cellY = 4; originX = 0; originY = 4;
+  ok = false; reason = '';
   dragLast: [number, number] | null = null;
-  removing = false; clearing = false; lastRemove = '';
+  gesture: UndoOp[] | null = null;
+  undo: UndoOp[][] = [];
+  lastRemove = '';
   recipeMem: Record<string, string> = {};
   filterMem = -1;
-  undo: UndoOp[][] = [];
-  gesture: UndoOp[] | null = null;
-  cam: Camera = { x: 0.5, y: 2, zoom: 34 };
-  ghost: PlaceResult | null = null; inReach = true;
-  ox = 0; oy = 0;                       // origine de l'empreinte de l'outil
+  x = 0.5; y = 5.5;             // curseur (manettes)
   prev: boolean[] = [];
   constructor(public id: number, public pad: number | null) {}
-  get color(): string { return COLORS[this.id % 4]; }
 }
 
 class App {
   game: Game;
-  renderer: Renderer;
+  scene: Scene3D;
   hud: Hud;
   audio = new AudioEngine();
-  players: Player[] = [new Player(0, null)];
+  actors: Actor[] = [new Actor(0, null)];
   keys = new Set<string>();
-  pressed = new Set<string>();
-  mouse = { x: 0, y: 0, left: false, right: false, leftDown: false, leftUp: false, rightUp: false };
-  zoom = 34; zoomBack = 34;
-  rings: Ring[] = [];
+  cam = { x: 0.5, y: 1.5, dist: 30 };
+  fly: { x: number; y: number } | null = null;
+  mouse = { x: 0, y: 0, over: false, left: false, right: false, middle: false, pressX: 0, pressY: 0, panning: false, anchor: { x: 0, y: 0 } };
+  hover: Ent | null = null;
+  rings: FxRing[] = [];
   time = 0; frame = 0; acc = 0; last = performance.now();
-  started = false; paused = false;
+  started = false; paused = false; tilt = true;
   hudTimer = 0; saveTimer = 0;
   canvas = document.getElementById('game') as HTMLCanvasElement;
 
   constructor() {
     this.game = new Game((Math.random() * 1e9) | 0);
-    this.renderer = new Renderer(this.canvas);
+    this.scene = new Scene3D(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
-      selectTool: (k) => { this.players[0].tool = k; this.audio.ui(); },
-      currentTool: () => this.players[0].tool,
-      setRecipe: (e, key) => { this.game.setRecipe(e, this.game.quota >= 0 ? (awaitRecipe(key)) : null); this.players[0].recipeMem[e.def.key] = key; this.audio.ui(); },
-      setFilter: (e, id) => { e.filter = id; this.players[0].filterMem = id; this.audio.ui(); },
+      tool: () => this.actors[0].tool,
+      selectTool: (k) => { this.actors[0].tool = k; this.hud.select(null); this.audio.ui(); },
+      stepDone: (s) => this.stepDone(s),
+      locate: (p) => this.locate(p),
+      setRecipe: (e, key) => { this.game.setRecipe(e, R[key]); this.actors[0].recipeMem[e.def.key] = key; this.audio.ui(); },
+      setFilter: (e, id) => { e.filter = id; this.actors[0].filterMem = id; this.game.version++; this.audio.ui(); },
       buyUpgrade: (k) => { if (this.game.buyUpgrade(k)) this.audio.quota(); },
-      ping: (list) => { for (const e of list) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: PAL.gold, size: 3, dur: 1.4 }); if (list[0]) this.hud.toast(`${list.length} à voir — suis les ondes dorées`); },
+      ping: (list) => {
+        for (const e of list.slice(0, 6)) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: '#ffc24a', size: 4, dur: 1.6 });
+        if (list[0]) this.fly = { x: list[0].cx, y: list[0].cy };
+      },
       menu: (a, v) => this.menu(a, v),
-      playerLines: () => this.players.map((p) => `<b style="color:${p.color};-webkit-text-stroke:.5px #1B1446">●</b> ${NAMES[p.id % 4]} — ${p.pad === null ? 'clavier + souris' : `manette ${p.pad + 1}`}`),
+      playerLines: () => this.actors.map((p) => `<b style="color:${COLORS[p.id % 4]}">■</b> ${NAMES[p.id % 4]} — ${p.pad === null ? 'souris et clavier' : `manette ${p.pad + 1}`}`),
     });
     this.bind();
-    this.resize();
-    void readSave('auto').then((s) => { if (s) document.getElementById('btn-continue')!.hidden = false; });
+    void readSave('auto').then((s) => { if (s) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
     requestAnimationFrame(() => this.loop());
   }
 
   // ================================================================ entrées
   private bind(): void {
-    window.addEventListener('resize', () => this.resize());
-    window.addEventListener('keydown', (ev) => {
-      const typing = (ev.target as HTMLElement).tagName === 'INPUT';
-      if (ev.code === 'Escape') { this.escape(); return; }
-      if (typing) return;
-      if (ev.code === 'Tab') { ev.preventDefault(); if (this.started) { if (this.hud.codexOpen) this.hud.closeCodex(); else this.hud.openCodex(); } return; }
-      if (ev.ctrlKey && ev.code === 'KeyZ') { ev.preventDefault(); this.undo(this.players[0]); return; }
-      if (ev.ctrlKey || ev.metaKey) return;
-      if (!this.keys.has(ev.code)) this.pressed.add(ev.code);
-      this.keys.add(ev.code);
-      if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
-    });
+    window.addEventListener('resize', () => this.scene.resize());
+    window.addEventListener('keydown', (ev) => this.onKey(ev));
     window.addEventListener('keyup', (ev) => this.keys.delete(ev.code));
-    window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = false; });
-    const cv = this.canvas;
-    cv.addEventListener('mousemove', (ev) => { this.mouse.x = ev.clientX; this.mouse.y = ev.clientY; });
+    window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = this.mouse.middle = false; });
+    const cv = this.canvas, m = this.mouse, a = this.actors[0];
+    cv.addEventListener('mouseenter', () => { m.over = true; });
+    cv.addEventListener('mouseleave', () => { m.over = false; });
+    cv.addEventListener('mousemove', (ev) => {
+      m.x = ev.clientX; m.y = ev.clientY; m.over = true;
+      if (!this.started) return;
+      this.aim(a);
+      if (m.middle || (m.left && !a.tool)) {
+        if (!m.panning && Math.hypot(m.x - m.pressX, m.y - m.pressY) > 6) m.panning = true;
+        if (m.panning) {                       // le point saisi reste sous le curseur
+          const p = this.scene.pick(m.x, m.y);
+          this.cam.x += m.anchor.x - p.x; this.cam.y += m.anchor.y - p.y; this.fly = null;
+          this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
+        }
+      } else if (m.left && a.tool === 'demolir') this.removeAt(a);
+      else if (m.left && a.tool && a.gesture && (!a.dragLast || a.dragLast[0] !== a.cellX || a.dragLast[1] !== a.cellY)) this.tryPlace(a, false);
+      else if (m.right && a.gesture) this.removeAt(a);
+    });
     cv.addEventListener('mousedown', (ev) => {
       this.audio.start();
-      this.mouse.x = ev.clientX; this.mouse.y = ev.clientY;
-      if (ev.button === 0) { this.mouse.left = true; this.mouse.leftDown = true; }
-      if (ev.button === 2) this.mouse.right = true;
+      m.x = ev.clientX; m.y = ev.clientY;
+      if (!this.started || this.paused) return;
+      this.aim(a);
+      m.pressX = m.x; m.pressY = m.y; m.panning = false; m.anchor = this.scene.pick(m.x, m.y);
+      if (ev.button === 0) {
+        m.left = true;
+        if (a.tool === 'demolir') { a.gesture = []; a.lastRemove = ''; this.removeAt(a); }
+        else if (a.tool) { a.gesture = []; a.dragLast = null; this.tryPlace(a, true); }
+      } else if (ev.button === 2) {
+        m.right = true;
+        if (a.tool) { a.tool = null; this.audio.ui(); }
+        else { a.gesture = []; a.lastRemove = ''; this.removeAt(a); }
+      } else if (ev.button === 1) { m.middle = true; ev.preventDefault(); }
     });
     window.addEventListener('mouseup', (ev) => {
-      if (ev.button === 0 && this.mouse.left) { this.mouse.left = false; this.mouse.leftUp = true; }
-      if (ev.button === 2 && this.mouse.right) { this.mouse.right = false; this.mouse.rightUp = true; }
+      if (ev.button === 0 && m.left) {
+        m.left = false;
+        if (a.tool) this.endGesture(a);
+        else if (!m.panning && this.started && !this.paused) {
+          const e = this.hover && this.hover.def.kind !== 'belt' && this.hover.def.kind !== 'bridge' && this.hover.def.kind !== 'deco' ? this.hover : null;
+          this.hud.select(e); if (e) this.audio.ui();
+        }
+      }
+      if (ev.button === 2 && m.right) { m.right = false; this.endGesture(a); }
+      if (ev.button === 1) m.middle = false;
+      m.panning = false;
     });
     cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
-    cv.addEventListener('wheel', (ev) => { ev.preventDefault(); this.zoom = Math.max(9, Math.min(72, this.zoom * Math.exp(-ev.deltaY * 0.0012))); }, { passive: false });
-    document.getElementById('btn-new')!.addEventListener('click', () => this.begin());
-    document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then(() => this.begin()); });
+    cv.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      if (!this.started) return;
+      // zoom vers le point visé
+      const before = this.scene.pick(m.x, m.y);
+      this.cam.dist = Math.max(MIN_DIST, Math.min(MAX_DIST, this.cam.dist * Math.exp(ev.deltaY * 0.0011)));
+      this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
+      const after = this.scene.pick(m.x, m.y);
+      this.cam.x += before.x - after.x; this.cam.y += before.y - after.y;
+    }, { passive: false });
+    document.getElementById('btn-new')!.addEventListener('click', () => this.begin(true));
+    document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then(() => this.begin(false)); });
   }
 
-  private begin(): void {
+  private onKey(ev: KeyboardEvent): void {
+    const typing = (ev.target as HTMLElement).tagName === 'INPUT';
+    if (ev.code === 'Escape') { this.escape(); return; }
+    if (typing || !this.started) return;
+    const a = this.actors[0], g = this.game;
+    if (ev.ctrlKey && ev.code === 'KeyZ') { ev.preventDefault(); this.undo(a); return; }
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.code.startsWith('Arrow') || ev.code === 'Space' || ev.code === 'Tab') ev.preventDefault();
+    if (this.keys.has(ev.code)) return;
+    this.keys.add(ev.code);
+    switch (ev.code) {
+      case 'KeyR': a.rot = (a.rot + 1) & 3; this.aim(a); this.audio.ui(); break;
+      case 'KeyE': this.pipette(a); break;
+      case 'KeyX': a.tool = a.tool === 'demolir' ? null : 'demolir'; this.hud.select(null); this.audio.ui(); break;
+      case 'Tab': this.hud.nextCategory(g, ev.shiftKey ? -1 : 1); this.audio.ui(); break;
+      case 'KeyG': if (this.hud.codexOpen) this.hud.closeCodex(); else this.hud.openCodex(); break;
+      case 'KeyH': this.hud.showGuide(!this.hud.guideOpen); break;
+      case 'Space': this.paused = !this.paused; this.hud.toast(this.paused ? 'Pause — Espace pour reprendre' : 'Reprise'); break;
+      default:
+        if (ev.code.startsWith('Digit')) {
+          const key = this.hud.toolsInCategory(g)[+ev.code.slice(5) - 1];
+          if (key) { a.tool = a.tool === key ? null : key; this.hud.select(null); this.audio.ui(); }
+        }
+    }
+  }
+
+  private begin(fresh: boolean): void {
     this.started = true;
-    for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; p.cam.x = p.x; p.cam.y = p.y; }
+    this.cam = { x: 0.5, y: 2.5, dist: 30 };
     document.getElementById('title')!.hidden = true;
     document.getElementById('hud')!.hidden = false;
     this.audio.start();
     this.hud.update(this.game);
+    let seen = false;
+    try { seen = localStorage.getItem('brutalusine.guide') === '1'; localStorage.setItem('brutalusine.guide', '1'); } catch { /* stockage indisponible */ }
+    if (fresh && !seen) this.hud.showGuide(true);
   }
 
   private escape(): void {
-    const p = this.players[0];
+    const a = this.actors[0];
     if (!this.started) return;
-    if (this.hud.codexOpen) this.hud.closeCodex();
+    if (this.hud.guideOpen) this.hud.showGuide(false);
+    else if (this.hud.codexOpen) this.hud.closeCodex();
     else if (this.hud.menuOpen) { this.hud.toggleMenu(false); this.paused = false; }
-    else if (p.tool) p.tool = null;
+    else if (a.tool) a.tool = null;
     else if (this.hud.selected) this.hud.select(null);
-    else { this.paused = this.hud.toggleMenu(true); }
+    else this.paused = this.hud.toggleMenu(true);
   }
 
   private menu(action: string, value?: string): void {
     switch (action) {
       case 'resume': this.hud.toggleMenu(false); this.paused = false; break;
+      case 'pause': this.paused = this.hud.toggleMenu(true); break;
+      case 'guide': this.hud.toggleMenu(false); this.paused = false; this.hud.showGuide(true); break;
+      case 'atlas': this.hud.openCodex(); break;
       case 'save': void this.save().then(() => this.hud.toast('Partie sauvegardée')); break;
       case 'load': void this.load().then((ok) => { this.hud.toast(ok ? 'Partie chargée' : 'Aucune sauvegarde'); if (ok) { this.hud.toggleMenu(false); this.paused = false; } }); break;
       case 'new':
         this.game = new Game((Math.random() * 1e9) | 0); this.resetWorld();
         this.hud.toggleMenu(false); this.paused = false; this.hud.toast('Nouvelle planète');
         break;
-      case 'volume': this.audio.setVolume(parseFloat(value ?? '0.7')); break;
-      case 'tilt': document.body.classList.toggle('no-tilt', value !== 'true'); break;
+      case 'music': this.audio.setMusic(parseFloat(value ?? '0.5')); break;
+      case 'sfx': this.audio.setSfx(parseFloat(value ?? '0.6')); break;
+      case 'tilt': this.tilt = value === 'true'; break;
       case 'codex-back': this.hud.codexBack(); break;
-      case 'savoir': this.hud.select(this.game.hub); break;
+      case 'savoir': this.hud.select(this.game.hub); this.fly = { x: this.game.hub.cx, y: this.game.hub.cy }; break;
     }
   }
 
   private resetWorld(): void {
-    this.renderer.terrain.clear();
+    this.scene.reset();
     this.hud.select(null);
     this.rings.length = 0;
-    for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; p.undo.length = 0; p.tool = null; p.cam.x = p.x; p.cam.y = p.y; }
+    this.cam = { x: 0.5, y: 2.5, dist: 30 };
+    for (const a of this.actors) { a.undo.length = 0; a.tool = null; a.gesture = null; }
   }
 
-  async save(): Promise<void> {
-    await writeSave('auto', serialize(this.game, { players: this.players.map((p) => ({ x: p.x, y: p.y })) }));
-  }
+  async save(): Promise<void> { await writeSave('auto', serialize(this.game, { cam: this.cam })); }
 
   async load(): Promise<boolean> {
-    const d = await readSave('auto');
+    const d = await readSave('auto').catch(() => null);
     if (!d) return false;
     this.game = deserialize(d);
     this.resetWorld();
-    const ex = d.extra as { players?: { x: number; y: number }[] } | undefined;
-    ex?.players?.forEach((s, i) => { const p = this.players[i]; if (p) { p.x = s.x; p.y = s.y; p.cam.x = s.x; p.cam.y = s.y; } });
+    const ex = d.extra as { cam?: { x: number; y: number; dist: number } } | undefined;
+    if (ex?.cam) this.cam = { ...ex.cam };
     return true;
   }
 
-  private resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.canvas.width = Math.round(window.innerWidth * dpr);
-    this.canvas.height = Math.round(window.innerHeight * dpr);
+  // ============================================================ tutoriel
+  private stepDone(s: Step): boolean {
+    const g = this.game;
+    if (s.t === 'tool') return this.actors[0].tool === s.key || g.count(s.key) > 0;
+    if (s.t === 'build') return g.count(s.key) > 0;
+    if (s.t === 'link') return g.tickers.some((e) => e.def.key === s.key && (e.outT.path !== null || e.outT.ent !== null));
+    return g.made[s.item] === 1;
   }
 
-  // ================================================================ joueurs
-  private pads(): (Gamepad | null)[] { return navigator.getGamepads ? Array.from(navigator.getGamepads()) : []; }
-
-  private joinLeave(): void {
-    const pads = this.pads();
-    for (const gp of pads) {
-      if (!gp) continue;
-      const owner = this.players.find((p) => p.pad === gp.index);
-      if (!owner && gp.buttons[0]?.pressed && this.players.length < 4 && this.started) {
-        const used = new Set(this.players.map((p) => p.id));
-        let id = 1; while (used.has(id)) id++;
-        const p = new Player(id, gp.index);
-        p.x = this.players[0].x + 1; p.y = this.players[0].y; p.cam = { ...this.players[0].cam };
-        p.prev = gp.buttons.map((b) => b.pressed);
-        this.players.push(p);
-        this.audio.start(); this.audio.quota();
-        this.hud.toast(`${NAMES[id % 4]} rejoint le chantier`);
-      } else if (owner && gp.buttons[8]?.pressed && owner.pad !== null) {
-        this.players = this.players.filter((p) => p !== owner);
-        this.hud.toast(`${NAMES[owner.id % 4]} quitte le chantier`);
-      }
-    }
-    this.players = this.players.filter((p) => p.pad === null || pads[p.pad]);
+  private placeOf(p: Place): { x: number; y: number } {
+    const w = this.game.world;
+    if (p === 'eau') return w.lake;
+    if (p === 'eventail') return { x: w.firstTree.x + 1.5, y: w.firstTree.y + 1.5 };
+    const type = DEPOSITS.findIndex((d) => d && ITEMS[d.item].key === p);
+    const b = w.blobs.find((q) => q.type === type) ?? w.blobs[0];
+    return { x: b.x + 0.5, y: b.y + 0.5 };
   }
 
-  private updatePlayer(p: Player, dt: number): void {
-    const g = this.game, w = g.world;
-    const W = window.innerWidth, H = window.innerHeight;
-    let mx = 0, my = 0, primary = false, primaryDown = false, primaryUp = false, secondary = false, secondaryUp = false;
-    let rotate = false, pipette = false, clear = false, cycle = 0, sprint = false;
-    if (p.pad === null) {
-      const k = this.keys, pr = this.pressed;
-      if (k.has('KeyW') || k.has('ArrowUp')) my -= 1;
-      if (k.has('KeyS') || k.has('ArrowDown')) my += 1;
-      if (k.has('KeyA') || k.has('ArrowLeft')) mx -= 1;
-      if (k.has('KeyD') || k.has('ArrowRight')) mx += 1;
-      sprint = k.has('ShiftLeft');
-      primary = this.mouse.left; primaryDown = this.mouse.leftDown; primaryUp = this.mouse.leftUp;
-      secondary = this.mouse.right; secondaryUp = this.mouse.rightUp;
-      rotate = pr.has('KeyR'); pipette = pr.has('KeyE'); clear = k.has('KeyF');
-      const wx = p.cam.x + (this.mouse.x - W / 2) / p.cam.zoom, wy = p.cam.y + (this.mouse.y - H / 2) / p.cam.zoom;
-      p.cx = Math.floor(wx); p.cy = Math.floor(wy);
-      const tools = BUILD_BAR.filter((key) => g.unlocked(B[key]));
-      for (let i = 0; i < 10; i++) if (pr.has(i === 9 ? 'Digit0' : `Digit${i + 1}`) && tools[i]) { p.tool = p.tool === tools[i] ? null : tools[i]; this.audio.ui(); }
-      if (pr.has('KeyM')) { if (this.zoom > 13) { this.zoomBack = this.zoom; this.zoom = 11; } else this.zoom = this.zoomBack; }
-    } else {
-      const gp = this.pads()[p.pad];
-      if (!gp) return;
-      const dz = (v: number) => (Math.abs(v) < 0.22 ? 0 : v);
-      mx = dz(gp.axes[0] ?? 0); my = dz(gp.axes[1] ?? 0);
-      const ax = dz(gp.axes[2] ?? 0), ay = dz(gp.axes[3] ?? 0);
-      p.aimX += ax * dt * 16; p.aimY += ay * dt * 16;
-      const al = Math.hypot(p.aimX, p.aimY), maxAim = g.reach - 1;
-      if (al > maxAim) { p.aimX *= maxAim / al; p.aimY *= maxAim / al; }
-      p.cx = Math.floor(p.x + p.aimX); p.cy = Math.floor(p.y + p.aimY);
-      const b = gp.buttons.map((x) => x.pressed), was = p.prev;
-      const down = (i: number) => b[i] && !was[i], up = (i: number) => !b[i] && was[i];
-      primary = b[0]; primaryDown = down(0); primaryUp = up(0);
-      secondary = b[1]; secondaryUp = up(1);
-      rotate = down(2); pipette = down(3); clear = b[6]; sprint = b[7];
-      cycle = down(5) ? 1 : down(4) ? -1 : 0;
-      if (down(12)) this.zoom = Math.min(72, this.zoom * 1.25);
-      if (down(13)) this.zoom = Math.max(9, this.zoom / 1.25);
-      if (down(9)) { if (this.hud.menuOpen) this.menu('resume'); else this.paused = this.hud.toggleMenu(true); }
-      p.prev = b;
-    }
-    if (this.paused) return;
-
-    // --- déplacement : la canopée freine, l'eau aussi, les convoyeurs emportent
-    const cellX = Math.floor(p.x), cellY = Math.floor(p.y);
-    const len = Math.hypot(mx, my);
-    if (len > 1) { mx /= len; my /= len; }
-    if (len > 0.1) { p.fx = mx / Math.max(len, 1e-6) * Math.min(1, len); p.fy = my / Math.max(len, 1e-6) * Math.min(1, len); const fl = Math.hypot(p.fx, p.fy); p.fx /= fl; p.fy /= fl; }
-    let speed = 8.5 * (sprint ? 1.5 : 1);
-    if (w.ground(cellX, cellY) === GROUND_WATER) speed *= 0.45;
-    else if (!w.slab(cellX, cellY)) speed *= 1 - 0.5 * Math.min(1, w.canopy(cellX, cellY) / 200);
-    let tx = mx * speed, ty = my * speed;
-    const under = g.entAt(cellX, cellY);
-    if (under && under.def.kind === 'belt') {
-      const bs = (BELT_SPEED * g.upgradeMult('convoyeurs') * 60) / TILE_U;
-      tx += DX[under.rot] * bs; ty += DY[under.rot] * bs;
-    }
-    const a = Math.min(1, dt * 14);
-    p.vx += (tx - p.vx) * a; p.vy += (ty - p.vy) * a;
-    p.x += p.vx * dt; p.y += p.vy * dt;
-    if (this.frame % 30 === p.id) w.ensureArea(Math.floor(p.x) - 44, Math.floor(p.y) - 34, Math.floor(p.x) + 44, Math.floor(p.y) + 34);
-
-    // --- outil
-    if (cycle) {
-      const tools: (string | null)[] = [null, ...BUILD_BAR.filter((key) => g.unlocked(B[key]))];
-      p.tool = tools[(tools.indexOf(p.tool) + cycle + tools.length) % tools.length];
-      this.audio.ui();
-      if (p.tool) this.hud.toast(`${NAMES[p.id % 4]} : ${B[p.tool].name}`);
-    }
-    if (rotate) { p.rot = (p.rot + 1) & 3; this.audio.ui(); }
-    if (pipette) {
-      const e = g.entAt(p.cx, p.cy);
-      if (e && BUILD_BAR.includes(e.def.key)) {
-        p.tool = e.def.key; p.rot = e.rot;
-        if (e.recipe) p.recipeMem[e.def.key] = e.recipe.key;
-        if (e.def.kind === 'splitter') p.filterMem = e.filter;
-      } else p.tool = !e && w.slab(p.cx, p.cy) ? 'dalle' : null;
-      this.audio.ui();
-    }
-    p.clearing = clear;
-    p.removing = secondary;
-    const reach = g.reach;
-    p.inReach = Math.hypot(p.cx + 0.5 - p.x, p.cy + 0.5 - p.y) <= reach;
-    if (p.tool) {
-      const def = B[p.tool];
-      const [fw, fh] = g.footprint(def, p.rot);
-      p.ox = p.cx - ((fw - 1) >> 1); p.oy = p.cy - ((fh - 1) >> 1);
-      if (def.kind === 'ring') { const t = g.entAt(p.cx, p.cy); if (t && t.def.kind === 'tree') { p.ox = t.x; p.oy = t.y; } }
-      p.ghost = g.canPlace(def, p.ox, p.oy, p.rot);
-    } else p.ghost = null;
-
-    if (clear && p.inReach) {
-      let cut = 0;
-      for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) if (i * i + j * j <= 3) cut += g.clearCanopy(p.cx + i, p.cy + j, 5);
-      if (cut > 0 && this.frame % 8 === 0) this.audio.cut(0.6, 0);
-      return;
-    }
-    if (primaryDown) {
-      if (p.tool) { p.gesture = []; p.dragLast = null; this.tryPlace(p, true); }
-      else { const e = g.entAt(p.cx, p.cy); this.hud.select(e); if (e) this.audio.ui(); }
-    } else if (primary && p.tool && p.gesture && (!p.dragLast || p.dragLast[0] !== p.cx || p.dragLast[1] !== p.cy)) this.tryPlace(p, false);
-    if (primaryUp && p.gesture) { if (p.gesture.length) p.undo.push(p.gesture); p.gesture = null; p.dragLast = null; }
-
-    if (secondary) {
-      const key = `${p.cx},${p.cy}`;
-      if (key !== p.lastRemove && p.inReach) {
-        p.lastRemove = key;
-        if (!p.gesture) p.gesture = [];
-        const info = g.remove(p.cx, p.cy);
-        if (info) p.gesture.push({ type: 'remove', ...info });
-      }
-    }
-    if (secondaryUp) { p.lastRemove = ''; if (p.gesture && !primary) { if (p.gesture.length) p.undo.push(p.gesture); p.gesture = null; } }
+  private locate(p: Place): void {
+    const t = this.placeOf(p);
+    this.fly = t;
+    this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.4, color: '#ffa040', size: 6, dur: 2 });
   }
 
-  private deny(reason: string): void { this.audio.deny(); this.hud.toast(reason); }
+  /** Où pointer la flèche du tutoriel pour l'étape en cours. */
+  private marker(): { x: number; y: number } | null {
+    const g = this.game, s = this.hud.currentStep(g);
+    if (!s) return null;
+    if ((s.t === 'tool' || s.t === 'build') && s.key === 'puits' && g.quota === 0) return this.placeOf('hematite');
+    if (s.t === 'build' && s.go) return this.placeOf(s.go);
+    if (s.t === 'link') {
+      const e = g.tickers.find((x) => x.def.key === s.key && !x.outT.path && !x.outT.ent);
+      if (!e) return null;
+      const d = e.rot, mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1);
+      const cell = d === 0 ? [e.x + e.w, my] : d === 1 ? [mx, e.y + e.h] : d === 2 ? [e.x - 1, my] : [mx, e.y - 1];
+      return { x: cell[0] + 0.5, y: cell[1] + 0.5 };
+    }
+    return null;
+  }
 
-  private placeOne(p: Player, key: string, x: number, y: number, rot: number): PlaceResult {
+  // ============================================================== actions
+  /** Met à jour la case visée et l'aperçu de construction. */
+  private aim(a: Actor): void {
+    const g = this.game;
+    if (a.pad === null) { const p = this.scene.pick(this.mouse.x, this.mouse.y); a.cellX = Math.floor(p.x); a.cellY = Math.floor(p.y); }
+    else { a.cellX = Math.floor(a.x); a.cellY = Math.floor(a.y); }
+    if (a.tool && a.tool !== 'demolir') {
+      const def = B[a.tool];
+      const [fw, fh] = g.footprint(def, a.rot);
+      a.originX = a.cellX - ((fw - 1) >> 1); a.originY = a.cellY - ((fh - 1) >> 1);
+      if (def.kind === 'ring') { const t = g.entAt(a.cellX, a.cellY); if (t && t.def.kind === 'tree') { a.originX = t.x; a.originY = t.y; } }
+      const res = g.canPlace(def, a.originX, a.originY, a.rot);
+      a.ok = res.ok; a.reason = res.reason;
+    }
+  }
+
+  private placeOne(a: Actor, key: string, x: number, y: number, rot: number): boolean {
     const g = this.game;
     const existed = g.entAt(x, y) !== null || (key === 'dalle' && g.world.slab(x, y) === 1);
-    const res = g.place(key, x, y, rot, { recipe: p.recipeMem[key], filter: key === 'aiguillage' && p.filterMem >= 0 ? p.filterMem : undefined });
-    if (res.ok && !existed) p.gesture?.push({ type: 'place', key, x, y, rot });
-    return res;
+    const res = g.place(key, x, y, rot, { recipe: a.recipeMem[key], filter: key === 'trieur' && a.filterMem >= 0 ? a.filterMem : undefined });
+    if (res.ok && !existed) a.gesture?.push({ type: 'place', key, x, y, rot });
+    return res.ok;
   }
 
-  /** Taille la canopée sous une empreinte : construire dans la jungle, c'est s'y frayer un chemin. */
-  private hack(x: number, y: number, w: number, h: number): void {
-    let cut = 0;
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) cut += this.game.clearCanopy(x + i, y + j, 12);
-    if (cut > 0 && this.frame % 6 === 0) this.audio.cut(0.7, 0);
-  }
-
-  private tryPlace(p: Player, first: boolean): void {
+  private tryPlace(a: Actor, first: boolean): void {
     const g = this.game;
-    const def = B[p.tool!];
-    if (!p.inReach) { if (first) this.deny('Hors de portée — approche-toi'); return; }
-    if (def.kind === 'belt' && !first && p.dragLast) {
-      // le convoyeur suit le curseur, case par case
-      let [lx, ly] = p.dragLast;
+    const def = B[a.tool!];
+    if (def.kind === 'belt' && !first && a.dragLast) {
+      // le convoyeur suit le curseur, case par case, et s'oriente tout seul
+      let [lx, ly] = a.dragLast;
       let guard = 0;
-      while ((lx !== p.cx || ly !== p.cy) && guard++ < 64) {
-        const dx = p.cx - lx, dy = p.cy - ly;
+      while ((lx !== a.cellX || ly !== a.cellY) && guard++ < 80) {
+        const dx = a.cellX - lx, dy = a.cellY - ly;
         const dir = (Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3) as Dir;
         const nx = lx + DX[dir], ny = ly + DY[dir];
         const prev = g.entAt(lx, ly);
-        if (prev && prev.def.kind === 'belt') this.placeOne(p, 'convoyeur', lx, ly, dir);
-        const res = this.placeOne(p, 'convoyeur', nx, ny, dir);
-        if (!res.ok) { if (res.canopy) this.hack(nx, ny, 1, 1); break; }
-        lx = nx; ly = ny; p.rot = dir;
+        if (prev && prev.def.kind === 'belt') this.placeOne(a, 'convoyeur', lx, ly, dir);
+        const next = g.entAt(nx, ny);
+        if (next && next.def.kind !== 'belt') break;              // on s'arrête contre une machine : le flux y entre
+        if (!this.placeOne(a, 'convoyeur', nx, ny, dir)) break;
+        lx = nx; ly = ny; a.rot = dir;
       }
-      p.dragLast = [lx, ly];
+      a.dragLast = [lx, ly];
       return;
     }
-    const res = g.canPlace(def, p.ox, p.oy, p.rot);
-    if (!res.ok) {
-      // la canopée résiste : on taille, et on retentera à l'image suivante
-      if (res.canopy) { const [fw, fh] = g.footprint(def, p.rot); this.hack(p.ox, p.oy, fw, fh); return; }
-      if (first) this.deny(res.reason);
-    } else this.placeOne(p, def.key, p.ox, p.oy, p.rot);
-    p.dragLast = [p.cx, p.cy];
+    if (!first && def.kind !== 'slab' && def.kind !== 'belt' && (def.w > 1 || def.h > 1)) return;   // pas de pose en rafale pour les grands bâtiments
+    const res = g.canPlace(def, a.originX, a.originY, a.rot);
+    if (!res.ok) { if (first) { this.audio.deny(); this.hud.toast(res.reason); } }
+    else this.placeOne(a, def.key, a.originX, a.originY, a.rot);
+    a.dragLast = [a.cellX, a.cellY];
+    this.aim(a);
   }
 
-  private undo(p: Player): void {
-    const ops = p.undo.pop();
+  private removeAt(a: Actor): void {
+    const key = `${a.cellX},${a.cellY}`;
+    if (key === a.lastRemove || !a.gesture) return;
+    a.lastRemove = key;
+    const info = this.game.remove(a.cellX, a.cellY);
+    if (info) a.gesture.push({ type: 'remove', ...info });
+  }
+
+  private endGesture(a: Actor): void {
+    if (a.gesture?.length) a.undo.push(a.gesture);
+    a.gesture = null; a.dragLast = null; a.lastRemove = '';
+  }
+
+  private pipette(a: Actor): void {
+    const e = this.game.entAt(a.cellX, a.cellY);
+    if (e && e.def.cat) {
+      a.tool = e.def.key; a.rot = e.rot;
+      if (e.recipe) a.recipeMem[e.def.key] = e.recipe.key;
+      if (e.def.filter) a.filterMem = e.filter;
+      this.hud.select(null);
+    } else a.tool = null;
+    this.audio.ui();
+  }
+
+  private undo(a: Actor): void {
+    const ops = a.undo.pop();
     if (!ops) { this.hud.toast('Rien à annuler'); return; }
     const g = this.game;
     for (let i = ops.length - 1; i >= 0; i--) {
@@ -366,41 +361,59 @@ class App {
     this.hud.toast('Annulé');
   }
 
-  // ================================================================== vues
-  private views(dt: number): View[] {
-    const ps = this.players;
-    const dpr = this.canvas.width / window.innerWidth;
-    const W = this.canvas.width, H = this.canvas.height;
-    const k = Math.min(1, dt * 7);
-    const follow = (p: Player, x: number, y: number, zoom: number) => { p.cam.x += (x - p.cam.x) * k; p.cam.y += (y - p.cam.y) * k; p.cam.zoom += (zoom - p.cam.zoom) * Math.min(1, dt * 10); };
-    const dev = (c: Camera): Camera => ({ x: c.x, y: c.y, zoom: c.zoom * dpr });
-    if (ps.length === 1) { follow(ps[0], ps[0].x, ps[0].y, this.zoom); return [{ cam: dev(ps[0].cam), clip: null }]; }
-    if (ps.length === 2) {
-      const [a, b] = ps;
-      const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
-      const R = (0.27 * Math.min(window.innerWidth, window.innerHeight)) / this.zoom;   // en cases
-      if (dist <= 2 * R) {
-        follow(a, (a.x + b.x) / 2, (a.y + b.y) / 2, this.zoom); b.cam = { ...a.cam };
-        return [{ cam: dev(a.cam), clip: null }];
+  // ============================================================== manettes
+  private pads(): (Gamepad | null)[] { return navigator.getGamepads ? Array.from(navigator.getGamepads()) : []; }
+
+  private updatePads(dt: number): void {
+    const pads = this.pads(), g = this.game;
+    for (const gp of pads) {
+      if (!gp) continue;
+      const owner = this.actors.find((p) => p.pad === gp.index);
+      if (!owner && gp.buttons[0]?.pressed && this.actors.length < 4) {
+        const used = new Set(this.actors.map((p) => p.id));
+        let id = 1; while (used.has(id)) id++;
+        const p = new Actor(id, gp.index);
+        p.x = this.cam.x + id; p.y = this.cam.y; p.prev = gp.buttons.map((b) => b.pressed);
+        this.actors.push(p);
+        this.audio.start(); this.hud.toast(`${NAMES[id % 4]} rejoint le chantier`);
+      } else if (owner && gp.buttons[8]?.pressed) {
+        this.actors = this.actors.filter((p) => p !== owner);
+        this.hud.toast(`${NAMES[owner.id % 4]} quitte le chantier`);
       }
-      // écran partagé dynamique : la ligne de partage est perpendiculaire à l'axe entre les deux bâtisseurs
-      const ux = dx / dist, uy = dy / dist;
-      follow(a, a.x + ux * R, a.y + uy * R, this.zoom);
-      follow(b, b.x - ux * R, b.y - uy * R, this.zoom);
-      const cx = W / 2, cy = H / 2, L = W + H;
-      const half = (s: number): [number, number][] => [
-        [cx - uy * L, cy + ux * L], [cx + uy * L, cy - ux * L],
-        [cx + uy * L + ux * L * s, cy - ux * L + uy * L * s], [cx - uy * L + ux * L * s, cy + ux * L + uy * L * s],
-      ];
-      return [{ cam: dev(a.cam), clip: half(-1) }, { cam: dev(b.cam), clip: half(1) }];
     }
-    // trois ou quatre : une seule vue qui recule pour garder tout le monde à l'écran
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const p of ps) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-    const fit = Math.max(9, Math.min(this.zoom, window.innerWidth / (x1 - x0 + 14), window.innerHeight / (y1 - y0 + 12)));
-    follow(ps[0], (x0 + x1) / 2, (y0 + y1) / 2, fit);
-    for (const p of ps) p.cam = { ...ps[0].cam };
-    return [{ cam: dev(ps[0].cam), clip: null }];
+    this.actors = this.actors.filter((p) => p.pad === null || pads[p.pad]);
+    const b = this.scene.bounds;
+    for (const a of this.actors) {
+      if (a.pad === null) continue;
+      const gp = pads[a.pad]!;
+      const dz = (v: number) => (Math.abs(v) < 0.2 ? 0 : v);
+      const sp = this.cam.dist * 0.75;
+      a.x += dz(gp.axes[0] ?? 0) * sp * dt; a.y += dz(gp.axes[1] ?? 0) * sp * dt;
+      this.cam.x += dz(gp.axes[2] ?? 0) * sp * dt; this.cam.y += dz(gp.axes[3] ?? 0) * sp * dt;
+      a.x = Math.max(b.x0 + 8, Math.min(b.x1 - 8, a.x)); a.y = Math.max(b.y0 + 10, Math.min(b.y1 - 8, a.y));
+      const now = gp.buttons.map((x) => x.pressed), was = a.prev;
+      const down = (i: number) => now[i] && !was[i], up = (i: number) => !now[i] && was[i];
+      const moved = Math.floor(a.x) !== a.cellX || Math.floor(a.y) !== a.cellY;
+      this.aim(a);
+      if (down(2)) { a.rot = (a.rot + 1) & 3; this.aim(a); this.audio.ui(); }
+      if (down(3)) this.pipette(a);
+      if (down(4) || down(5)) {
+        const tools: (string | null)[] = [null, ...BUILDINGS.filter((d) => d.cat && g.unlocked(d)).map((d) => d.key)];
+        a.tool = tools[(tools.indexOf(a.tool) + (down(5) ? 1 : -1) + tools.length) % tools.length];
+        this.audio.ui(); this.hud.toast(`${NAMES[a.id % 4]} : ${a.tool ? B[a.tool].name : 'aucun outil'}`);
+        this.aim(a);
+      }
+      if (down(0) && a.tool) { a.gesture = []; a.dragLast = null; this.tryPlace(a, true); }
+      else if (now[0] && a.tool && a.gesture && moved) this.tryPlace(a, false);
+      if (up(0)) this.endGesture(a);
+      if (down(1)) { a.gesture = []; a.lastRemove = ''; }
+      if (now[1] && a.gesture) this.removeAt(a);
+      if (up(1)) this.endGesture(a);
+      if (down(12)) this.cam.dist = Math.max(MIN_DIST, this.cam.dist / 1.25);
+      if (down(13)) this.cam.dist = Math.min(MAX_DIST, this.cam.dist * 1.25);
+      if (down(9)) { if (this.hud.menuOpen) this.menu('resume'); else this.menu('pause'); }
+      a.prev = now;
+    }
   }
 
   // ================================================================ boucle
@@ -409,101 +422,111 @@ class App {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.time += dt; this.frame++;
-    const g = this.game;
+    const g = this.game, a = this.actors[0], m = this.mouse;
 
     if (this.started) {
-      this.joinLeave();
-      for (const p of this.players) this.updatePlayer(p, dt);
+      // déplacement de la vue au clavier
+      const k = this.keys;
+      let px = 0, py = 0;
+      if (k.has('KeyW') || k.has('ArrowUp')) py -= 1;
+      if (k.has('KeyS') || k.has('ArrowDown')) py += 1;
+      if (k.has('KeyA') || k.has('ArrowLeft')) px -= 1;
+      if (k.has('KeyD') || k.has('ArrowRight')) px += 1;
+      if (px || py) { const sp = this.cam.dist * 0.95 * dt / Math.hypot(px, py); this.cam.x += px * sp; this.cam.y += py * sp; this.fly = null; }
+      if (this.fly) {
+        this.cam.x += (this.fly.x - this.cam.x) * Math.min(1, dt * 5); this.cam.y += (this.fly.y - this.cam.y) * Math.min(1, dt * 5);
+        if (Math.hypot(this.fly.x - this.cam.x, this.fly.y - this.cam.y) < 0.2) this.fly = null;
+      }
       if (!this.paused) {
+        this.updatePads(dt);
         this.acc += dt;
         let n = 0;
         while (this.acc >= 1 / 60 && n++ < 5) { g.step(); this.acc -= 1 / 60; }
         if (this.acc > 0.2) this.acc = 0;
       }
+      this.aim(a);
+      const e = m.over ? g.entAt(a.cellX, a.cellY) : null;
+      this.hover = e && (!a.tool || a.tool === 'demolir') ? e : null;
     } else {
-      // écran-titre : la caméra dérive lentement autour de la clairière
-      const p = this.players[0];
-      p.x = 0.5 + Math.cos(this.time * 0.07) * 7; p.y = 1.5 + Math.sin(this.time * 0.09) * 5;
+      // écran-titre : la vue tourne lentement autour de la clairière
+      this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 5; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4; this.cam.dist = 34;
       g.step();
     }
-    this.pressed.clear();
-    this.mouse.leftDown = this.mouse.leftUp = this.mouse.rightUp = false;
 
-    // premier pas : une onde dorée désigne le gisement tant qu'aucun puits n'est posé
-    if (this.started && g.quota === 0 && this.frame % 150 === 0 && !g.tickers.some((e) => e.def.kind === 'miner')) {
-      const b = g.world.blobs[0];
-      this.rings.push({ x: b.x + 0.5, y: b.y + 0.5, t0: this.time, color: PAL.gold, size: 4.5, dur: 1.8 });
-    }
     this.drain();
-    const views = this.views(dt);
-    const opts = { time: this.time, frame: this.frame, dt, players: this.started ? this.players : [], selected: this.hud.selected, rings: this.rings, reach: g.reach };
-    this.renderer.begin(g, opts);
-    for (const v of views) this.renderer.renderView(g, v, opts);
-    if (views.length === 2) this.splitLine();
+    this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
+    const b = this.scene.bounds;
+    g.world.ensureArea(b.x0, b.y0, b.x1, b.y1);     // le monde se génère devant la caméra : pas de bord
+    const build = this.started && a.tool && a.tool !== 'demolir' ? a.tool : null;
+    this.scene.render(g, {
+      time: this.time, dt, frame: this.frame, camX: this.cam.x, camY: this.cam.y, dist: this.cam.dist,
+      tool: build && m.over ? build : null, rot: a.rot, originX: a.originX, originY: a.originY, cellX: a.cellX, cellY: a.cellY,
+      ghostOk: a.ok, demolish: a.tool === 'demolir', hover: this.hover, selected: this.hud.selected,
+      cursors: this.actors.filter((p) => p.pad !== null).map((p) => ({ x: p.x, y: p.y, color: COLORS[p.id % 4] })),
+      rings: this.rings, marker: this.started ? this.marker() : null, tilt: this.tilt,
+    });
     this.rings = this.rings.filter((r) => this.time - r.t0 < r.dur);
-    this.audio.ambience(g.sun.night, g.sun.light);
+    this.audio.update(g.sun.night);
 
     if (this.started) {
+      this.updateTip();
       this.hudTimer -= dt;
-      if (this.hudTimer <= 0) { this.hudTimer = 0.2; this.hud.update(g); this.updateHint(); }
+      if (this.hudTimer <= 0) { this.hudTimer = 0.2; this.hud.update(g); }
       this.saveTimer += dt;
-      if (this.saveTimer > 120 && !this.paused) { this.saveTimer = 0; void this.save(); }
+      if (this.saveTimer > 120 && !this.paused) { this.saveTimer = 0; void this.save().catch(() => undefined); }
     }
     requestAnimationFrame(() => this.loop());
   }
 
-  private splitLine(): void {
-    const [a, b] = this.players;
-    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-    const c = this.renderer.ctx, W = this.canvas.width, H = this.canvas.height, L = W + H;
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.beginPath(); c.moveTo(W / 2 - (-dy / d) * L, H / 2 - (dx / d) * L); c.lineTo(W / 2 + (-dy / d) * L, H / 2 + (dx / d) * L);
-    c.strokeStyle = PAL.ink; c.lineWidth = 8; c.stroke();
-    c.strokeStyle = PAL.bone; c.lineWidth = 4; c.stroke();
+  /** Infobulle au curseur : pourquoi on ne peut pas poser, ou ce qu'on survole. */
+  private updateTip(): void {
+    const a = this.actors[0], m = this.mouse, g = this.game;
+    if (!m.over || m.panning || this.paused) { this.hud.tip(null); return; }
+    let html: string | null = null;
+    if (a.tool === 'demolir') html = this.hover ? `<b>Démolir : ${this.hover.def.name}</b><span class="k">Tout est remboursé</span>` : null;
+    else if (a.tool) {
+      const def = B[a.tool];
+      html = a.ok
+        ? `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' ? ' · glisser : tracer' : ''}${def.w + def.h > 2 || def.kind === 'belt' || def.kind === 'splitter' || def.kind === 'bridge' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
+        : `<b>${def.name}</b><span class="no">${a.reason}</span>`;
+    } else if (this.hover && (this.hover.def.kind === 'belt' || this.hover.def.kind === 'bridge' || this.hover.def.kind === 'deco')) {
+      html = `<b>${this.hover.def.name}</b><span class="k">Clic droit : démolir · E : copier</span>`;
+    } else if (this.hover) {
+      const st = this.hud.statusLine(g, this.hover);
+      html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : détails</span>`;
+    } else {
+      const d = g.world.deposit(a.cellX, a.cellY);
+      if (d) html = `<b>${DEPOSITS[d]!.name}</b><span class="k">${g.world.amount(a.cellX, a.cellY)} unités ici · pose un Puits dessus</span>`;
+    }
+    this.hud.tip(html, m.x, m.y);
   }
 
   /** Événements de la simulation → son et ondes visuelles. */
   private drain(): void {
     const g = this.game;
-    const cams = this.players.map((p) => p.cam);
     for (const ev of g.events) {
-      let near = 0, pan = 0;
-      for (const c of cams) {
-        const d2 = (ev.x - c.x) ** 2 + (ev.y - c.y) ** 2;
-        const n = 1 / (1 + d2 / 320);
-        if (n > near) { near = n; pan = Math.max(-1, Math.min(1, (ev.x - c.x) / 22)); }
-      }
-      if (!this.started) near *= 0;
+      const d = Math.hypot(ev.x - this.cam.x, ev.y - this.cam.y);
+      const near = this.started ? Math.max(0, 1 - d / (this.cam.dist * 0.9)) : 0;
+      const pan = Math.max(-1, Math.min(1, (ev.x - this.cam.x) / (this.cam.dist * 0.6)));
       switch (ev.type) {
-        case 'craft': this.audio.craft(ev.a, near, pan, g.sun.night); break;
-        case 'mine': this.audio.mine(near, pan); break;
+        case 'craft': case 'mine': this.audio.machine(near, pan); break;
         case 'cut': this.audio.cut(near, pan); break;
-        case 'deliver': this.audio.deliver(ev.a, near, pan); break;
-        case 'place': this.audio.place(ev.a); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: PAL.boneLight, size: 0.6 + Math.sqrt(ev.a) * 0.7, dur: 0.35 }); break;
-        case 'remove': this.audio.remove(); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: PAL.pink, size: 0.6 + Math.sqrt(ev.a) * 0.7, dur: 0.3 }); break;
+        case 'place': if (this.started) this.audio.place(ev.a); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: '#f1efe8', size: 0.7 + Math.sqrt(ev.a) * 0.8, dur: 0.35 }); break;
+        case 'remove': if (this.started) this.audio.remove(); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: '#ff6a5a', size: 0.7 + Math.sqrt(ev.a) * 0.8, dur: 0.3 }); break;
         case 'quota':
-          this.audio.quota();
-          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? PAL.glow : PAL.gold, size: 26 + i * 22, dur: 2.6 });
-          if (this.started) this.hud.banner(g);
+          if (this.started) { this.audio.quota(); this.hud.banner(g); }
+          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? '#7ff0d2' : '#ffb050', size: 24 + i * 20, dur: 2.6 });
           break;
+        default: break;
       }
     }
     g.events.length = 0;
-  }
-
-  private updateHint(): void {
-    const p = this.players[0];
-    if (p.tool) {
-      const def = B[p.tool];
-      const why = p.ghost && !p.ghost.ok ? ` — ${p.ghost.reason}` : !p.inReach ? ' — hors de portée' : '';
-      this.hud.hint(`${def.name}${why} · clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' (glisser pour tracer)' : ''} · maintenir dans la jungle : tailler · R : pivoter · Échap : lâcher`);
-    } else this.hud.hint('Clic : inspecter · 1–9 : construire · clic droit : démolir · F : défricher · E : pipette · Tab : Atlas');
+    if (this.rings.length > 10) this.rings.splice(0, this.rings.length - 10);
   }
 }
 
-import { R } from './sim/data';
-function awaitRecipe(key: string) { return R[key] ?? null; }
-
 const app = new App();
 (window as unknown as { brutalusine: App }).brutalusine = app;
-export type { Ent };
+if (import.meta.env.DEV) {
+  void import('./dev').then((dev) => { (app as unknown as { demo: () => string[] }).demo = () => dev.buildDemo(app.game); });
+}

@@ -1,19 +1,21 @@
-// Interface : le monde reste visible, l'action est près de la donnée, toute alerte dit sa cause.
-// (Les douze lois du dossier UI/UX sont résumées dans docs/DESIGN.md.)
+// Interface. Principes tirés du dossier UI/UX : une décision avant un menu, le monde reste visible,
+// reconnaître plutôt que se souvenir (icône + mot), montrer la cause, dévoiler par couches, erreur récupérable.
 
 import {
-  B, BUILD_BAR, BUILDINGS, ITEMS, MACHINE_RECIPES, NITEMS, RECIPES, UPGRADES, FUEL, I, quotaAt,
-  type BuildingDef, type ItemDef, type Recipe,
+  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, UPGRADES, I, quotaAt,
+  type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
-import { ACCU_CAP, type Game } from '../sim/game';
+import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
 import { prettyFormula } from '../sim/chem';
-import { buildingIcon } from '../render/sprites';
+import { buildingIcon } from '../render/icons';
 
 export interface HudHost {
   game(): Game;
+  tool(): string | null;
   selectTool(key: string | null): void;
-  currentTool(): string | null;
+  stepDone(step: Step): boolean;
+  locate(place: Place): void;
   setRecipe(e: Ent, key: string): void;
   setFilter(e: Ent, id: number): void;
   buyUpgrade(key: string): void;
@@ -25,43 +27,58 @@ export interface HudHost {
 const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
 const fmt = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}k` : Math.floor(n).toLocaleString('fr-FR'));
+const clock = (ticks: number) => `${Math.floor(ticks / 3600)} min ${String(Math.floor((ticks / 60) % 60)).padStart(2, '0')}`;
 
 /** Icône d'objet : la forme double la couleur (rien d'essentiel ne dépend de la couleur seule). */
-export function itemIcon(it: ItemDef, size = 16): string {
-  const s = { rond: '<circle cx="8" cy="8" r="5.5"/>', carre: '<rect x="3" y="3" width="10" height="10"/>', losange: '<path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/>', triangle: '<path d="M8 2 14.5 13.5H1.5Z"/>', hexa: '<path d="M14 8 11 13.2H5L2 8 5 2.8h6Z"/>', goutte: '<path d="M8 1.5C11 6 13 8 13 10.5a5 5 0 0 1-10 0C3 8 5 6 8 1.5Z"/>' }[it.shape];
-  return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="${it.color}" stroke="#1B1446" stroke-width="1.2" aria-hidden="true">${s}</svg>`;
+export function itemIcon(it: ItemDef, size = 18): string {
+  const s = { boule: '<circle cx="8" cy="8" r="5.5"/>', bloc: '<rect x="3" y="3" width="10" height="10"/>', gemme: '<path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/>', lingot: '<path d="M4 5h8l2.5 6h-13Z"/>', bonbonne: '<rect x="5" y="2" width="6" height="12" rx="3"/>' }[it.shape];
+  return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="${it.color}" stroke="#000" stroke-opacity=".55" stroke-width="1" aria-hidden="true">${s}</svg>`;
 }
 const itemTag = (id: number, n?: number | string) => `<button class="item" data-codex="i:${id}">${itemIcon(ITEMS[id])}${n !== undefined ? `<b>${n}</b> ` : ''}${esc(ITEMS[id].name)}</button>`;
 
 function equation(r: Recipe): string {
   const side = (items: [number, number][], gases: [string, number][]) => [
-    ...items.map(([id, n]) => `<span class="term">${n > 1 ? n + ' ' : ''}${itemIcon(ITEMS[id], 13)}${prettyFormula(ITEMS[id].formula)}</span>`),
+    ...items.map(([id, n]) => `<span class="term">${n > 1 ? n + ' ' : ''}${itemIcon(ITEMS[id], 15)}${prettyFormula(ITEMS[id].formula)}</span>`),
     ...gases.map(([g, n]) => `<span class="term gas">${n > 1 ? n + ' ' : ''}${prettyFormula(g)}</span>`),
   ].join(' + ');
   return `${side(r.inputs, r.gasIn)} <span class="arrow">→</span> ${side(r.outputs, r.gasOut) || '<span class="term gas">énergie</span>'}`;
 }
 
+/** Phrase simple : « 2 Hématite + 3 Charbon → 4 Fer ». */
+export function recipeWords(r: Recipe): string {
+  const side = (items: [number, number][]) => items.map(([id, n]) => `${n} ${ITEMS[id].name}`).join(' + ');
+  return `${side(r.inputs)} → ${side(r.outputs) || 'énergie'}`;
+}
+
 export class Hud {
   selected: Ent | null = null;
+  cat: Category = 'extraction';
   private codexHistory: string[] = [];
-  private lastUnlock = 0;
+  private seenUnlock = 0;
+  private fresh = new Set<string>();
   private toastTimer = 0;
   private bannerTimer = 0;
   private barKey = '';
+  private panelKey = '';
+  private quotaKey = '';
+  private lastTool: string | null = null;
 
   constructor(private host: HudHost) {
     document.addEventListener('click', (ev) => this.onClick(ev));
     $('codex-search').addEventListener('input', () => this.renderCodexList());
-    $('opt-volume').addEventListener('input', (ev) => host.menu('volume', (ev.target as HTMLInputElement).value));
+    $('opt-music').addEventListener('input', (ev) => host.menu('music', (ev.target as HTMLInputElement).value));
+    $('opt-sfx').addEventListener('input', (ev) => host.menu('sfx', (ev.target as HTMLInputElement).value));
     $('opt-tilt').addEventListener('change', (ev) => host.menu('tilt', String((ev.target as HTMLInputElement).checked)));
   }
 
   private onClick(ev: MouseEvent): void {
-    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-recipe],[data-filter],[data-codex],[data-upgrade],[data-menu],[data-alert],[data-close]');
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-upgrade],[data-menu],[data-alert],[data-close],[data-go]');
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
-    if (d.tool !== undefined) this.host.selectTool(this.host.currentTool() === d.tool ? null : d.tool);
+    if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.barKey = ''; }
+    else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
+    else if (d.go !== undefined) this.host.locate(d.go as Place);
     else if (d.recipe !== undefined && this.selected) { this.host.setRecipe(this.selected, d.recipe); this.renderPanel(g, true); }
     else if (d.filter !== undefined && this.selected) { this.host.setFilter(this.selected, +d.filter); this.renderPanel(g, true); }
     else if (d.codex !== undefined) this.openCodex(d.codex);
@@ -75,7 +92,6 @@ export class Hud {
     }
   }
 
-  // ------------------------------------------------------------- sélection
   select(e: Ent | null): void {
     this.selected = e;
     $('panel').hidden = !e;
@@ -86,7 +102,18 @@ export class Hud {
     const el = $('toast');
     el.textContent = text; el.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2200);
+    this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+  }
+
+  /** Infobulle au curseur : ce qu'on survole, ou pourquoi on ne peut pas poser. */
+  tip(html: string | null, x = 0, y = 0): void {
+    const el = $('tip');
+    if (!html) { el.hidden = true; return; }
+    if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+    el.hidden = false;
+    const w = el.offsetWidth, h = el.offsetHeight;
+    el.style.left = `${Math.min(window.innerWidth - w - 8, x + 18)}px`;
+    el.style.top = `${Math.max(8, Math.min(window.innerHeight - h - 8, y + 18))}px`;
   }
 
   // ------------------------------------------------------- mise à jour (5 Hz)
@@ -96,9 +123,13 @@ export class Hud {
     this.renderStock(g);
     this.renderAlerts(g);
     this.renderBar(g);
-    if (this.selected) {
-      if (this.selected.dead) this.select(null); else this.renderPanel(g, false);
-    }
+    if (this.selected) { if (this.selected.dead) this.select(null); else this.renderPanel(g, false); }
+  }
+
+  /** Première étape non faite du quota en cours (le tutoriel est la liste d'étapes elle-même). */
+  currentStep(g: Game): Step | null {
+    for (const s of quotaAt(g.quota).steps) if (!this.host.stepDone(s)) return s;
+    return null;
   }
 
   private renderQuota(g: Game): void {
@@ -107,23 +138,29 @@ export class Hud {
       const have = Math.min(n, g.delivered[id]);
       return `<div class="need">${itemTag(id)}<span class="count">${fmt(have)} / ${fmt(n)}</span><div class="bar"><i style="width:${(100 * have / n).toFixed(1)}%"></i></div></div>`;
     }).join('');
-    $('quota').innerHTML = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="hint">${esc(q.hint)}</p>`;
+    let seenNow = false;
+    const steps = q.steps.map((s) => {
+      const done = this.host.stepDone(s);
+      const now = !done && !seenNow;
+      if (now) seenNow = true;
+      const go = now && s.t === 'build' && s.go ? `<button class="go" data-go="${s.go}">Y aller</button>` : '';
+      return `<li class="${done ? 'done' : now ? 'now' : ''}"><span>${esc(s.text)}</span>${go}</li>`;
+    }).join('');
+    const html = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${steps ? `<ul class="steps">${steps}</ul>` : ''}`;
+    if (html !== this.quotaKey) { this.quotaKey = html; $('quota').innerHTML = html; }
   }
 
   private renderTop(g: Game): void {
-    const s = g.sun;
+    const s = g.sun, p = g.power;
     const hh = Math.floor(s.hour), mm = Math.floor((s.hour % 1) * 60);
-    const reg = g.regions[g.hub.region];
-    const demand = reg ? reg.lastDemand : 0, cap = reg ? reg.capacity : 0, sat = reg ? reg.sat : 1;
-    const low = sat < 0.999 && demand > 0;
-    const angle = s.t * 360;
-    const ppm = g.ppm();
-    const savoir = g.savoir > 0 ? `<button class="chip savoir" data-menu="savoir" title="Savoir à investir : clique sur la Tour">◆ ${g.savoir} Savoir</button>` : '';
+    const low = p.sat < 0.999 && p.lastDemand > 0;
+    const use = p.capacity > 0 ? Math.min(1, p.lastDemand / p.capacity) : 0;
+    const savoir = g.savoir > 0 ? `<button class="chip savoir" data-menu="savoir" title="Clique : investir ton Savoir dans la Tour">◆ ${g.savoir} Savoir à investir</button>` : '';
     $('topbar').innerHTML = `
-      <div class="chip" title="Le soleil alimente les héliostats et la canopée. Les ombres tournent."><svg width="22" height="22" viewBox="-11 -11 22 22" aria-hidden="true"><circle r="9.5" fill="none" stroke="#1B1446" stroke-width="1.5"/><path d="M-9.5 0A9.5 9.5 0 0 0 9.5 0Z" fill="#2E1C70" transform="rotate(${-angle + 117})"/><circle r="2.2" fill="${s.day ? '#FFC24A' : '#8CFBE8'}" transform="rotate(${angle - 207}) translate(6 0)"/></svg><b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b> ${s.day ? 'jour' : g.bloom > 0.2 ? 'floraison' : 'nuit'}</div>
-      <div class="chip ${low ? 'bad' : ''}" title="Réseau de la Tour : demande / capacité. Les dalles contiguës forment un même réseau.">⚡ <b>${Math.round(demand)}</b> / ${Math.round(cap)} W${low ? ` · ${Math.round(sat * 100)} %` : ''}${reg && reg.accus.length ? ` · ▮ ${Math.round(100 * reg.stored / (reg.accus.length * ACCU_CAP))} %` : ''}</div>
-      <div class="chip" title="CO₂ atmosphérique. Plus il y en a, plus la jungle repousse vite : elle se nourrit de ce que l’usine rejette.">CO₂ <b>${Math.round(ppm)}</b> ppm</div>
-      <div class="chip ${g.jungleHealth < 0.5 ? 'bad' : ''}" title="Santé moyenne des Éventails connus : canopée alentour, moins la fumée.">Jungle <b>${Math.round(g.jungleHealth * 100)} %</b></div>${savoir}`;
+      <div class="chip" title="Un jour dure 10 minutes. Le soleil alimente les héliostats et fait pousser la jungle."><b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b>${s.day ? 'jour' : g.bloom > 0.2 ? 'nuit de floraison' : 'nuit'}</div>
+      <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}${p.storeMax ? ` · réserve ${Math.round((100 * p.stored) / p.storeMax)} %` : ''}</div>
+      <div class="chip" title="CO₂ dans l’air. Plus il y en a, plus la jungle repousse vite : elle se nourrit de ce que l’usine rejette.">CO₂ <b>${Math.round(g.ppm())}</b> ppm</div>
+      <div class="chip ${g.jungleHealth < 0.5 ? 'bad' : ''}" title="Santé de la jungle autour des Éventails : canopée alentour, moins la fumée.">Jungle <b>${Math.round(g.jungleHealth * 100)} %</b></div>${savoir}`;
   }
 
   private renderStock(g: Game): void {
@@ -134,7 +171,7 @@ export class Hud {
       if (n < 1 && Math.abs(rate) < 0.5) continue;
       html += `<button class="row" data-codex="i:${i}">${itemIcon(ITEMS[i])}<span class="name">${esc(ITEMS[i].name)}</span><span class="rate ${rate < -0.5 ? 'neg' : ''}">${Math.abs(rate) >= 0.5 ? (rate > 0 ? '+' : '−') + Math.abs(Math.round(rate)) + '/min' : ''}</span><b>${fmt(n)}</b></button>`;
     }
-    $('stock').innerHTML = `<div class="eyebrow">Stock de la Tour</div>${html}`;
+    $('stock').innerHTML = `<div class="eyebrow">Stock de la Tour</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
   }
 
   private renderAlerts(g: Game): void {
@@ -142,86 +179,117 @@ export class Hud {
     for (const e of g.tickers) {
       const s = e.status;
       if (s !== Status.NoInput && s !== Status.NoPower && s !== Status.NoResource && s !== Status.Blocked) continue;
-      if (e.def.kind === 'solar' || e.def.kind === 'hub' || e.def.kind === 'splitter') continue;
+      const k = e.def.kind;
+      if (k === 'solar' || k === 'hub' || k === 'splitter' || k === 'storage' || k === 'generator') continue;
       const key = `${s}:${s === Status.NoInput ? e.missing : -1}:${e.def.key}`;
-      const cause = s === Status.NoInput ? `il manque ${ITEMS[e.missing]?.name ?? '…'}` : s === Status.NoPower ? 'pas de courant' : s === Status.Blocked ? 'sortie bloquée' : 'plus rien à extraire';
+      const cause = s === Status.NoInput ? `il manque ${ITEMS[e.missing]?.name ?? '…'}` : s === Status.NoPower ? 'pas assez de courant' : s === Status.Blocked ? 'sortie bloquée' : 'plus rien à extraire';
       const gr = groups.get(key);
       if (gr) gr.n++; else groups.set(key, { n: 1, text: `${e.def.name} : ${cause}` });
     }
     let html = '';
-    for (const [key, gr] of [...groups].slice(0, 5)) html += `<button class="alert" data-alert="${key}"><b>${gr.n}</b> ${esc(gr.text)}<span class="go">voir</span></button>`;
+    for (const [key, gr] of [...groups].slice(0, 4)) html += `<button class="alert" data-alert="${key}"><b>${gr.n}</b> ${esc(gr.text)}<span class="see">montrer</span></button>`;
     $('alerts').innerHTML = html;
   }
 
   private renderBar(g: Game): void {
-    const tool = this.host.currentTool();
-    const list = BUILD_BAR.map((k) => B[k]).filter((b) => g.unlocked(b));
-    const key = list.map((b) => b.key).join() + '|' + tool + '|' + list.map((b) => this.affordable(g, b)).join('');
+    const tool = this.host.tool();
+    if (g.quota !== this.seenUnlock) {
+      for (const b of BUILDINGS) if (b.cat && b.unlock === g.quota && g.quota > 0) this.fresh.add(b.key);
+      this.seenUnlock = g.quota;
+      const first = BUILDINGS.find((b) => b.cat && b.unlock === g.quota);
+      if (first?.cat && g.quota > 0) this.cat = first.cat;
+    }
+    // la barre suit l'outil seulement quand il vient de changer (pipette, raccourci) : on reste libre de feuilleter
+    if (tool !== this.lastTool) {
+      this.lastTool = tool;
+      if (tool && tool !== 'demolir' && B[tool].cat) this.cat = B[tool].cat!;
+    }
+    const cats = CATEGORIES.filter((c) => BUILDINGS.some((b) => b.cat === c.key && g.unlocked(b)));
+    const list = BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b));
+    const key = [this.cat, tool, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0)).join(), [...this.fresh].join()].join('|');
     if (key === this.barKey) return;
     this.barKey = key;
-    const fresh = g.quota !== this.lastUnlock;
-    $('buildbar').innerHTML = list.map((b, i) => {
-      const hot = i < 9 ? String(i + 1) : i === 9 ? '0' : '';
-      const cost = b.cost.map(([id, n]) => `${itemIcon(ITEMS[id], 13)}${n}`).join(' ');
-      const isNew = fresh && b.unlock === g.quota && g.quota > 0;
-      return `<button class="tool ${tool === b.key ? 'on' : ''} ${this.affordable(g, b) ? '' : 'poor'} ${isNew ? 'new' : ''}" data-tool="${b.key}" aria-label="${esc(b.name)}">
-        <img src="${buildingIcon(b.key, b.w, b.h)}" alt=""><kbd>${hot}</kbd>
-        <span class="tip"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span><span class="cost">${cost}${b.power && b.kind !== 'generator' && b.kind !== 'solar' && b.kind !== 'battery' ? ` · ⚡ ${b.power} W` : ''}</span></span></button>`;
-    }).join('');
-    this.lastUnlock = g.quota;
+    $('cats').innerHTML = cats.map((c) => `<button class="${c.key === this.cat ? 'on' : ''} ${BUILDINGS.some((b) => b.cat === c.key && this.fresh.has(b.key)) ? 'fresh' : ''}" data-cat="${c.key}">${c.name}</button>`).join('');
+    $('tools').innerHTML = list.map((b, i) => {
+      const cost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
+      const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
+      const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
+      return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
+        <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${buildingIcon(b.key)}" alt=""><span class="nm">${esc(b.name)}</span>
+        <span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span></button>`;
+    }).join('') + `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M17 17 41 41M41 17 17 41" stroke="#ff6a5a" stroke-width="6" stroke-linecap="square"/></svg><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
   }
 
-  private affordable(g: Game, b: BuildingDef): boolean {
-    return b.cost.every(([id, n]) => g.stock[id] >= n);
+  /** Bâtiments de la catégorie affichée, dans l'ordre des touches 1 à 9. */
+  toolsInCategory(g: Game): string[] { return BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b)).map((b) => b.key); }
+  nextCategory(g: Game, dir: number): void {
+    const cats = CATEGORIES.filter((c) => BUILDINGS.some((b) => b.cat === c.key && g.unlocked(b)));
+    const i = cats.findIndex((c) => c.key === this.cat);
+    this.cat = cats[(i + dir + cats.length) % cats.length].key;
+    this.barKey = ''; this.renderBar(g);
   }
 
   // ------------------------------------------------------------- panneau
-  private panelKey = '';
+  /** État d'une entité en une phrase qui dit la cause. */
+  statusLine(g: Game, e: Ent): { text: string; cls: string } {
+    let text = STATUS_TEXT[e.status];
+    if (e.status === Status.NoInput && e.missing >= 0) text = `Il manque : ${ITEMS[e.missing].name}`;
+    if (e.status === Status.Working && g.power.sat < 0.999 && e.def.power && !['generator', 'solar', 'wind', 'hydro', 'battery'].includes(e.def.kind)) text = `Au ralenti : ${Math.round(g.power.sat * 100)} % du courant demandé`;
+    if (e.def.kind === 'storage') text = `${e.outCount} / ${STORE_CAP} objets`;
+    if (e.def.kind === 'hub') text = 'Reçoit tout ce qui arrive';
+    if (e.def.kind === 'tree') text = e.health > 0.6 ? 'En pleine santé' : e.health > 0.25 ? 'Affaibli' : 'Mourant';
+    if (e.def.kind === 'splitter') text = e.def.filter ? (e.filter >= 0 ? `Laisse passer : ${ITEMS[e.filter].name}` : 'Choisis l’objet à laisser passer') : 'Répartit le flux';
+    const cls = e.status === Status.Working || e.def.kind === 'hub' ? 'ok' : e.status === Status.Idle || e.status === Status.Dark || e.def.kind === 'splitter' || e.def.kind === 'storage' ? '' : 'bad';
+    return { text, cls: e.def.kind === 'splitter' && e.def.filter && e.filter < 0 ? 'bad' : cls };
+  }
+
   private renderPanel(g: Game, force: boolean): void {
     const e = this.selected!;
     const k = e.def.kind;
-    const reg = g.regions[e.region];
-    let status = STATUS_TEXT[e.status];
-    if (e.status === Status.NoInput && e.missing >= 0) status = `Il manque : ${ITEMS[e.missing].name}`;
-    if (e.status === Status.Working && reg && reg.sat < 0.999) status = `Sous-alimenté : ${Math.round(reg.sat * 100)} % du courant demandé`;
-    const cls = e.status === Status.Working ? 'ok' : e.status === Status.Idle || e.status === Status.Dark ? '' : 'bad';
+    const st = this.statusLine(g, e);
     let body = '';
     if (k === 'machine' || k === 'scrubber' || k === 'ring') {
       const r = e.recipe;
-      const list = k === 'machine' ? (MACHINE_RECIPES[e.def.key] ?? []).filter((x) => g.quota >= x.unlock) : [];
-      if (list.length > 1) body += `<div class="recipes">${list.map((x) => `<button class="${x === r ? 'on' : ''}" data-recipe="${x.key}">${x.outputs.map(([id]) => itemIcon(ITEMS[id])).join('')} ${esc(x.name)}</button>`).join('')}</div>`;
+      const list = e.def.recipes.filter((x) => g.quota >= x.unlock);
+      if (list.length > 1) body += `<div class="recipes">${list.map((x) => `<button class="${x === r ? 'on' : ''}" data-recipe="${x.key}">${esc(x.name)}</button>`).join('')}</div>`;
       if (r) {
-        body += `<div class="eq">${equation(r)}</div><p class="note">${esc(r.note)}</p>`;
+        body += `<div class="eq">${equation(r)}</div><p class="note">${esc(recipeWords(r))}. ${esc(r.note)}</p>`;
         body += `<div class="bar big"><i style="width:${(e.working ? (100 * e.progress) / r.time : 0).toFixed(0)}%"></i></div>`;
-        body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${k === 'scrubber' ? `<span class="gasline">SO₂ capté : ${Math.floor(e.gas)}</span>` : ''}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}</div></div>`;
-        const perMin = (60 * 60) / r.time;
-        body += `<p class="meta">Cadence nominale : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} / min · ⚡ ${e.def.power} W</p>`;
+        body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${k === 'scrubber' ? `<span class="meta">SO₂ capté : ${Math.floor(e.gas)}</span>` : ''}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}</div></div>`;
+        const perMin = (3600 / r.time) * e.def.speed;
+        body += `<p class="meta">À plein régime : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} par minute · consomme ${e.def.power} W</p>`;
       }
       if (k === 'ring') body += `<p class="meta">Santé de la jungle alentour : <b>${Math.round(e.health * 100)} %</b>. Le rendement lui est proportionnel${g.bloom > 0.1 ? ' — <b>floraison : ×2</b>' : ''}.</p>`;
     } else if (k === 'miner') {
       let left = 0;
       const cells = e.cells!;
       for (let i = 0; i < cells.length; i += 2) left += g.world.amount(cells[i], cells[i + 1]);
-      body += `<p class="meta">Reste à portée : <b>${fmt(left)}</b> unités · 60 / min · ⚡ ${e.def.power} W</p>`;
+      body += `<p class="meta">Reste à portée : <b>${fmt(left)}</b> · ${Math.round(60 * e.def.speed)} par minute · consomme ${e.def.power} W</p>`;
     } else if (k === 'sawmill') {
-      body += `<p class="meta">Coupe la case la plus dense dans un rayon de 5. Une forêt à moitié pleine repousse le plus vite : couper moins, c’est récolter plus longtemps.</p>`;
+      body += `<p class="meta">Jusqu’à 40 biomasses par minute. Une forêt à moitié pleine repousse le plus vite : en couper moins, c’est récolter plus longtemps.</p>`;
     } else if (k === 'generator') {
-      body += `<div class="io"><div><span class="eyebrow">Combustible</span>${Object.keys(FUEL).map((id) => itemTag(+id, e.buf![+id])).join('')}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que le réseau demande.</p>`;
+      body += `<div class="io"><div><span class="eyebrow">Combustible</span>${e.def.fuels.map((id) => itemTag(id, e.buf![id])).join('')}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que l’usine demande.</p>`;
     } else if (k === 'solar') {
-      body += `<p class="meta">Éclairement : <b>${Math.round(e.light * 100)} %</b> → ${Math.round(e.light * e.def.power)} W</p>`;
+      body += `<p class="meta">Éclairement : <b>${Math.round(e.light * 100)} %</b> → ${Math.round(e.light * e.def.power)} W${e.light < 0.05 && g.sun.day ? ' — à l’ombre d’un bâtiment' : ''}</p>`;
+    } else if (k === 'wind') {
+      body += `<p class="meta">Vent : <b>${Math.round(g.wind * 100)} %</b> → ${Math.round(e.flow)} W</p>`;
+    } else if (k === 'hydro') {
+      body += `<p class="meta">Fournit <b>${e.def.power} W</b> en continu.</p>`;
     } else if (k === 'battery') {
-      body += `<div class="bar big"><i style="width:${(100 * e.energy / ACCU_CAP).toFixed(0)}%"></i></div><p class="meta">${(e.energy / 1000).toFixed(1)} / ${ACCU_CAP / 1000} kJ · ${e.flow >= 0 ? 'fournit' : 'absorbe'} ${Math.abs(Math.round(e.flow))} W</p>`;
-    } else if (k === 'splitter') {
-      body += `<p class="meta">Filtre : l’objet choisi va tout droit, les autres sur les côtés.</p><div class="filters"><button class="${e.filter < 0 ? 'on' : ''}" data-filter="-1">aucun</button>${ITEMS.filter((it) => g.stock[it.id] > 0 || g.stats.rate(g.stats.prod, it.id) > 0 || e.filter === it.id).map((it) => `<button class="${e.filter === it.id ? 'on' : ''}" data-filter="${it.id}" title="${esc(it.name)}">${itemIcon(it, 18)}</button>`).join('')}</div>`;
-    } else if (k === 'tree') {
-      body += `<p class="meta">Santé : <b>${Math.round(e.health * 100)} %</b>. Son cœur bat avec la canopée qui l’entoure. Un Cerclage en recueillerait la Lueur.</p>`;
+      body += `<div class="bar big"><i style="width:${(100 * e.energy / ACCU_CAP).toFixed(0)}%"></i></div><p class="meta">${(e.energy / 1000).toFixed(1)} / ${ACCU_CAP / 1000} kJ · ${e.flow >= 0 ? 'fournit' : 'se charge de'} ${Math.abs(Math.round(e.flow))} W</p>`;
+    } else if (k === 'storage') {
+      body += `<div class="io"><div><span class="eyebrow">Contenu</span>${ITEMS.filter((it) => e.out![it.id] > 0).map((it) => itemTag(it.id, e.out![it.id])).join('') || '—'}</div></div>`;
+    } else if (k === 'seeder') {
+      body += `<div class="io"><div><span class="eyebrow">Engrais</span>${itemTag(I.engrais, e.buf![I.engrais])}</div></div>`;
+    } else if (k === 'splitter' && e.def.filter) {
+      body += `<div class="filters">${ITEMS.filter((it) => g.stock[it.id] > 0 || g.made[it.id] || e.filter === it.id).map((it) => `<button class="${e.filter === it.id ? 'on' : ''}" data-filter="${it.id}">${itemIcon(it)}${esc(it.name)}</button>`).join('')}</div>`;
     } else if (k === 'hub') {
-      body += `<p class="meta">Étages : <b>${3 + e.level}</b>. Énergie de base : ${e.def.power} W.</p>`;
-      body += `<div class="eyebrow">Savoir : ${g.savoir} à investir</div><div class="upgrades">${UPGRADES.map((u) => `<button data-upgrade="${u.key}" ${g.savoir < 1 ? 'disabled' : ''}><b>${esc(u.name)} · niv. ${g.upgrades[u.key]}</b><span>${esc(u.desc)}</span></button>`).join('')}</div>`;
-      if (g.records.length) body += `<div class="eyebrow">Records</div><table class="records"><tr><th>Quota</th><th>Durée</th><th>Dalles</th><th>CO₂</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${Math.floor(r.ticks / 3600)} min ${String(Math.floor((r.ticks / 60) % 60)).padStart(2, '0')}</td><td>${r.slabs}</td><td>${fmt(r.co2)}</td></tr>`).join('')}</table>`;
+      body += `<p class="meta">Énergie fournie : ${e.def.power} W. Objets reçus : ${fmt(e.done)}.</p>`;
+      body += `<div class="eyebrow">Savoir : ${g.savoir} à investir</div><div class="upgrades">${UPGRADES.map((u) => `<button data-upgrade="${u.key}" ${g.savoir < 1 ? 'disabled' : ''}><b>${esc(u.name)} · niveau ${g.upgrades[u.key]}</b><span>${esc(u.desc)}</span></button>`).join('')}</div>`;
+      if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Quota</th><th>Durée</th><th>Bâtiments</th><th>CO₂ émis</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td><td>${fmt(r.co2)}</td></tr>`).join('')}</table>`;
     }
-    const html = `<header><div><div class="eyebrow">${k === 'tree' ? 'Planète' : 'Bâtiment'}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
-      <div class="status ${cls}">${esc(status)}</div><p class="desc">${esc(e.def.desc)}</p>${body}`;
+    const html = `<header><div><div class="eyebrow">${k === 'tree' ? 'Planète' : esc(CATEGORIES.find((c) => c.key === e.def.cat)?.name ?? 'Monument')}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
+      <div class="status ${st.cls}">${esc(st.text)}</div><p class="desc">${esc(e.def.desc)}</p>${body}`;
     if (!force && html === this.panelKey) return;
     this.panelKey = html;
     $('panel').innerHTML = html;
@@ -231,11 +299,11 @@ export class Hud {
   banner(g: Game): void {
     const rec = g.records[g.records.length - 1];
     const done = quotaAt(rec.quota), next = quotaAt(g.quota);
-    const unlocked = [...BUILDINGS.filter((b) => b.unlock === g.quota).map((b) => b.name), ...RECIPES.filter((r) => r.unlock === g.quota && r.machine !== 'amphi').map((r) => r.name)];
+    const unlocked = BUILDINGS.filter((b) => b.cat && b.unlock === g.quota).map((b) => b.name);
     const el = $('banner');
     el.innerHTML = `<div class="eyebrow">Quota accompli</div><h1>${esc(done.title)}</h1>
-      <div class="metrics"><span><b>${Math.floor(rec.ticks / 3600)} min ${String(Math.floor((rec.ticks / 60) % 60)).padStart(2, '0')}</b>durée</span><span><b>${rec.slabs}</b>dalles posées</span><span><b>${fmt(rec.co2)}</b>CO₂ émis</span></div>
-      <p class="lore">${esc(next.lore)}</p>${unlocked.length ? `<p class="unlock">Débloqué : ${unlocked.map(esc).join(' · ')}</p>` : ''}`;
+      <div class="metrics"><span><b>${clock(rec.ticks)}</b>durée</span><span><b>${rec.buildings}</b>bâtiments</span><span><b>${fmt(rec.co2)}</b>CO₂ émis</span></div>
+      <p class="lore">${esc(next.lore)}</p>${unlocked.length ? `<p class="unlock">Nouveau : ${unlocked.map(esc).join(' · ')}</p>` : ''}<p class="meta">+1 Savoir à investir dans la Tour</p>`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.bannerTimer);
     this.bannerTimer = window.setTimeout(() => { el.hidden = true; }, 9000);
@@ -250,23 +318,26 @@ export class Hud {
   }
   closeCodex(): void { $('codex').hidden = true; }
   get codexOpen(): boolean { return !$('codex').hidden; }
+  get guideOpen(): boolean { return !$('guide').hidden; }
+  showGuide(show: boolean): void { $('guide').hidden = !show; }
 
   private renderCodexList(): void {
     const g = this.host.game();
     const q = (document.getElementById('codex-search') as HTMLInputElement).value.trim().toLowerCase();
     const match = (s: string) => !q || s.toLowerCase().includes(q);
     // on ne montre que ce qui a été découvert : pas de divulgâchage
-    const seen = (id: number) => id < 3 || id === I.biomasse || g.stock[id] > 0 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
+    const seen = (id: number) => id < 3 || id === I.biomasse || g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
     const items = ITEMS.filter((it) => seen(it.id) && (match(it.name) || match(it.formula))).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></button>`);
-    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key, b.w, b.h)}" alt="" width="18" height="18"> ${esc(b.name)}</button>`);
-    const recs = RECIPES.filter((r) => g.quota >= r.unlock && match(r.name)).map((r) => `<button data-codex="r:${r.key}">⚗ ${esc(r.name)}</button>`);
+    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
+    const recs = RECIPES.filter((r) => g.quota >= r.unlock && match(r.name)).map((r) => `<button data-codex="r:${r.key}">${esc(r.name)}</button>`);
     $('codex-list').innerHTML = `<div class="eyebrow">Objets</div>${items.join('')}<div class="eyebrow">Bâtiments</div>${builds.join('')}<div class="eyebrow">Réactions</div>${recs.join('')}`;
   }
 
   private renderCodexEntry(entry: string): void {
     const g = this.host.game();
     const [type, id] = entry.split(':');
-    const recipeCard = (r: Recipe) => `<button class="rcard" data-codex="r:${r.key}"><b>${esc(r.name)}</b> <small>${esc(B[r.machine]?.name ?? '')}</small><div class="eq">${equation(r)}</div></button>`;
+    const where = (r: Recipe) => BUILDINGS.find((b) => b.recipes.includes(r) || (b.kind === 'generator' && r.key.startsWith('combustion') && r.inputs.some(([x]) => b.fuels.includes(x))));
+    const recipeCard = (r: Recipe) => `<button class="rcard" data-codex="r:${r.key}"><b>${esc(r.name)}</b> <small>${esc(where(r)?.name ?? '')}</small><div class="eq">${equation(r)}</div></button>`;
     const known = (r: Recipe) => g.quota >= r.unlock;
     let html = '';
     if (type === 'i') {
@@ -274,19 +345,20 @@ export class Hud {
       const made = RECIPES.filter((r) => known(r) && r.outputs.some(([x]) => x === it.id));
       const used = RECIPES.filter((r) => known(r) && r.inputs.some(([x]) => x === it.id));
       const builds = BUILDINGS.filter((b) => g.unlocked(b) && b.cost.some(([x]) => x === it.id));
-      html = `<h2>${itemIcon(it, 24)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></h2><p>${esc(it.desc)}</p>
+      html = `<h2>${itemIcon(it, 28)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></h2><p>${esc(it.desc)}</p>
         <div class="eyebrow">D’où ça vient</div>${made.map(recipeCard).join('') || '<p class="meta">Extrait du sol, de la jungle ou de la rivière — ou pas encore découvert.</p>'}
-        <div class="eyebrow">À quoi ça sert</div>${used.map(recipeCard).join('')}${builds.length ? `<p class="meta">Construction : ${builds.map((b) => `<button class="link" data-codex="b:${b.key}">${esc(b.name)}</button>`).join(', ')}</p>` : ''}${!used.length && !builds.length ? '<p class="meta">Rien de connu pour l’instant.</p>' : ''}`;
+        <div class="eyebrow">À quoi ça sert</div>${used.map(recipeCard).join('')}${builds.length ? `<p class="meta">Pour construire : ${builds.map((b) => `<button class="link" data-codex="b:${b.key}">${esc(b.name)}</button>`).join(', ')}</p>` : ''}${!used.length && !builds.length ? '<p class="meta">Rien de connu pour l’instant.</p>' : ''}`;
     } else if (type === 'b') {
       const b = B[id];
-      const recs = (MACHINE_RECIPES[b.key] ?? []).filter(known);
-      html = `<h2><img src="${buildingIcon(b.key, b.w, b.h)}" alt="" width="36" height="36"> ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
-        <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${b.cost.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ⚡ ${b.power} W` : ''}</p>
+      const recs = b.recipes.filter(known);
+      html = `<h2><img src="${buildingIcon(b.key)}" alt="" width="52" height="52"> ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
+        <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${b.cost.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ${b.power} W` : ''}</p>
         ${recs.length ? `<div class="eyebrow">Réactions</div>${recs.map(recipeCard).join('')}` : ''}`;
     } else {
       const r = RECIPES.find((x) => x.key === id)!;
-      html = `<h2>${esc(r.name)}</h2><div class="eq big">${equation(r)}</div><p>${esc(r.note)}</p>
-        <p class="meta">Dans : <button class="link" data-codex="b:${r.machine}">${esc(B[r.machine].name)}</button> · ${(r.time / 60).toFixed(1)} s par cycle</p>
+      const b = where(r);
+      html = `<h2>${esc(r.name)}</h2><div class="eq big">${equation(r)}</div><p>${esc(recipeWords(r))}. ${esc(r.note)}</p>
+        <p class="meta">${b ? `Dans : <button class="link" data-codex="b:${b.key}">${esc(b.name)}</button> · ` : ''}${(r.time / 60).toFixed(1)} s par cycle</p>
         <div class="eyebrow">Objets</div><p>${[...r.inputs, ...r.outputs].map(([x]) => itemTag(x)).join(' ')}</p>`;
     }
     const back = this.codexHistory.length > 1 ? `<button class="link" data-menu="codex-back">← retour</button>` : '';
@@ -307,8 +379,4 @@ export class Hud {
     return !el.hidden;
   }
   get menuOpen(): boolean { return !$('menu').hidden; }
-
-  hint(text: string): void { const el = $('hint'); if (el.textContent !== text) el.textContent = text; }
 }
-
-export { I };

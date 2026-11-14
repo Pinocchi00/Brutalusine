@@ -1,19 +1,33 @@
-// L'usine chante. Chaque machine a sa note ; les notes tombent sur une grille rythmique,
-// si bien qu'une usine équilibrée sonne juste, et qu'une usine affamée se tait par endroits.
+// Son : une musique d'ambiance lente et douce (nappes, basse, notes rares dans une longue réverbération),
+// et des bruitages feutrés. Rien d'agressif : ondes sinus et triangle, filtres bas, attaques lentes.
 
-const SCALE = [0, 3, 5, 7, 10];             // pentatonique mineure
-const ROOT = 146.83;                        // ré
-const GRID = 0.125;                         // double-croche à 120 bpm
+const CHORDS: number[][] = [          // demi-tons au-dessus de ré : Rém9, Si♭maj7, Famaj9, Do6/9
+  [0, 3, 7, 10, 14],
+  [-4, 0, 3, 7, 12],
+  [3, 7, 10, 14, 17],
+  [-2, 2, 5, 7, 12],
+];
+const MELODY = [0, 3, 5, 7, 10, 12, 15, 17];   // pentatonique mineure de ré
+const ROOT = 146.83;                            // ré 3
+const CHORD_LEN = 11;                           // secondes par accord
+const hz = (semi: number, octave = 0) => ROOT * Math.pow(2, octave + semi / 12);
 
 export class AudioEngine {
   ctx: AudioContext | null = null;
   private master!: GainNode;
-  private pad!: GainNode;
-  private padFilter!: BiquadFilterNode;
+  private music!: GainNode;
+  private sfx!: GainNode;
+  private reverb!: ConvolverNode;
+  private wet!: GainNode;
+  private noise!: AudioBuffer;
+  private nextChord = 0;
+  private chordIndex = 0;
+  private nextNote = 0;
+  private lastNote = -1;
   private budget = 0;
-  private lastGrid = 0;
-  private noise: AudioBuffer | null = null;
-  volume = 0.7;
+  musicVolume = 0.5;
+  sfxVolume = 0.6;
+  night = 0;
 
   /** À appeler sur un geste du joueur (les navigateurs l'exigent). */
   start(): void {
@@ -22,110 +36,154 @@ export class AudioEngine {
     if (!AC) return;
     const ctx = (this.ctx = new AC());
     const comp = ctx.createDynamicsCompressor();
-    this.master = ctx.createGain();
-    this.master.gain.value = this.volume;
+    comp.threshold.value = -18; comp.ratio.value = 3;
+    this.master = ctx.createGain(); this.master.gain.value = 0.9;
     this.master.connect(comp).connect(ctx.destination);
-    // nappe : deux voix désaccordées derrière un filtre qui s'ouvre avec le jour
-    this.pad = ctx.createGain(); this.pad.gain.value = 0.0;
-    this.padFilter = ctx.createBiquadFilter(); this.padFilter.type = 'lowpass'; this.padFilter.frequency.value = 400;
-    for (const [f, det] of [[ROOT / 2, -6], [ROOT / 2, 7], [ROOT * 0.75, 0]] as [number, number][]) {
-      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
-      o.connect(this.padFilter); o.start();
+    this.music = ctx.createGain(); this.music.gain.value = this.musicVolume;
+    this.sfx = ctx.createGain(); this.sfx.gain.value = this.sfxVolume;
+    this.music.connect(this.master); this.sfx.connect(this.master);
+    // réverbération : une réponse impulsionnelle synthétique, longue et sombre
+    const len = Math.floor(ctx.sampleRate * 4.2);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        lp += ((Math.random() * 2 - 1) - lp) * (0.5 - 0.42 * t);      // de plus en plus sourd
+        d[i] = lp * Math.pow(1 - t, 2.6);
+      }
     }
-    this.padFilter.connect(this.pad).connect(this.master);
-    const len = ctx.sampleRate * 0.3;
-    this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
-    const data = this.noise.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    this.reverb = ctx.createConvolver(); this.reverb.buffer = ir;
+    this.wet = ctx.createGain(); this.wet.gain.value = 0.9;
+    this.reverb.connect(this.wet).connect(this.master);
+    const nl = Math.floor(ctx.sampleRate * 0.4);
+    this.noise = ctx.createBuffer(1, nl, ctx.sampleRate);
+    const nd = this.noise.getChannelData(0);
+    for (let i = 0; i < nl; i++) nd[i] = Math.random() * 2 - 1;
+    this.nextChord = ctx.currentTime + 0.3;
+    this.nextNote = ctx.currentTime + 4;
   }
 
-  setVolume(v: number): void { this.volume = v; if (this.ctx) this.master.gain.value = v; }
+  setMusic(v: number): void { this.musicVolume = v; if (this.ctx) this.music.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1); }
+  setSfx(v: number): void { this.sfxVolume = v; if (this.ctx) this.sfx.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1); }
 
-  /** Appelé à chaque image : ambiance selon l'heure. */
-  ambience(night: number, light: number): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    this.pad.gain.setTargetAtTime(0.035 + 0.02 * night, t, 2);
-    this.padFilter.frequency.setTargetAtTime(260 + 900 * light, t, 2);
-    this.budget = Math.min(8, this.budget + 0.5);
-    // la nuit, la jungle répond par de brefs appels aigus
-    if (night > 0.4 && Math.random() < 0.012 * night) this.tone(ROOT * 8 * [1, 1.189, 1.335, 1.498][(Math.random() * 4) | 0], 'sine', 0.18, 0.03, Math.random() * 2 - 1, 0, 0.004);
-  }
-
-  private nextGrid(): number {
-    const t = this.ctx!.currentTime;
-    const g = Math.ceil((t + 0.01) / GRID) * GRID;
-    this.lastGrid = g;
-    return g - t;
-  }
-
-  private tone(freq: number, type: OscillatorType, dur: number, vol: number, pan: number, delay: number, attack = 0.005, slideTo = 0): void {
+  /** Une voix : oscillateur → filtre passe-bas → enveloppe → sortie directe + réverbération. */
+  private voice(freq: number, type: OscillatorType, t: number, attack: number, hold: number, release: number, vol: number, cutoff: number, bus: GainNode, send: number, pan = 0, detune = 0): void {
     const ctx = this.ctx!;
-    const t = ctx.currentTime + delay;
-    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
-    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; o.detune.value = detune;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; f.Q.value = 0.3;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + attack);
+    g.gain.setValueAtTime(vol, t + attack + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + release);
     const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan));
-    o.connect(g).connect(p).connect(this.master);
-    o.start(t); o.stop(t + dur + 0.02);
+    o.connect(f).connect(g).connect(p);
+    p.connect(bus);
+    if (send > 0) { const s = ctx.createGain(); s.gain.value = send; p.connect(s).connect(this.reverb); }
+    o.start(t); o.stop(t + attack + hold + release + 0.1);
   }
 
-  private hit(dur: number, vol: number, pan: number, freq: number): void {
+  private thud(t: number, freq: number, to: number, dur: number, vol: number, pan = 0): void {
     const ctx = this.ctx!;
-    if (!this.noise) return;
-    const s = ctx.createBufferSource(); s.buffer = this.noise;
-    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.2;
-    const g = ctx.createGain(); g.gain.value = vol;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan));
-    s.connect(f).connect(g).connect(p).connect(this.master);
-    s.start(ctx.currentTime, 0, dur);
+    o.connect(g).connect(p).connect(this.sfx);
+    o.start(t); o.stop(t + dur + 0.05);
   }
 
-  private degree(n: number, octave = 0): number {
-    const d = SCALE[((n % 5) + 5) % 5], oct = Math.floor(n / 5) + octave;
-    return ROOT * Math.pow(2, oct + d / 12);
+  private click(t: number, freq: number, dur: number, vol: number, pan = 0): void {
+    const ctx = this.ctx!;
+    const s = ctx.createBufferSource(); s.buffer = this.noise;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.9;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan));
+    s.connect(f).connect(g).connect(p).connect(this.sfx);
+    s.start(t, Math.random() * 0.2, dur + 0.02);
   }
 
-  /** near : 0..1 (proximité de la caméra) ; pan : -1..1. */
-  craft(recipeId: number, near: number, pan: number, night: number): void {
-    if (!this.ctx || near < 0.03 || this.budget < 1) return;
-    this.budget--;
-    const delay = this.nextGrid();
-    const oct = night > 0.5 ? 0 : 1;
-    this.tone(this.degree(recipeId * 2, oct), recipeId % 2 ? 'triangle' : 'sine', 0.5, 0.11 * near, pan, delay, 0.008);
-    this.tone(this.degree(recipeId * 2, oct) * 2.005, 'sine', 0.25, 0.03 * near, pan, delay);
+  /** Appelé à chaque image : programme la musique un peu en avance. */
+  update(night: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.night = night;
+    this.budget = Math.min(6, this.budget + 0.25);
+    const now = ctx.currentTime;
+    if (now + 0.5 > this.nextChord) {
+      const t = this.nextChord;
+      const chord = CHORDS[this.chordIndex % CHORDS.length];
+      const cutoff = 950 - 420 * night;
+      // nappe : chaque note de l'accord, deux voix légèrement désaccordées, entrée et sortie très lentes
+      chord.forEach((semi, i) => {
+        const pan = (i / (chord.length - 1)) * 1.2 - 0.6;
+        this.voice(hz(semi), 'triangle', t + i * 0.35, 3.2, CHORD_LEN - 4.5, 5.5, 0.05, cutoff, this.music, 0.5, pan, -5);
+        this.voice(hz(semi), 'sine', t + i * 0.35, 3.6, CHORD_LEN - 4.5, 5.5, 0.04, cutoff, this.music, 0.5, -pan, 6);
+      });
+      this.voice(hz(chord[0], -2), 'sine', t, 2.0, CHORD_LEN - 3, 4, 0.16, 220, this.music, 0.15);   // basse
+      this.chordIndex++;
+      this.nextChord = t + CHORD_LEN;
+    }
+    if (now + 0.3 > this.nextNote) {
+      const t = this.nextNote;
+      // mélodie : des notes rares, comme des gouttes ; plus rares encore la nuit
+      if (Math.random() < 0.62 - 0.3 * night) {
+        let k = (Math.random() * MELODY.length) | 0;
+        if (k === this.lastNote) k = (k + 2) % MELODY.length;
+        this.lastNote = k;
+        const f = hz(MELODY[k], 1);
+        const pan = Math.random() * 1.4 - 0.7;
+        this.voice(f, 'sine', t, 0.012, 0.02, 2.6, 0.075, 2600, this.music, 0.9, pan);
+        this.voice(f * 2.005, 'sine', t, 0.008, 0.01, 0.9, 0.018, 4000, this.music, 0.9, pan);
+        if (Math.random() < 0.3) this.voice(hz(MELODY[(k + 2) % MELODY.length], 1), 'sine', t + 0.42, 0.012, 0.02, 2.2, 0.045, 2400, this.music, 0.9, -pan);
+      }
+      this.nextNote = t + 1.4 + Math.random() * 2.6;
+    }
   }
-  mine(near: number, pan: number): void {
-    if (!this.ctx || near < 0.05 || this.budget < 1) return;
-    this.budget -= 0.5;
-    this.tone(92, 'sine', 0.16, 0.16 * near, pan, this.nextGrid(), 0.004, 46);
-  }
-  cut(near: number, pan: number): void {
-    if (!this.ctx || near < 0.05 || this.budget < 1) return;
-    this.budget -= 0.5;
-    this.hit(0.07, 0.1 * near, pan, 3200);
-  }
-  deliver(item: number, near: number, pan: number): void {
-    if (!this.ctx || near < 0.05 || this.budget < 1) return;
-    this.budget -= 0.5;
-    this.tone(this.degree(item, 2), 'sine', 0.12, 0.035 * near, pan, this.nextGrid());
-  }
+
+  // ------------------------------------------------------------ bruitages
   place(size: number): void {
     if (!this.ctx) return;
-    this.tone(size > 1 ? 130 : 196, 'triangle', 0.12, 0.14, 0, 0, 0.003, size > 1 ? 65 : 120);
-    this.hit(0.05, 0.08, 0, 900);
+    const t = this.ctx.currentTime;
+    this.thud(t, size > 1 ? 120 : 170, size > 1 ? 52 : 85, size > 1 ? 0.2 : 0.11, size > 1 ? 0.42 : 0.26);
+    this.click(t, 1400, 0.035, 0.07);
   }
-  remove(): void { if (this.ctx) { this.tone(180, 'triangle', 0.14, 0.1, 0, 0, 0.003, 320); } }
-  deny(): void { if (this.ctx) this.tone(82, 'square', 0.12, 0.05, 0, 0, 0.003, 70); }
-  ui(): void { if (this.ctx) this.tone(660, 'sine', 0.06, 0.04, 0, 0); }
-  /** Quota accompli : un accord qui monte, la Tour grandit. */
+  remove(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.thud(t, 90, 150, 0.1, 0.2);
+    this.click(t, 700, 0.06, 0.06);
+  }
+  deny(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.thud(t, 110, 92, 0.1, 0.2); this.thud(t + 0.11, 92, 78, 0.14, 0.2);
+  }
+  ui(): void { if (this.ctx) this.click(this.ctx.currentTime, 2600, 0.02, 0.05); }
+  /** Bruit discret d'une machine qui termine un cycle (seulement près de la caméra). */
+  machine(near: number, pan: number): void {
+    if (!this.ctx || near < 0.15 || this.budget < 1) return;
+    this.budget--;
+    const t = this.ctx.currentTime;
+    this.click(t, 420 + Math.random() * 260, 0.06, 0.035 * near, pan);
+  }
+  cut(near: number, pan: number): void {
+    if (!this.ctx || near < 0.15 || this.budget < 1) return;
+    this.budget--;
+    this.click(this.ctx.currentTime, 3000, 0.05, 0.03 * near, pan);
+  }
+  /** Quota accompli : un arpège de cloches qui monte dans la réverbération. */
   quota(): void {
     if (!this.ctx) return;
-    [0, 2, 4, 5, 7, 9].forEach((n, i) => {
-      this.tone(this.degree(n, 0), 'triangle', 1.6, 0.1, (i - 2.5) / 4, i * GRID, 0.01);
-      this.tone(this.degree(n, 1), 'sine', 2.2, 0.06, (2.5 - i) / 4, i * GRID + 0.03, 0.02);
+    const t = this.ctx.currentTime;
+    [0, 7, 12, 15, 19, 24].forEach((semi, i) => {
+      this.voice(hz(semi, 1), 'sine', t + i * 0.16, 0.01, 0.05, 3.2, 0.12, 5000, this.sfx, 0.9, (i - 2.5) / 3.5);
+      this.voice(hz(semi, 2) * 1.003, 'sine', t + i * 0.16, 0.01, 0.02, 1.4, 0.03, 6000, this.sfx, 0.9, (2.5 - i) / 3.5);
     });
-    this.tone(55, 'sine', 2.4, 0.3, 0, 0, 0.05, 36);
+    this.thud(t, 70, 38, 1.4, 0.4);
   }
 }

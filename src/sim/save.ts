@@ -8,6 +8,7 @@ export interface SaveData {
   stock: Float64Array; delivered: Float64Array;
   quota: number; quotaStart: number; savoir: number; upgrades: Record<string, number>;
   atmo: { co2: number; emitted: number; fixed: number };
+  made: Uint8Array; wind: number;
   records: Game['records']; bloom: number; jungleHealth: number;
   chunks: { cx: number; cy: number; canopy: Uint8Array; deposit: Uint8Array; amount: Uint16Array; slab: Uint8Array; smoke: Float32Array }[];
   ents: EntSave[];
@@ -63,7 +64,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     v: 1, seed: g.seed, tick: g.tick, nextId: g.nextId,
     stock: g.stock.slice(), delivered: g.delivered.slice(),
     quota: g.quota, quotaStart: g.quotaStart, savoir: g.savoir, upgrades: { ...g.upgrades },
-    atmo: { ...g.atmo }, records: g.records.slice(), bloom: g.bloom, jungleHealth: g.jungleHealth,
+    atmo: { ...g.atmo }, made: g.made.slice(), wind: g.wind, records: g.records.slice(), bloom: g.bloom, jungleHealth: g.jungleHealth,
     chunks: g.world.list.map((c) => ({ cx: c.cx, cy: c.cy, canopy: c.canopy.slice(), deposit: c.deposit.slice(), amount: c.amount.slice(), slab: c.slab.slice(), smoke: c.smoke.slice() })),
     ents, extra,
   };
@@ -75,9 +76,9 @@ export function deserialize(d: SaveData): Game {
   for (const cd of d.chunks) {
     const c = g.world.chunk(cd.cx, cd.cy)!;
     c.canopy.set(cd.canopy); c.deposit.set(cd.deposit); c.amount.set(cd.amount); c.slab.set(cd.slab); c.smoke.set(cd.smoke);
-    c.slabCount = 0;
+    c.slabCount = 0; c.smokeSum = 0;
     for (let i = 0; i < c.slab.length; i++) if (c.slab[i]) c.slabCount++;
-    g.slabCount += c.slabCount;
+    for (let i = 0; i < c.smoke.length; i++) c.smokeSum += c.smoke[i];
     c.version++;
   }
   for (const s of d.ents) {
@@ -95,9 +96,10 @@ export function deserialize(d: SaveData): Game {
   g.nextId = d.nextId; g.tick = d.tick;
   g.stock.set(d.stock); g.delivered.set(d.delivered);
   g.quota = d.quota; g.quotaStart = d.quotaStart; g.savoir = d.savoir; Object.assign(g.upgrades, d.upgrades);
-  Object.assign(g.atmo, d.atmo); g.records = d.records.slice(); g.bloom = d.bloom; g.jungleHealth = d.jungleHealth;
+  Object.assign(g.atmo, d.atmo); g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice(); g.bloom = d.bloom; g.jungleHealth = d.jungleHealth;
   g.loading = false;
   g.topoDirty = true;
+  g.refresh();          // les objets en transit retrouvent leur convoyeur dès le chargement
   return g;
 }
 

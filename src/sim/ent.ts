@@ -4,7 +4,7 @@
 import type { BuildingDef, Dir, Recipe } from './data';
 import { NO_TARGET, type BeltPath, type Target } from './belts';
 
-export enum Status { Idle, Working, NoInput, Blocked, NoPower, NoResource, NoRecipe, Dark }
+export enum Status { Idle, Working, NoInput, Blocked, NoPower, NoResource, NoRecipe, Dark, NoGas }
 
 export class Ent {
   dead = false;
@@ -57,16 +57,17 @@ export class Ent {
   get cx(): number { return this.x + this.w / 2; }
   get cy(): number { return this.y + this.h / 2; }
   /** Hauteur effective (la Tour grandit). */
-  get height(): number { return this.def.kind === 'hub' ? this.def.height + this.level * 0.8 : this.def.height; }
+  get height(): number { return this.def.kind === 'hub' ? this.def.height + this.level * 0.7 : this.def.height; }
 }
 
 export const STATUS_TEXT: Record<number, string> = {
   [Status.Idle]: 'En attente',
   [Status.Working]: 'En marche',
   [Status.NoInput]: 'Il manque',
-  [Status.Blocked]: 'Sortie bloquée',
-  [Status.NoPower]: 'Pas de courant : relie ses dalles à la Tour ou à une source',
+  [Status.Blocked]: 'Sortie bloquée : relie sa flèche à un convoyeur qui avance',
+  [Status.NoPower]: 'Pas de courant : construis une source d’énergie',
   [Status.NoResource]: 'Plus rien à extraire à portée',
   [Status.NoRecipe]: 'Aucune recette choisie',
-  [Status.Dark]: 'Dans l’ombre ou la nuit',
+  [Status.Dark]: 'Attend la lumière du jour',
+  [Status.NoGas]: 'Aucun SO₂ à capter : il faut une Fonderie de cuivre à moins de 8 cases',
 };

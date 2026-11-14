@@ -17,6 +17,8 @@ export class Chunk {
   region = new Uint16Array(CHUNK * CHUNK);   // réseau électrique
   smoke = new Float32Array(SMOKE_RES * SMOKE_RES);
   next: Float32Array | null = null;          // tampon de diffusion
+  pending = false;
+  smokeSum = 0;
   version = 1;        // incrémenté à chaque changement visible (cache de rendu)
   urgent = false;     // changement à repeindre tout de suite (construction, coupe)
   slabCount = 0;
@@ -100,7 +102,7 @@ export class World {
     return c ? c.smoke[(((y & 31) >> 2) << 3) | ((x & 31) >> 2)] : 0;
   }
   addSmoke(x: number, y: number, v: number): void {
-    const c = this.at(x, y)!; c.smoke[(((y & 31) >> 2) << 3) | ((x & 31) >> 2)] += v;
+    const c = this.at(x, y)!; c.smoke[(((y & 31) >> 2) << 3) | ((x & 31) >> 2)] += v; c.smokeSum += v;
   }
 
   ensureArea(x0: number, y0: number, x1: number, y1: number): void {

@@ -1,7 +1,7 @@
 {
   "name": "brutalusine",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Brutalusine — une usine d'os dans une jungle qui respire. Jeu d'automatisation vue du dessus, coop local.",
   "scripts": {
@@ -12,12 +12,14 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
-    "@fontsource/inter": "^5.3.0"
+    "@fontsource/inter": "^5.3.0",
+    "three": "^0.187.0"
   }
 }

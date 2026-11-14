@@ -4,74 +4,96 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Brutalusine</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23EFE5D3'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%232E1C70'/%3E%3Ccircle cx='8' cy='8' r='2.5' fill='%23FFC24A'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23141513'/%3E%3Crect x='3' y='4' width='10' height='9' fill='%2396948D'/%3E%3Crect x='7' y='7' width='2' height='3' fill='%23F08A24'/%3E%3C/svg%3E">
 </head>
 <body>
   <canvas id="game" aria-label="Brutalusine"></canvas>
-  <div id="tilt-top" class="tilt"></div>
-  <div id="tilt-bottom" class="tilt"></div>
 
   <div id="hud" hidden>
-    <section id="quota" class="slab" aria-live="polite"></section>
+    <section id="quota" class="card" aria-live="polite"></section>
     <section id="topbar"></section>
-    <section id="stock" class="slab"></section>
+    <section id="stock" class="card"></section>
     <section id="alerts"></section>
-    <section id="panel" class="slab" hidden></section>
-    <nav id="buildbar" aria-label="Construction"></nav>
-    <div id="hint"></div>
+    <section id="panel" class="card" hidden></section>
+    <nav id="build" aria-label="Construction">
+      <div id="cats"></div>
+      <div id="tools"></div>
+    </nav>
+    <div id="sidebtns">
+      <button data-menu="guide" title="Comment jouer (H)"><b>?</b><span>Guide</span></button>
+      <button data-menu="atlas" title="Atlas : objets, bâtiments, réactions (G)"><b>A</b><span>Atlas</span></button>
+      <button data-menu="pause" title="Pause et options (Échap)"><b>≡</b><span>Menu</span></button>
+    </div>
+    <div id="tip" hidden></div>
     <div id="toast" role="status"></div>
-    <div id="banner" class="slab" hidden></div>
+    <div id="banner" class="card" hidden></div>
+  </div>
+
+  <div id="guide" class="overlay" hidden>
+    <div class="card sheet">
+      <header><h2>Comment jouer</h2><button class="x" data-close="guide" aria-label="Fermer">✕</button></header>
+      <div class="guidegrid">
+        <article><h3><i>1</i> Le but</h3><p>Tu bâtis une usine qui tourne toute seule. Au centre, <b>la Tour</b> te donne un <b>quota</b> : une quantité d’objets à lui livrer. Tout ce qui entre dans la Tour compte, et rejoint ton stock pour construire.</p><p>Chaque quota accompli <b>débloque de nouveaux bâtiments</b> et fait grandir la Tour. Il y en a onze, puis des paliers sans fin.</p></article>
+        <article><h3><i>2</i> Trois gestes</h3><p><b>Poser</b> : choisis un bâtiment en bas, clique sur le sol. <b>R</b> le fait pivoter.</p><p><b>Relier</b> : choisis le Convoyeur, clique et <b>glisse</b>. Il tourne tout seul.</p><p><b>Regarder</b> : sans outil, clique sur un bâtiment pour voir ce qu’il fait et ce qui lui manque.</p><p>Clic droit lâche l’outil ; sans outil, il démolit. Démolir <b>rembourse tout</b>. <b>Ctrl+Z</b> annule.</p></article>
+        <article><h3><i>3</i> Les flux</h3><p>Chaque machine a une <b>flèche orange</b> : sa sortie. Elle accepte ses entrées par <b>tous les autres côtés</b>.</p><p>Un convoyeur qui pointe vers une machine la nourrit. Un convoyeur posé devant la flèche emporte ce qu’elle produit.</p><p>Une machine arrêtée affiche <b>un pictogramme</b> : l’objet qui lui manque, ⚡ pas assez de courant, ⏸ sortie bloquée.</p></article>
+        <article><h3><i>4</i> L’énergie</h3><p>Une machine consomme des watts <b>seulement quand elle travaille</b>. En haut de l’écran : <b>demande / capacité</b>.</p><p>Si la demande dépasse la capacité, <b>toute l’usine ralentit</b>. La Tour donne 300 W. Ensuite : Amphithéâtre (brûle biomasse ou charbon), Héliostats (le jour, hors de l’ombre), Éoliennes, Turbines, Accumulateurs pour la nuit.</p></article>
+        <article><h3><i>5</i> La chimie est vraie</h3><p>Chaque recette est une <b>vraie équation équilibrée</b> : 2 Fe₂O₃ + 3 C → 4 Fe + 3 CO₂. Les proportions du jeu sont celles de la nature.</p><p><b>Rien ne disparaît</b> : le CO₂ part dans l’air, le SO₂ retombe en fumée sur la jungle, la scorie reste sur tes convoyeurs jusqu’à ce que tu lui trouves une place.</p></article>
+        <article><h3><i>6</i> La jungle est vivante</h3><p>Elle <b>repousse</b> sur tout sol nu — plus vite quand l’air est chargé en CO₂. La Scierie la coupe : coupe trop, et il n’y a plus rien à couper.</p><p>La <b>fumée la tue</b>. Or les <b>Éventails</b>, ces grands arbres lumineux, ne donnent leur Lueur que si la jungle vit autour d’eux. Tôt ou tard, il faudra choisir comment cohabiter.</p></article>
+        <article><h3><i>7</i> Le jour et la nuit</h3><p>Un jour dure dix minutes. Les <b>ombres tournent</b> : un Héliostat à l’ombre d’un bâtiment ne produit rien. La nuit, plus de soleil du tout.</p><p>Les nuits où la jungle va bien, elle <b>fleurit</b> — et les Éventails donnent deux fois plus.</p></article>
+        <article><h3><i>8</i> Les commandes</h3>
+          <table class="keys">
+            <tr><td>Clic gauche</td><td>Poser · glisser pour tracer · inspecter</td></tr>
+            <tr><td>Glisser dans le vide</td><td>Déplacer la vue (aussi ZQSD, flèches, clic molette)</td></tr>
+            <tr><td>Molette</td><td>Zoom</td></tr>
+            <tr><td>Clic droit</td><td>Lâcher l’outil · sinon démolir</td></tr>
+            <tr><td>R · E · X</td><td>Pivoter · pipette · outil Démolir</td></tr>
+            <tr><td>1…9 · Tab</td><td>Bâtiment · catégorie suivante</td></tr>
+            <tr><td>Ctrl+Z · Espace</td><td>Annuler · pause</td></tr>
+            <tr><td>Manette</td><td>A poser, B démolir, X pivoter, Y pipette, LB/RB outil</td></tr>
+          </table>
+        </article>
+      </div>
+      <div class="stack row"><button class="big" data-close="guide">Compris</button></div>
+    </div>
   </div>
 
   <div id="codex" class="overlay" hidden>
-    <div class="slab sheet">
+    <div class="card sheet">
       <header><h2>Atlas</h2><input id="codex-search" type="search" placeholder="Chercher un objet, un bâtiment, une réaction…" aria-label="Chercher dans l’Atlas"><button class="x" data-close="codex" aria-label="Fermer">✕</button></header>
       <div class="cols"><div id="codex-list"></div><div id="codex-entry"><p class="meta">Tout ce que tu as découvert est ici. Chaque objet dit d’où il vient et à quoi il sert.</p></div></div>
     </div>
   </div>
 
   <div id="menu" class="overlay" hidden>
-    <div class="slab sheet narrow">
+    <div class="card sheet narrow">
       <header><h2>Pause</h2><button class="x" data-menu="resume" aria-label="Reprendre">✕</button></header>
       <div class="stack">
         <button class="big" data-menu="resume">Reprendre</button>
-        <button class="big" data-menu="save">Sauvegarder</button>
-        <button class="big" data-menu="load">Charger la sauvegarde</button>
-        <button class="big" data-menu="new">Nouvelle planète</button>
+        <button class="big ghost" data-menu="guide">Comment jouer</button>
+        <button class="big ghost" data-menu="save">Sauvegarder</button>
+        <button class="big ghost" data-menu="load">Charger la sauvegarde</button>
+        <button class="big ghost" data-menu="new">Nouvelle planète</button>
       </div>
       <div class="eyebrow">Options</div>
-      <label class="opt">Volume <input id="opt-volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+      <label class="opt">Musique <input id="opt-music" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+      <label class="opt">Bruitages <input id="opt-sfx" type="range" min="0" max="1" step="0.05" value="0.6"></label>
       <label class="opt"><input id="opt-tilt" type="checkbox" checked> Effet maquette (flou des bords)</label>
-      <div class="eyebrow">Bâtisseurs</div>
+      <div class="eyebrow">Coop locale</div>
       <ul id="players"></ul>
-      <p class="meta">Coop locale : appuyez sur <b>A</b> sur une manette pour rejoindre, <b>Select</b> pour partir.</p>
-      <div class="eyebrow">Commandes</div>
-      <table class="keys">
-        <tr><td>ZQSD / flèches</td><td>Se déplacer</td><td>Stick gauche</td></tr>
-        <tr><td>Clic gauche (glisser)</td><td>Poser · inspecter</td><td>A</td></tr>
-        <tr><td>Clic droit (glisser)</td><td>Démolir (remboursé)</td><td>B</td></tr>
-        <tr><td>R</td><td>Pivoter</td><td>X</td></tr>
-        <tr><td>E (pipette)</td><td>Copier ce qui est sous le curseur</td><td>Y</td></tr>
-        <tr><td>F (maintenir)</td><td>Défricher la canopée</td><td>LT</td></tr>
-        <tr><td>1…9, 0</td><td>Choisir un bâtiment</td><td>LB / RB</td></tr>
-        <tr><td>Molette · M</td><td>Zoom · vue d’ensemble</td><td>Croix ↑ ↓</td></tr>
-        <tr><td>Ctrl+Z</td><td>Annuler le dernier geste</td><td></td></tr>
-        <tr><td>Tab</td><td>Atlas</td><td></td></tr>
-        <tr><td>Échap</td><td>Lâcher l’outil · pause</td><td>Start</td></tr>
-      </table>
+      <p class="meta">Appuyez sur <b>A</b> sur une manette pour rejoindre le chantier, <b>Select</b> pour le quitter.</p>
     </div>
   </div>
 
   <div id="title" class="overlay">
     <div class="titlecard">
-      <div class="eyebrow">Une usine d’os dans une jungle qui respire</div>
+      <div class="eyebrow">Béton contre canopée</div>
       <h1>BRUTALUSINE</h1>
-      <p>Rien ne se perd : chaque réaction est une vraie équation. La dalle est ta fondation, ton réseau et ta frontière. Le soleil tourne, les ombres aussi. Et la jungle répond.</p>
+      <p>Une usine de béton brut dans une jungle vivante. Chaque réaction est une vraie équation. Rien ne disparaît. Le soleil tourne, les ombres aussi.</p>
       <div class="stack row">
         <button class="big" id="btn-continue" hidden>Continuer</button>
-        <button class="big" id="btn-new">Se poser</button>
+        <button class="big" id="btn-new">Nouvelle partie</button>
       </div>
-      <p class="meta">Clavier + souris, et jusqu’à 3 manettes pour jouer à plusieurs sur le même écran.</p>
+      <p class="meta">Souris et clavier — et jusqu’à trois manettes pour bâtir à plusieurs sur le même écran.</p>
     </div>
   </div>
 
