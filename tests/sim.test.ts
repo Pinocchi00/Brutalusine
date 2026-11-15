@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES } from '../src/sim/data';
+import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, LOOT_FER, TREE_MIN } from '../src/sim/data';
 import { Status } from '../src/sim/ent';
 import { serialize, deserialize } from '../src/sim/save';
 
@@ -17,10 +17,8 @@ const clear = (g: Game, x0: number, y0: number, x1: number, y1: number) => {
   g.world.ensureArea(x0 - 2, y0 - 2, x1 + 2, y1 + 2);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const c = g.world.at(x, y)!, i = ((y & 31) << 5) | (x & 31);
-    const e = g.entAt(x, y);
-    if (e && e.def.kind === 'tree') { g.trees = g.trees.filter((t) => t !== e); g.ents.delete(e.id); for (let j = 0; j < 3; j++) for (let k = 0; k < 3; k++) g.world.setEnt(e.x + k, e.y + j, 0); }
     if (c.ent[i]) continue;
-    c.ground[i] = 0; c.deposit[i] = 0; c.amount[i] = 0; c.canopy[i] = 0;
+    c.ground[i] = 0; c.deposit[i] = 0; c.amount[i] = 0; c.canopy[i] = 0; c.cap[i] = 0; c.loot[i] = 0;
   }
 };
 const line = (g: Game, x0: number, y: number, n: number) => {
@@ -113,13 +111,13 @@ describe('convoyeurs', () => {
     for (let y = 11; y < 14; y++) g.place('convoyeur', 13, y, 1, { free: true });  // côté
     run(g, 1);
     const src = g.paths.find((q) => q.tiles[0].x === 10)!;
-    for (let t = 0; t < 900; t++) { if (t % 20 === 0) src.insertAtStart(t % 40 === 0 ? I.cuivre : I.scorie); g.step(); }
+    for (let t = 0; t < 900; t++) { if (t % 20 === 0) src.insertAtStart(t % 40 === 0 ? I.cuivre : I.fer); g.step(); }
     const straight = g.paths.find((q) => q.tiles[0].x === 14)!;
     const side = g.paths.find((q) => q.tiles[0].y === 11)!;
     expect(straight.count).toBeGreaterThan(0);
     expect(side.count).toBeGreaterThan(0);
     for (let i = straight.head; i < straight.types.length; i++) expect(straight.types[i]).toBe(I.cuivre);
-    for (let i = side.head; i < side.types.length; i++) expect(side.types[i]).toBe(I.scorie);
+    for (let i = side.head; i < side.types.length; i++) expect(side.types[i]).toBe(I.fer);
   });
 
   it('un entrepôt garde les objets puis les ressort par sa flèche', () => {
@@ -138,19 +136,19 @@ describe('convoyeurs', () => {
 });
 
 describe('machines', () => {
-  it('un haut fourneau réduit l’hématite selon la vraie stœchiométrie', () => {
+  it('une fonderie fond le minerai dans les vraies proportions', () => {
     const g = sandbox();
     clear(g, 8, 8, 16, 14);
-    expect(g.place('haut_fourneau', 10, 10, 0, { free: true }).ok).toBe(true);
+    expect(g.place('fonderie', 10, 10, 0, { free: true }).ok).toBe(true);
     const f = g.entAt(10, 10)!;
     expect(f.recipe).toBe(R.reduction);
     f.buf![I.hematite] = 2; f.buf![I.carbone] = 3;
-    const co2 = g.atmo.emitted;
+    const co2 = g.atmo.co2;
     run(g, 300);
     expect(f.out![I.fer]).toBe(4);
-    expect(g.atmo.emitted - co2).toBe(3);
     expect(f.status).toBe(Status.NoInput);
     expect(f.missing).toBe(I.hematite);
+    expect(g.atmo.co2).toBeGreaterThan(co2);
   });
 
   it('chaîne complète : puits → convoyeur', () => {
@@ -166,31 +164,34 @@ describe('machines', () => {
     expect(g.made[I.hematite]).toBe(1);
   });
 
-  it('quand la demande dépasse la capacité, toute l’usine ralentit ; un amphithéâtre rétablit la cadence', () => {
+  it('un puits ne se pose que sur un gisement', () => {
+    const g = sandbox();
+    clear(g, 50, 50, 60, 60);
+    expect(g.place('puits', 52, 52, 0, { free: true }).ok).toBe(false);
+  });
+
+  it('quand la demande dépasse la capacité, toute l’usine ralentit ; un brûleur rétablit la cadence', () => {
     const g = sandbox();
     clear(g, 38, 38, 60, 52);
-    const fours = [0, 1, 2, 3].map((i) => { expect(g.place('haut_fourneau', 40 + i * 4, 40, 0, { free: true }).ok).toBe(true); return g.entAt(40 + i * 4, 40)!; });
+    const fours = [0, 1, 2, 3].map((i) => { expect(g.place('fonderie', 40 + i * 4, 40, 0, { free: true }).ok).toBe(true); return g.entAt(40 + i * 4, 40)!; });
     for (const f of fours) { f.buf![I.hematite] = 4; f.buf![I.carbone] = 6; }
     run(g, 60);
     expect(g.power.lastDemand).toBe(600);
     expect(g.power.sat).toBeCloseTo(0.5, 5);          // la Tour ne fournit que 300 W
-    expect(g.place('amphi', 40, 46, 0, { free: true }).ok).toBe(true);
-    g.entAt(40, 46)!.buf![I.biomasse] = 5;
+    expect(g.place('bruleur', 40, 46, 0, { free: true }).ok).toBe(true);
+    g.entAt(40, 46)!.buf![I.bois] = 5;
     run(g, 60);
     expect(g.power.sat).toBeCloseTo(1, 5);
     run(g, 400);
     expect(fours[0].done).toBeGreaterThan(0);
   });
 
-  it('un héliostat ne produit rien la nuit ni à l’ombre de la Tour', () => {
+  it('un héliostat produit le jour et rien la nuit', () => {
     const g = sandbox();
     clear(g, -12, -12, 12, 12);
-    // la Tour occupe (-1..1) ; au matin le soleil est à l'est : l'ombre tombe à l'ouest
-    g.place('heliostat', -3, 0, 0, { free: true });
     g.place('heliostat', 8, 8, 0, { free: true });
     run(g, 200);
     expect(g.sun.day).toBe(true);
-    expect(g.entAt(-3, 0)!.light).toBe(0);
     expect(g.entAt(8, 8)!.light).toBeGreaterThan(0.2);
     g.tick += Math.round(0.75 * 36000);               // en pleine nuit
     run(g, 60);
@@ -199,8 +200,69 @@ describe('machines', () => {
   });
 });
 
+describe('récolte à la main', () => {
+  it('déraciner un arbre donne son bois et compte pour le quota', () => {
+    const g = new Game(4);
+    g.world.ensureArea(10, 10, 40, 40);
+    let tx = 0, ty = 0;
+    search: for (let y = 12; y < 40; y++) for (let x = 12; x < 40; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
+    const size = g.world.canopy(tx, ty);
+    expect(size).toBeGreaterThanOrEqual(TREE_MIN);
+    const carbon = g.ledger('C');
+    const wood = g.uproot(tx, ty);
+    expect(wood).toBeCloseTo(size / 32, 6);
+    expect(g.stock[I.bois]).toBeCloseTo(wood, 6);
+    expect(g.delivered[I.bois]).toBeCloseTo(wood, 6);
+    expect(g.world.canopy(tx, ty)).toBe(0);
+    expect(g.ledger('C')).toBeCloseTo(carbon, 6);
+    expect(g.events.some((e) => e.type === 'fell')).toBe(true);
+  });
+
+  it('piocher un gisement et ramasser des débris remplit le stock', () => {
+    const g = new Game(4);
+    const b = g.world.blobs[0];
+    const fe = g.ledger('Fe');
+    expect(g.handMine(b.x, b.y)).toBe(I.hematite);
+    expect(g.stock[I.hematite]).toBe(1);
+    expect(g.world.scraps.size).toBeGreaterThanOrEqual(6);
+    let picked = 0;
+    for (let y = -10; y <= 10; y++) for (let x = -10; x <= 10; x++) if (g.world.loot(x, y) && g.pickLoot(x, y)) picked++;
+    expect(picked).toBeGreaterThanOrEqual(6);
+    expect(g.stock[I.fer]).toBe(40 + picked * LOOT_FER);
+    expect(g.ledger('Fe')).toBeCloseTo(fe, 6);
+    expect(g.gathered).toBe(picked + 1);
+  });
+
+  it('on peut nourrir une machine depuis le stock et vider sa sortie', () => {
+    const g = sandbox();
+    clear(g, 8, 8, 16, 14);
+    g.place('charbonniere', 10, 10, 0, { free: true });
+    const e = g.entAt(10, 10)!;
+    g.stock[I.bois] = 5; g.stock[I.carbone] = 0;
+    expect(g.feed(e)).toBe(2);
+    expect(g.stock[I.bois]).toBe(3);
+    run(g, 200);
+    expect(e.out![I.carbone]).toBe(6);
+    expect(g.take(e)).toBe(6);
+    expect(g.stock[I.carbone]).toBe(6);
+    expect(e.outCount).toBe(0);
+  });
+
+  it('poser un bâtiment sur des arbres les déracine', () => {
+    const g = sandbox(4);
+    g.world.ensureArea(10, 10, 40, 40);
+    let tx = 0, ty = 0;
+    search: for (let y = 14; y < 40; y++) for (let x = 14; x < 40; x++) {
+      if (g.world.tree(x, y) && !g.world.deposit(x + 1, y + 1) && g.world.ground(x + 1, y + 1) === 0 && g.world.ground(x, y + 1) === 0 && g.world.ground(x + 1, y) === 0) { tx = x; ty = y; break search; }
+    }
+    expect(g.place('charbonniere', tx, ty, 0, { free: true }).ok).toBe(true);
+    expect(g.world.canopy(tx, ty)).toBe(0);
+    expect(g.world.slab(tx, ty)).toBe(1);
+  });
+});
+
 describe('lois de conservation', () => {
-  it('carbone, fer, calcium, silicium, cuivre et soufre se conservent sur toute une usine', () => {
+  it('carbone, fer, calcium, silicium et cuivre se conservent sur toute une usine', () => {
     const g = sandbox(11);
     g.stock.fill(0);
     clear(g, 6, 6, 44, 30);
@@ -208,43 +270,38 @@ describe('lois de conservation', () => {
       expect(g.place(key, x, y, 0, { free: true, recipe }).ok, key).toBe(true);
       return g.entAt(x, y)!;
     };
-    const a = mk('charbonniere', 10, 10); a.buf![I.biomasse] = 2;
-    const b = mk('haut_fourneau', 10, 13); b.buf![I.hematite] = 4; b.buf![I.carbone] = 6;
-    const c = mk('four_chaux', 10, 17); c.buf![I.calcaire] = 2;
-    const d = mk('fonderie', 14, 10); d.buf![I.chalcopyrite] = 4; d.buf![I.quartz] = 4;
-    const e = mk('epurateur', 14, 13); e.buf![I.eau] = 4;
-    const f = mk('amphi', 14, 16); f.buf![I.biomasse] = 3; f.buf![I.carbone] = 3;
-    const h = mk('serre', 18, 13); h.buf![I.eau] = 10;
-    const p = mk('platriere', 18, 10); p.buf![I.calcaire] = 2; p.buf![I.acide] = 2;
+    const a = mk('charbonniere', 10, 10); a.buf![I.bois] = 2;
+    const b = mk('fonderie', 10, 13); b.buf![I.hematite] = 4; b.buf![I.carbone] = 6;
+    const c = mk('four', 10, 17); c.buf![I.calcaire] = 2;
+    const d = mk('fonderie', 14, 10, 'cuivre'); d.buf![I.malachite] = 2; d.buf![I.carbone] = 2;
+    const f = mk('bruleur', 14, 16); f.buf![I.bois] = 3; f.buf![I.carbone] = 3;
+    const h = mk('four_arc', 18, 13); h.buf![I.quartz] = 2; h.buf![I.carbone] = 4;
+    const p = mk('presse', 18, 10); p.buf![I.fer] = 4;
     mk('scierie', 24, 10);
     mk('convoyeur', 26, 10);
     mk('convoyeur', 27, 10);
     run(g, 1);
-    const els = ['C', 'Fe', 'Ca', 'Si', 'Cu', 'S'];
+    const els = ['C', 'Fe', 'Ca', 'Si', 'Cu'];
     const before = els.map((el) => g.ledger(el));
     run(g, UPS * 150);
     els.forEach((el, i) => expect(g.ledger(el), el).toBeCloseTo(before[i], 3));
-    expect(a.done + b.done + c.done + d.done + e.done + p.done).toBeGreaterThan(6);
-    expect(e.done).toBeGreaterThan(0);   // le SO₂ a bien été capté et transformé
-    expect(h.done).toBeGreaterThan(0);   // la serre a fixé du CO₂
+    expect(a.done + b.done + c.done + d.done + h.done + p.done).toBeGreaterThan(6);
+    expect(d.out![I.cuivre]).toBeGreaterThan(0);
   });
 
-  it('la jungle repousse et fixe du CO₂ ; un Semeur l’accélère', () => {
+  it('un arbre coupé repousse à sa place, pas sous une dalle, et le carbone se conserve', () => {
     const g = sandbox(3);
-    clear(g, 60, 60, 84, 84);
-    for (let y = 60; y <= 84; y++) for (let x = 60; x <= 84; x++) g.world.setCanopy(x, y, 110);
-    const sum = () => { let s = 0; for (let y = 60; y <= 84; y++) for (let x = 60; x <= 84; x++) s += g.world.canopy(x, y); return s; };
-    const c0 = sum(), fixed0 = g.atmo.fixed, carbon = g.ledger('C');
-    run(g, UPS * 120);
-    const natural = sum() - c0;
-    expect(natural).toBeGreaterThan(0);
-    expect(g.atmo.fixed).toBeGreaterThan(fixed0);
+    g.world.ensureArea(40, 40, 90, 90);
+    const trees: [number, number][] = [];
+    for (let y = 44; y < 88 && trees.length < 2; y++) for (let x = 44; x < 88 && trees.length < 2; x++) if (g.world.tree(x, y) && !trees.some(([a, b]) => Math.abs(a - x) < 3 && Math.abs(b - y) < 3)) trees.push([x, y]);
+    const [[ax, ay], [bx, by]] = trees;
+    g.uproot(ax, ay); g.uproot(bx, by);
+    g.place('dalle', bx, by, 0, { free: true });
+    const carbon = g.ledger('C');
+    run(g, UPS * 240);
+    expect(g.world.canopy(ax, ay)).toBeGreaterThan(TREE_MIN);
+    expect(g.world.canopy(bx, by)).toBe(0);
     expect(g.ledger('C')).toBeCloseTo(carbon, 3);
-    g.place('semeur', 71, 71, 0, { free: true });
-    g.entAt(71, 71)!.buf![I.engrais] = 8;
-    const c1 = sum();
-    run(g, UPS * 120);
-    expect(sum() - c1).toBeGreaterThan(natural * 1.5);
   });
 });
 
@@ -253,36 +310,36 @@ describe('contenu et progression', () => {
     for (const b of BUILDINGS) if (b.cat) expect(b.unlock, b.key).toBeLessThan(QUOTAS.length);
     const combustion = (k: string) => k.startsWith('combustion');
     for (const r of RECIPES) if (!combustion(r.key)) expect(BUILDINGS.some((b) => b.recipes.includes(r)), r.key).toBe(true);
-    expect(BUILDINGS.filter((b) => b.cat).length).toBeGreaterThanOrEqual(33);
+    expect(BUILDINGS.filter((b) => b.cat).length).toBeGreaterThanOrEqual(22);
   });
 
-  it('chaque quota est atteignable : ce qu’il demande est produit par des bâtiments déjà débloqués', () => {
+  it('chaque quota est atteignable, et le coût de chaque bâtiment est payable quand il se débloque', () => {
+    const raw = [I.hematite, I.calcaire, I.quartz, I.malachite, I.bois];
+    const makeable = (id: number, index: number) => raw.includes(id) || id === I.fer
+      || BUILDINGS.some((b) => b.unlock <= index && b.recipes.some((r) => r.unlock <= index && r.outputs.some(([x]) => x === id)));
     QUOTAS.forEach((q, index) => {
-      for (const [id] of q.need) {
-        const raw = [I.hematite, I.calcaire, I.quartz, I.chalcopyrite, I.biomasse, I.eau].includes(id);
-        const makers = BUILDINGS.filter((b) => b.unlock <= index && b.recipes.some((r) => r.unlock <= index && r.outputs.some(([x]) => x === id)));
-        expect(raw || makers.length > 0, `quota ${q.title}`).toBe(true);
-      }
-      for (const s of q.steps) if (s.t !== 'make') expect(B[s.key].unlock, `${q.title} → ${s.key}`).toBeLessThanOrEqual(index);
+      for (const [id] of q.need) expect(makeable(id, index), `quota ${q.title}`).toBe(true);
+      for (const s of q.steps) if (s.t === 'build' || s.t === 'tool' || s.t === 'link') expect(B[s.key].unlock, `${q.title} → ${s.key}`).toBeLessThanOrEqual(index);
     });
+    for (const b of BUILDINGS) for (const [id] of b.cost) expect(makeable(id, b.unlock), `coût de ${b.key}`).toBe(true);
   });
 
-  it('livrer le quota fait grandir la Tour, donne un Savoir et débloque la suite', () => {
+  it('livrer le quota fait grandir la Tour et débloque la suite', () => {
     const g = new Game(5);
     expect(g.unlocked(B.scierie)).toBe(false);
-    for (let i = 0; i < 20; i++) g.accept(g.hub, I.hematite, 0);
+    for (let i = 0; i < 30; i++) g.accept(g.hub, I.hematite, 0);
     run(g, 61);
     expect(g.quota).toBe(1);
     expect(g.hub.level).toBe(1);
-    expect(g.savoir).toBe(1);
     expect(g.unlocked(B.scierie)).toBe(true);
   });
 
-  it('le stock de départ suffit pour accomplir le premier quota', () => {
+  it('le départ suffit pour accomplir le premier quota : fer en stock et débris à ramasser', () => {
     const g = new Game(9);
     const b = g.world.blobs[0];
     expect(g.place('puits', b.x - 1, b.y - 1, 0).ok).toBe(true);
-    expect(g.stock[I.fer]).toBeGreaterThan(Math.abs(b.x) + Math.abs(b.y) + 10);   // assez de fer pour les convoyeurs
+    const reach = g.stock[I.fer] + g.world.scraps.size * LOOT_FER;
+    expect(reach).toBeGreaterThan(Math.abs(b.x) + Math.abs(b.y) + 10);   // assez de fer pour les convoyeurs
   });
 
   it('la partie est déterministe, et une sauvegarde la restitue exactement', () => {
@@ -290,12 +347,12 @@ describe('contenu et progression', () => {
       const g = sandbox(42);
       clear(g, 4, -8, 30, 8);
       g.place('charbonniere', 10, 0, 0, { free: true });
-      g.entAt(10, 0)!.buf![I.biomasse] = 3;
+      g.entAt(10, 0)!.buf![I.bois] = 3;
       for (let x = 12; x <= 20; x++) g.place('convoyeur', x, 0, 0, { free: true });
       g.place('trieur', 21, 0, 0, { free: true, filter: I.carbone });
       for (let x = 22; x <= 25; x++) g.place('convoyeur', x, 0, 0, { free: true });
-      g.place('amphi', 10, 4, 0, { free: true });
-      g.entAt(10, 4)!.buf![I.biomasse] = 4;
+      g.place('bruleur', 10, 4, 0, { free: true });
+      g.entAt(10, 4)!.buf![I.bois] = 4;
       g.place('pont', 16, 4, 0, { free: true }); g.place('pont', 19, 4, 0, { free: true });
       run(g, 900);
       return g;
@@ -324,7 +381,7 @@ describe('performance', () => {
       const y = 104 + row * 2;
       for (let x = 110; x < 210; x++) {
         const c = g.world.at(x, y)!, i = ((y & 31) << 5) | (x & 31);
-        c.ground[i] = 0; c.canopy[i] = 0; c.deposit[i] = 0; c.ent[i] = 0;
+        c.ground[i] = 0; c.canopy[i] = 0; c.cap[i] = 0; c.deposit[i] = 0; c.ent[i] = 0;
         expect(g.place('convoyeur', x, y, 0, { free: true }).ok).toBe(true);
       }
     }

@@ -1,6 +1,7 @@
 // Le monde : une grille infinie découpée en blocs de 32×32, générée à la demande.
 
 import { fbm, hash01, mulberry32 } from './rng';
+import { TREE_MIN } from './data';
 
 export const CHUNK = 32;
 export const GROUND_SOIL = 0;
@@ -13,6 +14,8 @@ export class Chunk {
   deposit = new Uint8Array(CHUNK * CHUNK);   // type de gisement
   amount = new Uint16Array(CHUNK * CHUNK);   // unités restantes
   slab = new Uint8Array(CHUNK * CHUNK);
+  loot = new Uint8Array(CHUNK * CHUNK);      // débris à ramasser (1 = ferraille)
+  cap = new Uint8Array(CHUNK * CHUNK);       // taille adulte de l'arbre de cette case (0 = pas d'arbre)
   ent = new Int32Array(CHUNK * CHUNK);       // identifiant d'entité (0 = vide)
   region = new Uint16Array(CHUNK * CHUNK);   // réseau électrique
   smoke = new Float32Array(SMOKE_RES * SMOKE_RES);
@@ -34,9 +37,7 @@ export class World {
   list: Chunk[] = [];
   blobs: Blob[] = [];          // gisements garantis près du départ
   lake: { x: number; y: number; r: number };
-  firstTree: { x: number; y: number };
-  /** Appelé quand la génération fait naître un Éventail. */
-  onTree: ((x: number, y: number) => void) | null = null;
+  scraps = new Set<number>();  // débris du module, autour du départ
   private last: Chunk | null = null;
 
   constructor(public seed: number) {
@@ -51,8 +52,10 @@ export class World {
     }
     const lp = at(base + 3.2 + (rnd() - 0.5) * 0.4, 32);
     this.lake = { ...lp, r: 5.5 };
-    const tp = at(base + 5.3 + (rnd() - 0.5) * 0.4, 27);
-    this.firstTree = tp;
+    for (let i = 0; i < 12; i++) {
+      const p = at(base + i * 0.52 + rnd() * 0.3, 5 + rnd() * 3.5);
+      if (Math.max(Math.abs(p.x), Math.abs(p.y)) >= 4) this.scraps.add(key(p.x, p.y));
+    }
   }
 
   chunk(cx: number, cy: number, create = true): Chunk | null {
@@ -79,7 +82,15 @@ export class World {
   amount(x: number, y: number): number { return this.at(x, y)!.amount[((y & 31) << 5) | (x & 31)]; }
   slab(x: number, y: number): number { return this.at(x, y)!.slab[((y & 31) << 5) | (x & 31)]; }
   ent(x: number, y: number): number { return this.at(x, y)!.ent[((y & 31) << 5) | (x & 31)]; }
-  region(x: number, y: number): number { return this.at(x, y)!.region[((y & 31) << 5) | (x & 31)]; }
+  loot(x: number, y: number): number { return this.at(x, y)!.loot[((y & 31) << 5) | (x & 31)]; }
+  /** Y a-t-il un arbre adulte sur cette case ? */
+  tree(x: number, y: number): boolean { return this.canopy(x, y) >= TREE_MIN; }
+  takeLoot(x: number, y: number): boolean {
+    const c = this.at(x, y)!; const i = ((y & 31) << 5) | (x & 31);
+    if (!c.loot[i]) return false;
+    c.loot[i] = 0; c.version++; c.urgent = true;
+    return true;
+  }
 
   setCanopy(x: number, y: number, v: number): void {
     const c = this.at(x, y)!; c.canopy[((y & 31) << 5) | (x & 31)] = v; c.version++; c.urgent = true;
@@ -139,18 +150,17 @@ export class World {
     return [0, 0];
   }
 
-  private treeHere(x: number, y: number): boolean {
-    if (x === this.firstTree.x && y === this.firstTree.y) return true;
-    const G = 30;
-    const gx = Math.floor(x / G), gy = Math.floor(y / G);
-    if (hash01(gx, gy, this.seed + 71) > 0.55) return false;
-    const tx = gx * G + 3 + Math.floor(hash01(gx, gy, this.seed + 72) * (G - 8));
-    const ty = gy * G + 3 + Math.floor(hash01(gx, gy, this.seed + 73) * (G - 8));
-    return tx === x && ty === y && Math.hypot(x, y) > 36;
+  /** Densité de forêt en un point (0 = clairière, 1 = jungle épaisse). Sert aussi au rendu du sol. */
+  density(x: number, y: number): number {
+    const d = Math.hypot(x, y);
+    let dens = 0.35 + 0.75 * fbm(x * 0.045, y * 0.045, this.seed + 5, 3);
+    const clearing = fbm(x * 0.02, y * 0.02, this.seed + 6, 2);
+    if (clearing < 0.32) dens *= clearing / 0.32;
+    if (d < 6.5) dens = 0; else if (d < 12) dens *= (d - 6.5) / 5.5;
+    return dens;
   }
 
   private generate(c: Chunk): void {
-    const trees: [number, number][] = [];
     for (let ly = 0; ly < CHUNK; ly++) {
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = c.cx * CHUNK + lx, y = c.cy * CHUNK + ly, i = (ly << 5) | lx;
@@ -159,17 +169,14 @@ export class World {
         const [type, amt] = this.depositAt(x, y);
         c.deposit[i] = type;
         c.amount[i] = Math.min(65535, amt);
-        // canopée : dense partout, clairières ponctuelles, clairsemée sur les gisements
-        let can = 0.5 + 0.6 * fbm(x * 0.045, y * 0.045, this.seed + 5, 3);
-        const clearing = fbm(x * 0.02, y * 0.02, this.seed + 6, 2);
-        if (clearing < 0.3) can *= clearing / 0.3;
-        can += (hash01(x, y, this.seed + 9) - 0.5) * 0.25;
-        if (type) can *= 0.12;
-        if (d < 6.5) can = 0; else if (d < 12) can *= (d - 6.5) / 5.5;
-        c.canopy[i] = Math.max(0, Math.min(255, Math.round(can * 255)));
-        if (this.treeHere(x, y)) trees.push([x, y]);
+        if (type) continue;                                   // rien ne pousse sur la roche
+        if (this.scraps.has(key(x, y)) || (d > 26 && hash01(x, y, this.seed + 81) < 0.0022)) { c.loot[i] = 1; continue; }
+        // forêt : dense par endroits, trouée de clairières ; chaque case porte un arbre ou rien
+        const dens = this.density(x, y);
+        if (dens < 0.15 || hash01(x, y, this.seed + 9) > 0.08 + 0.5 * dens) continue;
+        const size = Math.round(Math.min(255, (100 + 155 * hash01(x, y, this.seed + 10)) * (0.65 + 0.35 * Math.min(1, dens))));
+        c.cap[i] = size; c.canopy[i] = size;
       }
     }
-    for (const [x, y] of trees) this.onTree?.(x, y);
   }
 }

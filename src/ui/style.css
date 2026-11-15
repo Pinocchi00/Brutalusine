@@ -202,3 +202,7 @@ button.big.ghost:hover { border-color: var(--signal); }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (max-width: 1500px) { #build { max-width: calc(100vw - 32px); bottom: 16px; } #alerts { bottom: 170px; } #sidebtns { bottom: 170px; } #quota { width: 300px; } }
+
+/* --- gestes à la main sur une machine */
+.act { display: block; margin-top: 6px; padding: 6px 10px; background: var(--raise-2); border: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+.act:hover { background: var(--signal); color: #141513; border-color: var(--signal); }

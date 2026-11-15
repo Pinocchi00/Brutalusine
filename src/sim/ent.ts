@@ -43,10 +43,15 @@ export class Ent {
   // divers
   cells: number[] | null = null;     // cases exploitables (puits)
   ptr = 0;
-  health = 1;                        // santé de la jungle alentour (éventail, cerclage)
-  gas = 0;                           // SO₂ capté (épurateur)
+  tx = 0; ty = 0;                    // dernier arbre coupé (scierie) : pour l'animation
+  born = 0;                          // pas de simulation de la pose (animation d'apparition)
+  pushed = -999;                     // dernier pas où un objet est sorti (animation de la bouche)
   level = 0;                         // étages gagnés (Tour)
   anim = 0;                          // phase d'animation (rendu)
+  act = 0;                           // activité lissée 0..1 (rendu)
+  pulse = 0;                         // éclat après un cycle (rendu)
+  seen = 0;                          // dernier `done` vu par le rendu
+  aim = 0;                           // angle d'un organe mobile (rendu)
   done = 0;                          // cycles terminés (statistiques, rendu)
 
   constructor(
@@ -57,7 +62,7 @@ export class Ent {
   get cx(): number { return this.x + this.w / 2; }
   get cy(): number { return this.y + this.h / 2; }
   /** Hauteur effective (la Tour grandit). */
-  get height(): number { return this.def.kind === 'hub' ? this.def.height + this.level * 0.7 : this.def.height; }
+  get height(): number { return this.def.kind === 'hub' ? this.def.height + Math.min(8, this.level) * 0.35 : this.def.height; }
 }
 
 export const STATUS_TEXT: Record<number, string> = {
@@ -66,8 +71,7 @@ export const STATUS_TEXT: Record<number, string> = {
   [Status.NoInput]: 'Il manque',
   [Status.Blocked]: 'Sortie bloquée : relie sa flèche à un convoyeur qui avance',
   [Status.NoPower]: 'Pas de courant : construis une source d’énergie',
-  [Status.NoResource]: 'Plus rien à extraire à portée',
+  [Status.NoResource]: 'Plus rien à récolter ici',
   [Status.NoRecipe]: 'Aucune recette choisie',
-  [Status.Dark]: 'Attend la lumière du jour',
-  [Status.NoGas]: 'Aucun SO₂ à capter : il faut une Fonderie de cuivre à moins de 8 cases',
+  [Status.Dark]: 'Attend le jour',
 };

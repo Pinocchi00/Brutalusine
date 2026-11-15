@@ -100,7 +100,7 @@ export function resolveTarget(g: Game, x: number, y: number, dir: number): Targe
   if (!t || t.dead) return NO_TARGET;
   if (isBeltLike(t)) return accepts(t, dir) && t.path ? { path: t.path, ent: null, dir } : NO_TARGET;
   const k = t.def.kind;
-  if (k === 'tree' || k === 'solar' || k === 'battery' || k === 'wind' || k === 'hydro' || k === 'deco') return NO_TARGET;
+  if (k === 'solar' || k === 'battery' || k === 'wind' || k === 'hydro' || k === 'deco') return NO_TARGET;
   return { path: null, ent: t, dir };
 }
 
@@ -110,7 +110,7 @@ export function outputPorts(e: Ent): [number, number, number][] {
   if (k === 'splitter') {
     return [3, 0, 1].map((turn) => { const d = (e.rot + turn) & 3; return [e.x + DX[d], e.y + DY[d], d] as [number, number, number]; });
   }
-  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'pump' || k === 'scrubber' || k === 'ring' || k === 'storage') {
+  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'storage') {
     const d = e.rot;
     const mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1);
     if (d === 0) return [[e.x + e.w, my, d]];
@@ -202,7 +202,7 @@ export function rebuildBelts(g: Game): void {
     else if (last.def.kind === 'bridge' && !last.isOut) p.target = NO_TARGET;
     else {
       const t = entAt(g, last.x + DX[last.rot], last.y + DY[last.rot]);
-      p.target = t && !t.dead && !isBeltLike(t) && t.def.kind !== 'tree' ? { path: null, ent: t, dir: last.rot } : NO_TARGET;
+      p.target = t && !t.dead && !isBeltLike(t) ? { path: null, ent: t, dir: last.rot } : NO_TARGET;
     }
   }
 

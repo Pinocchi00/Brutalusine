@@ -1,161 +1,155 @@
-// Brutalusine — boucle principale : entrées, simulation à pas fixe, scène 3D, interface, son.
-// Prise en main : la souris fait tout. Clic = poser ou inspecter, glisser = tracer ou déplacer la vue.
+// Brutalusine — boucle principale : le bâtisseur, ses gestes, la simulation à pas fixe, le rendu, le son.
+// Prise en main : on marche (ZQSD), on clique. Clic sur un arbre : on le déracine. Sur un rocher : on pioche.
+// Avec un bâtiment en main : on pose. Clic droit : on lâche l'outil, ou on démolit.
 
 import './ui/style.css';
-import { B, BUILDINGS, DEPOSITS, DX, DY, ITEMS, R, type Dir, type Place, type Step } from './sim/data';
+import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_FER, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
 import { Game } from './sim/game';
 import type { Ent } from './sim/ent';
+import { GROUND_WATER } from './sim/world';
 import { serialize, deserialize, writeSave, readSave } from './sim/save';
-import { Scene3D, type FxRing } from './render/scene';
+import { Renderer, type Camera, type PlayerView, type Ring } from './render/renderer';
+import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
 
 interface UndoOp { type: 'place' | 'remove'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
+interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
 
 const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
-const MIN_DIST = 12, MAX_DIST = 80;
+const MIN_ZOOM = 16, MAX_ZOOM = 76, REACH = 2.1;
 
-/** Un bâtisseur : la souris (id 0) ou une manette. */
-class Actor {
-  tool: string | null = null;
-  rot = 0;
-  cellX = 0; cellY = 4; originX = 0; originY = 4;
-  ok = false; reason = '';
+/** Un bâtisseur : clavier et souris (id 0) ou une manette. */
+class Player implements PlayerView {
+  x = 0.5; y = 3.6; vx = 0; vy = 0; fx = 0; fy = 1;
+  walk = 0; speed = 0; swing = 0; lean = 0; blink = 0;
+  tool: string | null = null; rot = 0;
+  cx = 0; cy = 5; ox = 0; oy = 5; ok = false; reason = '';
+  gx = 0; gy = 0; gprog = 0; beam = 0;
+  task: Task | null = null;
+  hitTimer = 0;
+  aimX = 0; aimY = 1.6;
   dragLast: [number, number] | null = null;
   gesture: UndoOp[] | null = null;
   undo: UndoOp[][] = [];
   lastRemove = '';
   recipeMem: Record<string, string> = {};
   filterMem = -1;
-  x = 0.5; y = 5.5;             // curseur (manettes)
   prev: boolean[] = [];
   constructor(public id: number, public pad: number | null) {}
+  get color(): string { return COLORS[this.id % 4]; }
 }
 
 class App {
   game: Game;
-  scene: Scene3D;
+  renderer: Renderer;
   hud: Hud;
   audio = new AudioEngine();
-  actors: Actor[] = [new Actor(0, null)];
+  players: Player[] = [new Player(0, null)];
   keys = new Set<string>();
-  cam = { x: 0.5, y: 1.5, dist: 30 };
-  fly: { x: number; y: number } | null = null;
-  mouse = { x: 0, y: 0, over: false, left: false, right: false, middle: false, pressX: 0, pressY: 0, panning: false, anchor: { x: 0, y: 0 } };
+  cam: Camera = { x: 0.5, y: 2.5, zoom: 44 };
+  zoom = 44;
+  mouse = { x: 0, y: 0, over: false, left: false, right: false };
   hover: Ent | null = null;
-  rings: FxRing[] = [];
+  rings: Ring[] = [];
   time = 0; frame = 0; acc = 0; last = performance.now();
-  started = false; paused = false; tilt = true;
+  started = false; paused = false;
   hudTimer = 0; saveTimer = 0;
   canvas = document.getElementById('game') as HTMLCanvasElement;
 
   constructor() {
     this.game = new Game((Math.random() * 1e9) | 0);
-    this.scene = new Scene3D(this.canvas);
+    this.renderer = new Renderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
-      tool: () => this.actors[0].tool,
-      selectTool: (k) => { this.actors[0].tool = k; this.hud.select(null); this.audio.ui(); },
+      tool: () => this.players[0].tool,
+      selectTool: (k) => { const p = this.players[0]; p.tool = k; p.task = null; this.hud.select(null); this.audio.ui(); },
       stepDone: (s) => this.stepDone(s),
-      locate: (p) => this.locate(p),
-      setRecipe: (e, key) => { this.game.setRecipe(e, R[key]); this.actors[0].recipeMem[e.def.key] = key; this.audio.ui(); },
-      setFilter: (e, id) => { e.filter = id; this.actors[0].filterMem = id; this.game.version++; this.audio.ui(); },
-      buyUpgrade: (k) => { if (this.game.buyUpgrade(k)) this.audio.quota(); },
+      locate: (pl) => this.locate(pl),
+      setRecipe: (e, key) => { this.game.setRecipe(e, R[key]); this.players[0].recipeMem[e.def.key] = key; this.audio.ui(); },
+      setFilter: (e, id) => { e.filter = id; this.players[0].filterMem = id; this.game.version++; this.audio.ui(); },
+      feed: (e) => { const n = this.game.feed(e); if (n) this.audio.place(1); else { this.audio.deny(); this.hud.toast('Rien à donner : ton stock n’a pas ce qu’il lui faut'); } },
+      take: (e) => { const n = this.game.take(e); if (n) { this.audio.place(1); this.hud.toast(`+${n} dans ton stock`); } },
       ping: (list) => {
-        for (const e of list.slice(0, 6)) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: '#ffc24a', size: 4, dur: 1.6 });
-        if (list[0]) this.fly = { x: list[0].cx, y: list[0].cy };
+        for (const e of list.slice(0, 6)) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: PAL.signalHi, size: 4, dur: 1.6 });
+        if (list[0]) this.players[0].task = { kind: 'walk', x: Math.floor(list[0].cx), y: Math.floor(list[0].y + list[0].h + 1), stuck: 0, best: 1e9 };
       },
       menu: (a, v) => this.menu(a, v),
-      playerLines: () => this.actors.map((p) => `<b style="color:${COLORS[p.id % 4]}">■</b> ${NAMES[p.id % 4]} — ${p.pad === null ? 'souris et clavier' : `manette ${p.pad + 1}`}`),
+      playerLines: () => this.players.map((p) => `<b style="color:${p.color}">●</b> ${NAMES[p.id % 4]} — ${p.pad === null ? 'clavier et souris' : `manette ${p.pad + 1}`}`),
     });
     this.bind();
-    void readSave('auto').then((s) => { if (s) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
+    this.resize();
+    void readSave('auto').then((s) => { if (s && s.v === 2) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
     requestAnimationFrame(() => this.loop());
   }
 
   // ================================================================ entrées
+  private resize(): void {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w < 2 || h < 2) return;
+    this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(h * dpr);
+  }
+  private get dpr(): number { return this.canvas.width / Math.max(1, window.innerWidth); }
+
+  /** Point du monde sous un point de l'écran. */
+  private pick(sx: number, sy: number): { x: number; y: number } {
+    const z = this.cam.zoom / this.dpr;
+    return { x: this.cam.x + (sx - window.innerWidth / 2) / z, y: this.cam.y + (sy - window.innerHeight / 2) / z };
+  }
+
   private bind(): void {
-    window.addEventListener('resize', () => this.scene.resize());
+    window.addEventListener('resize', () => this.resize());
     window.addEventListener('keydown', (ev) => this.onKey(ev));
     window.addEventListener('keyup', (ev) => this.keys.delete(ev.code));
-    window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = this.mouse.middle = false; });
-    const cv = this.canvas, m = this.mouse, a = this.actors[0];
+    window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = false; });
+    const cv = this.canvas, m = this.mouse, p = this.players[0];
     cv.addEventListener('mouseenter', () => { m.over = true; });
     cv.addEventListener('mouseleave', () => { m.over = false; });
     cv.addEventListener('mousemove', (ev) => {
       m.x = ev.clientX; m.y = ev.clientY; m.over = true;
-      if (!this.started) return;
-      this.aim(a);
-      if (m.middle || (m.left && !a.tool)) {
-        if (!m.panning && Math.hypot(m.x - m.pressX, m.y - m.pressY) > 6) m.panning = true;
-        if (m.panning) {                       // le point saisi reste sous le curseur
-          const p = this.scene.pick(m.x, m.y);
-          this.cam.x += m.anchor.x - p.x; this.cam.y += m.anchor.y - p.y; this.fly = null;
-          this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
-        }
-      } else if (m.left && a.tool === 'demolir') this.removeAt(a);
-      else if (m.left && a.tool && a.gesture && (!a.dragLast || a.dragLast[0] !== a.cellX || a.dragLast[1] !== a.cellY)) this.tryPlace(a, false);
-      else if (m.right && a.gesture) this.removeAt(a);
+      if (!this.started || this.paused) return;
+      this.aim(p);
+      if (m.left && p.tool === 'demolir') this.removeAt(p);
+      else if (m.left && p.tool && p.gesture && (!p.dragLast || p.dragLast[0] !== p.cx || p.dragLast[1] !== p.cy)) this.tryPlace(p, false);
+      else if (m.right && p.gesture) this.removeAt(p);
     });
     cv.addEventListener('mousedown', (ev) => {
       this.audio.start();
       m.x = ev.clientX; m.y = ev.clientY;
       if (!this.started || this.paused) return;
-      this.aim(a);
-      m.pressX = m.x; m.pressY = m.y; m.panning = false; m.anchor = this.scene.pick(m.x, m.y);
-      if (ev.button === 0) {
-        m.left = true;
-        if (a.tool === 'demolir') { a.gesture = []; a.lastRemove = ''; this.removeAt(a); }
-        else if (a.tool) { a.gesture = []; a.dragLast = null; this.tryPlace(a, true); }
-      } else if (ev.button === 2) {
-        m.right = true;
-        if (a.tool) { a.tool = null; this.audio.ui(); }
-        else { a.gesture = []; a.lastRemove = ''; this.removeAt(a); }
-      } else if (ev.button === 1) { m.middle = true; ev.preventDefault(); }
+      this.aim(p);
+      if (ev.button === 0) { m.left = true; this.primaryDown(p); }
+      else if (ev.button === 2) { m.right = true; this.secondaryDown(p); }
     });
     window.addEventListener('mouseup', (ev) => {
-      if (ev.button === 0 && m.left) {
-        m.left = false;
-        if (a.tool) this.endGesture(a);
-        else if (!m.panning && this.started && !this.paused) {
-          const e = this.hover && this.hover.def.kind !== 'belt' && this.hover.def.kind !== 'bridge' && this.hover.def.kind !== 'deco' ? this.hover : null;
-          this.hud.select(e); if (e) this.audio.ui();
-        }
-      }
-      if (ev.button === 2 && m.right) { m.right = false; this.endGesture(a); }
-      if (ev.button === 1) m.middle = false;
-      m.panning = false;
+      if (ev.button === 0 && m.left) { m.left = false; this.endGesture(p); }
+      if (ev.button === 2 && m.right) { m.right = false; this.endGesture(p); }
     });
     cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
     cv.addEventListener('wheel', (ev) => {
       ev.preventDefault();
-      if (!this.started) return;
-      // zoom vers le point visé
-      const before = this.scene.pick(m.x, m.y);
-      this.cam.dist = Math.max(MIN_DIST, Math.min(MAX_DIST, this.cam.dist * Math.exp(ev.deltaY * 0.0011)));
-      this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
-      const after = this.scene.pick(m.x, m.y);
-      this.cam.x += before.x - after.x; this.cam.y += before.y - after.y;
+      if (this.started) this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom * Math.exp(-ev.deltaY * 0.0011)));
     }, { passive: false });
     document.getElementById('btn-new')!.addEventListener('click', () => this.begin(true));
-    document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then(() => this.begin(false)); });
+    document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then((ok) => this.begin(!ok)); });
   }
 
   private onKey(ev: KeyboardEvent): void {
     const typing = (ev.target as HTMLElement).tagName === 'INPUT';
     if (ev.code === 'Escape') { this.escape(); return; }
     if (typing || !this.started) return;
-    const a = this.actors[0], g = this.game;
-    if (ev.ctrlKey && ev.code === 'KeyZ') { ev.preventDefault(); this.undo(a); return; }
+    const p = this.players[0], g = this.game;
+    if (ev.ctrlKey && ev.code === 'KeyZ') { ev.preventDefault(); this.undo(p); return; }
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     if (ev.code.startsWith('Arrow') || ev.code === 'Space' || ev.code === 'Tab') ev.preventDefault();
     if (this.keys.has(ev.code)) return;
     this.keys.add(ev.code);
     switch (ev.code) {
-      case 'KeyR': a.rot = (a.rot + 1) & 3; this.aim(a); this.audio.ui(); break;
-      case 'KeyE': this.pipette(a); break;
-      case 'KeyX': a.tool = a.tool === 'demolir' ? null : 'demolir'; this.hud.select(null); this.audio.ui(); break;
+      case 'KeyR': p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); break;
+      case 'KeyE': this.pipette(p); break;
+      case 'KeyX': p.tool = p.tool === 'demolir' ? null : 'demolir'; p.task = null; this.hud.select(null); this.audio.ui(); break;
       case 'Tab': this.hud.nextCategory(g, ev.shiftKey ? -1 : 1); this.audio.ui(); break;
       case 'KeyG': if (this.hud.codexOpen) this.hud.closeCodex(); else this.hud.openCodex(); break;
       case 'KeyH': this.hud.showGuide(!this.hud.guideOpen); break;
@@ -163,30 +157,31 @@ class App {
       default:
         if (ev.code.startsWith('Digit')) {
           const key = this.hud.toolsInCategory(g)[+ev.code.slice(5) - 1];
-          if (key) { a.tool = a.tool === key ? null : key; this.hud.select(null); this.audio.ui(); }
+          if (key) { p.tool = p.tool === key ? null : key; p.task = null; this.hud.select(null); this.audio.ui(); }
         }
     }
   }
 
   private begin(fresh: boolean): void {
     this.started = true;
-    this.cam = { x: 0.5, y: 2.5, dist: 30 };
+    if (fresh) for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; }
+    this.cam.x = this.players[0].x; this.cam.y = this.players[0].y;
     document.getElementById('title')!.hidden = true;
     document.getElementById('hud')!.hidden = false;
     this.audio.start();
     this.hud.update(this.game);
     let seen = false;
-    try { seen = localStorage.getItem('brutalusine.guide') === '1'; localStorage.setItem('brutalusine.guide', '1'); } catch { /* stockage indisponible */ }
+    try { seen = localStorage.getItem('brutalusine.guide3') === '1'; localStorage.setItem('brutalusine.guide3', '1'); } catch { /* stockage indisponible */ }
     if (fresh && !seen) this.hud.showGuide(true);
   }
 
   private escape(): void {
-    const a = this.actors[0];
+    const p = this.players[0];
     if (!this.started) return;
     if (this.hud.guideOpen) this.hud.showGuide(false);
     else if (this.hud.codexOpen) this.hud.closeCodex();
     else if (this.hud.menuOpen) { this.hud.toggleMenu(false); this.paused = false; }
-    else if (a.tool) a.tool = null;
+    else if (p.tool) p.tool = null;
     else if (this.hud.selected) this.hud.select(null);
     else this.paused = this.hud.toggleMenu(true);
   }
@@ -201,155 +196,193 @@ class App {
       case 'load': void this.load().then((ok) => { this.hud.toast(ok ? 'Partie chargée' : 'Aucune sauvegarde'); if (ok) { this.hud.toggleMenu(false); this.paused = false; } }); break;
       case 'new':
         this.game = new Game((Math.random() * 1e9) | 0); this.resetWorld();
+        for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; }
         this.hud.toggleMenu(false); this.paused = false; this.hud.toast('Nouvelle planète');
         break;
       case 'music': this.audio.setMusic(parseFloat(value ?? '0.5')); break;
       case 'sfx': this.audio.setSfx(parseFloat(value ?? '0.6')); break;
-      case 'tilt': this.tilt = value === 'true'; break;
       case 'codex-back': this.hud.codexBack(); break;
-      case 'savoir': this.hud.select(this.game.hub); this.fly = { x: this.game.hub.cx, y: this.game.hub.cy }; break;
     }
   }
 
   private resetWorld(): void {
-    this.scene.reset();
+    this.renderer.reset();
     this.hud.select(null);
     this.rings.length = 0;
-    this.cam = { x: 0.5, y: 2.5, dist: 30 };
-    for (const a of this.actors) { a.undo.length = 0; a.tool = null; a.gesture = null; }
+    for (const p of this.players) { p.undo.length = 0; p.tool = null; p.gesture = null; p.task = null; p.vx = p.vy = 0; }
   }
 
-  async save(): Promise<void> { await writeSave('auto', serialize(this.game, { cam: this.cam })); }
+  async save(): Promise<void> { await writeSave('auto', serialize(this.game, { players: this.players.map((p) => ({ x: p.x, y: p.y })), zoom: this.zoom })); }
 
   async load(): Promise<boolean> {
     const d = await readSave('auto').catch(() => null);
-    if (!d) return false;
+    if (!d || d.v !== 2) return false;
     this.game = deserialize(d);
     this.resetWorld();
-    const ex = d.extra as { cam?: { x: number; y: number; dist: number } } | undefined;
-    if (ex?.cam) this.cam = { ...ex.cam };
+    const ex = d.extra as { players?: { x: number; y: number }[]; zoom?: number } | undefined;
+    ex?.players?.forEach((s, i) => { const p = this.players[i]; if (p) { p.x = s.x; p.y = s.y; } });
+    if (ex?.zoom) this.zoom = ex.zoom;
     return true;
   }
 
   // ============================================================ tutoriel
   private stepDone(s: Step): boolean {
     const g = this.game;
-    if (s.t === 'tool') return this.actors[0].tool === s.key || g.count(s.key) > 0;
+    if (s.t === 'gather') return g.gathered > 0;
+    if (s.t === 'tool') return this.players[0].tool === s.key || g.count(s.key) > 0;
     if (s.t === 'build') return g.count(s.key) > 0;
     if (s.t === 'link') return g.tickers.some((e) => e.def.key === s.key && (e.outT.path !== null || e.outT.ent !== null));
     return g.made[s.item] === 1;
   }
 
-  private placeOf(p: Place): { x: number; y: number } {
-    const w = this.game.world;
-    if (p === 'eau') return w.lake;
-    if (p === 'eventail') return { x: w.firstTree.x + 1.5, y: w.firstTree.y + 1.5 };
-    const type = DEPOSITS.findIndex((d) => d && ITEMS[d.item].key === p);
+  private placeOf(pl: Place): { x: number; y: number } | null {
+    const w = this.game.world, p = this.players[0];
+    if (pl === 'eau') return w.lake;
+    if (pl === 'debris') {
+      let best: { x: number; y: number } | null = null, bd = 1e9;
+      for (let y = -11; y <= 11; y++) for (let x = -11; x <= 11; x++) if (w.loot(x, y)) { const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y); if (d < bd) { bd = d; best = { x: x + 0.5, y: y + 0.5 }; } }
+      return best;
+    }
+    const type = DEPOSITS.findIndex((d) => d && ITEMS[d.item].key === pl);
     const b = w.blobs.find((q) => q.type === type) ?? w.blobs[0];
     return { x: b.x + 0.5, y: b.y + 0.5 };
   }
 
-  private locate(p: Place): void {
-    const t = this.placeOf(p);
-    this.fly = t;
-    this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.4, color: '#ffa040', size: 6, dur: 2 });
+  /** « Y aller » : le bâtisseur s'y rend tout seul. */
+  private locate(pl: Place): void {
+    const t = this.placeOf(pl);
+    if (!t) return;
+    const p = this.players[0];
+    p.task = { kind: 'walk', x: Math.floor(t.x), y: Math.floor(t.y), stuck: 0, best: 1e9 };
+    this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.2, color: PAL.signalHi, size: 5, dur: 2 });
   }
 
-  /** Où pointer la flèche du tutoriel pour l'étape en cours. */
+  /** Où pointer la flèche du guide pour l'étape en cours (ramenée au bord de l'écran si c'est loin). */
   private marker(): { x: number; y: number } | null {
     const g = this.game, s = this.hud.currentStep(g);
     if (!s) return null;
-    if ((s.t === 'tool' || s.t === 'build') && s.key === 'puits' && g.quota === 0) return this.placeOf('hematite');
-    if (s.t === 'build' && s.go) return this.placeOf(s.go);
-    if (s.t === 'link') {
+    let t: { x: number; y: number } | null = null;
+    if (s.t === 'gather') t = this.placeOf(s.go ?? 'debris');
+    else if ((s.t === 'tool' || s.t === 'build') && s.key === 'puits' && g.quota === 0) t = this.placeOf('hematite');
+    else if (s.t === 'build' && s.go) t = this.placeOf(s.go);
+    else if (s.t === 'link') {
       const e = g.tickers.find((x) => x.def.key === s.key && !x.outT.path && !x.outT.ent);
-      if (!e) return null;
-      const d = e.rot, mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1);
-      const cell = d === 0 ? [e.x + e.w, my] : d === 1 ? [mx, e.y + e.h] : d === 2 ? [e.x - 1, my] : [mx, e.y - 1];
-      return { x: cell[0] + 0.5, y: cell[1] + 0.5 };
+      if (e) { const d = e.rot, mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1); const c = d === 0 ? [e.x + e.w, my] : d === 1 ? [mx, e.y + e.h] : d === 2 ? [e.x - 1, my] : [mx, e.y - 1]; t = { x: c[0] + 0.5, y: c[1] + 0.5 }; }
     }
+    if (!t) return null;
+    const z = this.cam.zoom / this.dpr, hw = window.innerWidth / 2 / z - 2, hh = window.innerHeight / 2 / z - 3;
+    return { x: Math.max(this.cam.x - hw, Math.min(this.cam.x + hw, t.x)), y: Math.max(this.cam.y - hh + 1.5, Math.min(this.cam.y + hh - 2, t.y)) };
+  }
+
+  // ============================================================== gestes
+  /** Met à jour la case visée et l'aperçu de construction. */
+  private aim(p: Player): void {
+    const g = this.game;
+    if (p.pad === null) { const w = this.pick(this.mouse.x, this.mouse.y); p.cx = Math.floor(w.x); p.cy = Math.floor(w.y); }
+    else { p.cx = Math.floor(p.x + p.aimX); p.cy = Math.floor(p.y + p.aimY); }
+    if (p.tool && p.tool !== 'demolir') {
+      const def = B[p.tool];
+      const [fw, fh] = g.footprint(def, p.rot);
+      p.ox = p.cx - ((fw - 1) >> 1); p.oy = p.cy - ((fh - 1) >> 1);
+      const res = g.canPlace(def, p.ox, p.oy, p.rot);
+      p.ok = res.ok; p.reason = res.reason;
+    }
+  }
+
+  /** Ce qu'on peut récolter à la main sur une case. */
+  private gatherable(x: number, y: number): Task['kind'] | null {
+    const w = this.game.world;
+    if (w.ent(x, y)) return null;
+    if (w.loot(x, y)) return 'loot';
+    if (w.canopy(x, y) >= TREE_MIN) return 'tree';
+    if (w.amount(x, y) > 0 && !w.slab(x, y)) return 'ore';
     return null;
   }
 
-  // ============================================================== actions
-  /** Met à jour la case visée et l'aperçu de construction. */
-  private aim(a: Actor): void {
-    const g = this.game;
-    if (a.pad === null) { const p = this.scene.pick(this.mouse.x, this.mouse.y); a.cellX = Math.floor(p.x); a.cellY = Math.floor(p.y); }
-    else { a.cellX = Math.floor(a.x); a.cellY = Math.floor(a.y); }
-    if (a.tool && a.tool !== 'demolir') {
-      const def = B[a.tool];
-      const [fw, fh] = g.footprint(def, a.rot);
-      a.originX = a.cellX - ((fw - 1) >> 1); a.originY = a.cellY - ((fh - 1) >> 1);
-      if (def.kind === 'ring') { const t = g.entAt(a.cellX, a.cellY); if (t && t.def.kind === 'tree') { a.originX = t.x; a.originY = t.y; } }
-      const res = g.canPlace(def, a.originX, a.originY, a.rot);
-      a.ok = res.ok; a.reason = res.reason;
+  private primaryDown(p: Player): void {
+    if (p.tool === 'demolir') { p.gesture = []; p.lastRemove = ''; this.removeAt(p); return; }
+    if (p.tool) { p.gesture = []; p.dragLast = null; this.tryPlace(p, true); return; }
+    const e = this.game.entAt(p.cx, p.cy);
+    if (e) {
+      const sel = e.def.kind !== 'belt' && e.def.kind !== 'bridge' && e.def.kind !== 'deco' ? e : null;
+      this.hud.select(sel); if (sel) this.audio.ui();
+      return;
     }
+    this.hud.select(null);
+    const kind = this.gatherable(p.cx, p.cy);
+    if (kind) { p.task = { kind, x: p.cx, y: p.cy, stuck: 0, best: 1e9 }; p.gprog = 0; }
+    else p.task = { kind: 'walk', x: p.cx, y: p.cy, stuck: 0, best: 1e9 };       // clic dans le vide : on y va
   }
 
-  private placeOne(a: Actor, key: string, x: number, y: number, rot: number): boolean {
+  private secondaryDown(p: Player): void {
+    if (p.tool) { p.tool = null; this.audio.ui(); return; }
+    if (p.task) { p.task = null; p.gprog = 0; return; }
+    p.gesture = []; p.lastRemove = ''; this.removeAt(p);
+  }
+
+  private placeOne(p: Player, key: string, x: number, y: number, rot: number): boolean {
     const g = this.game;
     const existed = g.entAt(x, y) !== null || (key === 'dalle' && g.world.slab(x, y) === 1);
-    const res = g.place(key, x, y, rot, { recipe: a.recipeMem[key], filter: key === 'trieur' && a.filterMem >= 0 ? a.filterMem : undefined });
-    if (res.ok && !existed) a.gesture?.push({ type: 'place', key, x, y, rot });
+    const res = g.place(key, x, y, rot, { recipe: p.recipeMem[key], filter: key === 'trieur' && p.filterMem >= 0 ? p.filterMem : undefined });
+    if (res.ok && !existed) { p.gesture?.push({ type: 'place', key, x, y, rot }); p.beam = 1; }
     return res.ok;
   }
 
-  private tryPlace(a: Actor, first: boolean): void {
+  private tryPlace(p: Player, first: boolean): void {
     const g = this.game;
-    const def = B[a.tool!];
-    if (def.kind === 'belt' && !first && a.dragLast) {
+    const def = B[p.tool!];
+    if (def.kind === 'belt' && !first && p.dragLast) {
       // le convoyeur suit le curseur, case par case, et s'oriente tout seul
-      let [lx, ly] = a.dragLast;
+      let [lx, ly] = p.dragLast;
       let guard = 0;
-      while ((lx !== a.cellX || ly !== a.cellY) && guard++ < 80) {
-        const dx = a.cellX - lx, dy = a.cellY - ly;
+      while ((lx !== p.cx || ly !== p.cy) && guard++ < 80) {
+        const dx = p.cx - lx, dy = p.cy - ly;
         const dir = (Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3) as Dir;
         const nx = lx + DX[dir], ny = ly + DY[dir];
         const prev = g.entAt(lx, ly);
-        if (prev && prev.def.kind === 'belt') this.placeOne(a, 'convoyeur', lx, ly, dir);
+        if (prev && prev.def.kind === 'belt') this.placeOne(p, 'convoyeur', lx, ly, dir);
         const next = g.entAt(nx, ny);
         if (next && next.def.kind !== 'belt') break;              // on s'arrête contre une machine : le flux y entre
-        if (!this.placeOne(a, 'convoyeur', nx, ny, dir)) break;
-        lx = nx; ly = ny; a.rot = dir;
+        if (!this.placeOne(p, 'convoyeur', nx, ny, dir)) break;
+        lx = nx; ly = ny; p.rot = dir;
       }
-      a.dragLast = [lx, ly];
+      p.dragLast = [lx, ly];
       return;
     }
     if (!first && def.kind !== 'slab' && def.kind !== 'belt' && (def.w > 1 || def.h > 1)) return;   // pas de pose en rafale pour les grands bâtiments
-    const res = g.canPlace(def, a.originX, a.originY, a.rot);
+    const res = g.canPlace(def, p.ox, p.oy, p.rot);
     if (!res.ok) { if (first) { this.audio.deny(); this.hud.toast(res.reason); } }
-    else this.placeOne(a, def.key, a.originX, a.originY, a.rot);
-    a.dragLast = [a.cellX, a.cellY];
-    this.aim(a);
+    else this.placeOne(p, def.key, p.ox, p.oy, p.rot);
+    p.dragLast = [p.cx, p.cy];
+    this.aim(p);
   }
 
-  private removeAt(a: Actor): void {
-    const key = `${a.cellX},${a.cellY}`;
-    if (key === a.lastRemove || !a.gesture) return;
-    a.lastRemove = key;
-    const info = this.game.remove(a.cellX, a.cellY);
-    if (info) a.gesture.push({ type: 'remove', ...info });
+  private removeAt(p: Player): void {
+    const key = `${p.cx},${p.cy}`;
+    if (key === p.lastRemove || !p.gesture) return;
+    p.lastRemove = key;
+    const info = this.game.remove(p.cx, p.cy);
+    if (info) { p.gesture.push({ type: 'remove', ...info }); p.beam = 1; }
   }
 
-  private endGesture(a: Actor): void {
-    if (a.gesture?.length) a.undo.push(a.gesture);
-    a.gesture = null; a.dragLast = null; a.lastRemove = '';
+  private endGesture(p: Player): void {
+    if (p.gesture?.length) p.undo.push(p.gesture);
+    p.gesture = null; p.dragLast = null; p.lastRemove = '';
   }
 
-  private pipette(a: Actor): void {
-    const e = this.game.entAt(a.cellX, a.cellY);
+  private pipette(p: Player): void {
+    const e = this.game.entAt(p.cx, p.cy);
     if (e && e.def.cat) {
-      a.tool = e.def.key; a.rot = e.rot;
-      if (e.recipe) a.recipeMem[e.def.key] = e.recipe.key;
-      if (e.def.filter) a.filterMem = e.filter;
+      p.tool = e.def.key; p.rot = e.rot;
+      if (e.recipe) p.recipeMem[e.def.key] = e.recipe.key;
+      if (e.def.filter) p.filterMem = e.filter;
       this.hud.select(null);
-    } else a.tool = null;
+    } else p.tool = !e && this.game.world.slab(p.cx, p.cy) ? 'dalle' : null;
     this.audio.ui();
   }
 
-  private undo(a: Actor): void {
-    const ops = a.undo.pop();
+  private undo(p: Player): void {
+    const ops = p.undo.pop();
     if (!ops) { this.hud.toast('Rien à annuler'); return; }
     const g = this.game;
     for (let i = ops.length - 1; i >= 0; i--) {
@@ -361,59 +394,142 @@ class App {
     this.hud.toast('Annulé');
   }
 
-  // ============================================================== manettes
+  // ============================================================ bâtisseurs
   private pads(): (Gamepad | null)[] { return navigator.getGamepads ? Array.from(navigator.getGamepads()) : []; }
 
-  private updatePads(dt: number): void {
-    const pads = this.pads(), g = this.game;
+  private joinLeave(): void {
+    const pads = this.pads();
     for (const gp of pads) {
       if (!gp) continue;
-      const owner = this.actors.find((p) => p.pad === gp.index);
-      if (!owner && gp.buttons[0]?.pressed && this.actors.length < 4) {
-        const used = new Set(this.actors.map((p) => p.id));
+      const owner = this.players.find((p) => p.pad === gp.index);
+      if (!owner && gp.buttons[0]?.pressed && this.players.length < 4) {
+        const used = new Set(this.players.map((p) => p.id));
         let id = 1; while (used.has(id)) id++;
-        const p = new Actor(id, gp.index);
-        p.x = this.cam.x + id; p.y = this.cam.y; p.prev = gp.buttons.map((b) => b.pressed);
-        this.actors.push(p);
+        const p = new Player(id, gp.index);
+        p.x = this.players[0].x + 1; p.y = this.players[0].y; p.prev = gp.buttons.map((b) => b.pressed);
+        this.players.push(p);
         this.audio.start(); this.hud.toast(`${NAMES[id % 4]} rejoint le chantier`);
       } else if (owner && gp.buttons[8]?.pressed) {
-        this.actors = this.actors.filter((p) => p !== owner);
+        this.players = this.players.filter((p) => p !== owner);
         this.hud.toast(`${NAMES[owner.id % 4]} quitte le chantier`);
       }
     }
-    this.actors = this.actors.filter((p) => p.pad === null || pads[p.pad]);
-    const b = this.scene.bounds;
-    for (const a of this.actors) {
-      if (a.pad === null) continue;
-      const gp = pads[a.pad]!;
-      const dz = (v: number) => (Math.abs(v) < 0.2 ? 0 : v);
-      const sp = this.cam.dist * 0.75;
-      a.x += dz(gp.axes[0] ?? 0) * sp * dt; a.y += dz(gp.axes[1] ?? 0) * sp * dt;
-      this.cam.x += dz(gp.axes[2] ?? 0) * sp * dt; this.cam.y += dz(gp.axes[3] ?? 0) * sp * dt;
-      a.x = Math.max(b.x0 + 8, Math.min(b.x1 - 8, a.x)); a.y = Math.max(b.y0 + 10, Math.min(b.y1 - 8, a.y));
-      const now = gp.buttons.map((x) => x.pressed), was = a.prev;
-      const down = (i: number) => now[i] && !was[i], up = (i: number) => !now[i] && was[i];
-      const moved = Math.floor(a.x) !== a.cellX || Math.floor(a.y) !== a.cellY;
-      this.aim(a);
-      if (down(2)) { a.rot = (a.rot + 1) & 3; this.aim(a); this.audio.ui(); }
-      if (down(3)) this.pipette(a);
+    this.players = this.players.filter((p) => p.pad === null || pads[p.pad]);
+  }
+
+  /** Un bâtiment (hors convoyeurs) barre le passage. */
+  private solid(x: number, y: number): boolean {
+    const e = this.game.entAt(Math.floor(x), Math.floor(y));
+    return !!e && e.def.kind !== 'belt' && e.def.kind !== 'bridge';
+  }
+
+  private updatePlayer(p: Player, dt: number): void {
+    const g = this.game, w = g.world;
+    let mx = 0, my = 0, sprint = false, hold = false;
+    if (p.pad === null) {
+      const k = this.keys;
+      if (k.has('KeyW') || k.has('ArrowUp')) my -= 1;
+      if (k.has('KeyS') || k.has('ArrowDown')) my += 1;
+      if (k.has('KeyA') || k.has('ArrowLeft')) mx -= 1;
+      if (k.has('KeyD') || k.has('ArrowRight')) mx += 1;
+      sprint = k.has('ShiftLeft') || k.has('ShiftRight');
+      hold = this.mouse.left && !p.tool;
+      this.aim(p);
+    } else {
+      const gp = this.pads()[p.pad];
+      if (!gp) return;
+      const dz = (v: number) => (Math.abs(v) < 0.22 ? 0 : v);
+      mx = dz(gp.axes[0] ?? 0); my = dz(gp.axes[1] ?? 0);
+      const ax = dz(gp.axes[2] ?? 0), ay = dz(gp.axes[3] ?? 0);
+      if (ax || ay) { p.aimX += ax * dt * 14; p.aimY += ay * dt * 14; const al = Math.hypot(p.aimX, p.aimY); if (al > 7) { p.aimX *= 7 / al; p.aimY *= 7 / al; } }
+      else if (mx || my) { const l = Math.hypot(mx, my); p.aimX += ((mx / l) * 1.6 - p.aimX) * Math.min(1, dt * 8); p.aimY += ((my / l) * 1.6 - p.aimY) * Math.min(1, dt * 8); }
+      const b = gp.buttons.map((x) => x.pressed), was = p.prev;
+      const down = (i: number) => b[i] && !was[i], up = (i: number) => !b[i] && was[i];
+      const moved = Math.floor(p.x + p.aimX) !== p.cx || Math.floor(p.y + p.aimY) !== p.cy;
+      this.aim(p);
+      sprint = b[7]; hold = b[0] && !p.tool;
+      if (down(2)) { p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); }
+      if (down(3)) this.pipette(p);
       if (down(4) || down(5)) {
         const tools: (string | null)[] = [null, ...BUILDINGS.filter((d) => d.cat && g.unlocked(d)).map((d) => d.key)];
-        a.tool = tools[(tools.indexOf(a.tool) + (down(5) ? 1 : -1) + tools.length) % tools.length];
-        this.audio.ui(); this.hud.toast(`${NAMES[a.id % 4]} : ${a.tool ? B[a.tool].name : 'aucun outil'}`);
-        this.aim(a);
+        p.tool = tools[(tools.indexOf(p.tool) + (down(5) ? 1 : -1) + tools.length) % tools.length];
+        this.audio.ui(); this.hud.toast(`${NAMES[p.id % 4]} : ${p.tool ? B[p.tool].name : 'mains libres'}`);
+        this.aim(p);
       }
-      if (down(0) && a.tool) { a.gesture = []; a.dragLast = null; this.tryPlace(a, true); }
-      else if (now[0] && a.tool && a.gesture && moved) this.tryPlace(a, false);
-      if (up(0)) this.endGesture(a);
-      if (down(1)) { a.gesture = []; a.lastRemove = ''; }
-      if (now[1] && a.gesture) this.removeAt(a);
-      if (up(1)) this.endGesture(a);
-      if (down(12)) this.cam.dist = Math.max(MIN_DIST, this.cam.dist / 1.25);
-      if (down(13)) this.cam.dist = Math.min(MAX_DIST, this.cam.dist * 1.25);
+      if (down(0)) this.primaryDown(p);
+      else if (b[0] && p.tool && p.tool !== 'demolir' && p.gesture && moved) this.tryPlace(p, false);
+      if (up(0)) this.endGesture(p);
+      if (down(1)) this.secondaryDown(p);
+      else if (b[1] && p.gesture && moved) this.removeAt(p);
+      if (up(1)) this.endGesture(p);
+      if (down(12)) this.zoom = Math.min(MAX_ZOOM, this.zoom * 1.25);
+      if (down(13)) this.zoom = Math.max(MIN_ZOOM, this.zoom / 1.25);
       if (down(9)) { if (this.hud.menuOpen) this.menu('resume'); else this.menu('pause'); }
-      a.prev = now;
+      p.prev = b;
     }
+
+    // --- la tâche en cours : y aller, puis agir
+    let acting = false;
+    if (mx || my) { if (p.task) { p.task = null; p.gprog = 0; } }
+    else if (p.task) {
+      const t = p.task, tx = t.x + 0.5, ty = t.y + 0.5, d = Math.hypot(tx - p.x, ty - p.y);
+      const need = t.kind === 'walk' ? 0.25 : t.kind === 'loot' ? 1.1 : REACH;
+      if (d > need) {
+        mx = (tx - p.x) / d; my = (ty - p.y) / d;
+        if (d < t.best - 0.05) { t.best = d; t.stuck = 0; } else if ((t.stuck += dt) > 0.9) { p.task = null; p.gprog = 0; if (t.kind !== 'walk') this.hud.toast('Le chemin est barré : fais le tour'); }
+      } else if (t.kind === 'walk') p.task = null;
+      else {
+        acting = true;
+        p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
+        if (this.gatherable(t.x, t.y) !== t.kind) { p.task = null; p.gprog = 0; }
+        else if (t.kind === 'loot') {
+          g.pickLoot(t.x, t.y); p.task = null; this.hud.toast(`+${LOOT_FER} Fer`);
+        } else {
+          const size = w.canopy(t.x, t.y);
+          p.gx = t.x; p.gy = t.y;
+          p.gprog += dt / (t.kind === 'tree' ? 0.45 + 0.5 * (size / 255) : 0.5);
+          p.swing = (p.swing + dt * 3.4) % 1 || 0.001;
+          if ((p.hitTimer -= dt) <= 0) {
+            p.hitTimer = 0.29;
+            if (t.kind === 'tree') { this.renderer.hit(t.x, t.y); this.renderer.burst('leaf', tx, ty - 0.3, PAL.leaf[3], 2); this.audio.cut(0.7, 0); }
+            else { this.renderer.burst('chip', tx, ty, DEPOSITS[w.deposit(t.x, t.y)]!.color, 3); this.audio.machine(0.8, 0); }
+          }
+          if (p.gprog >= 1) {
+            p.gprog = 0;
+            if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.hud.toast(`+${n.toFixed(1).replace('.', ',')} Bois`); }
+            else g.handMine(t.x, t.y);
+            // bouton maintenu : on enchaîne sur ce que vise le curseur
+            const nk = hold ? this.gatherable(p.cx, p.cy) : null;
+            p.task = nk ? { kind: nk, x: p.cx, y: p.cy, stuck: 0, best: 1e9 } : t.kind === 'ore' && hold ? t : null;
+          }
+        }
+      }
+    }
+    if (!acting) { p.swing = 0; if (!p.task) p.gprog = 0; }
+
+    // --- déplacement : l'eau et les arbres freinent, les convoyeurs emportent, les bâtiments arrêtent
+    const len = Math.hypot(mx, my);
+    if (len > 1) { mx /= len; my /= len; }
+    if (len > 0.1 && !acting) { p.fx += (mx / len - p.fx) * Math.min(1, dt * 14); p.fy += (my / len - p.fy) * Math.min(1, dt * 14); const fl = Math.hypot(p.fx, p.fy) || 1; p.fx /= fl; p.fy /= fl; }
+    const cellX = Math.floor(p.x), cellY = Math.floor(p.y);
+    let speed = 7.2 * (sprint ? 1.5 : 1);
+    if (w.ground(cellX, cellY) === GROUND_WATER) speed *= 0.5;
+    else if (w.canopy(cellX, cellY) >= TREE_MIN) speed *= 0.72;
+    let tx = mx * speed, ty = my * speed;
+    const under = g.entAt(cellX, cellY);
+    if (under && under.def.kind === 'belt') { const bs = (BELT_SPEED * 60) / TILE_U; tx += DX[under.rot] * bs; ty += DY[under.rot] * bs; }
+    const a = Math.min(1, dt * 13);
+    p.vx += (tx - p.vx) * a; p.vy += (ty - p.vy) * a;
+    const nx = p.x + p.vx * dt, ny = p.y + p.vy * dt;
+    const inside = this.solid(p.x, p.y);
+    if (inside || !this.solid(nx, p.y)) p.x = nx; else p.vx = 0;
+    if (inside || !this.solid(p.x, ny)) p.y = ny; else p.vy = 0;
+    const v = Math.hypot(p.vx, p.vy);
+    p.speed += (Math.min(1, v / 5) - p.speed) * Math.min(1, dt * 10);
+    p.walk += dt * (6 + v * 1.6) * (v > 0.3 ? 1 : 0);
+    p.lean += (Math.min(1, v / 8) - p.lean) * Math.min(1, dt * 5);
+    p.blink = (this.time * 0.31 + p.id * 0.37) % 1;
+    p.beam = Math.max(0, p.beam - dt * 5);
   }
 
   // ================================================================ boucle
@@ -422,48 +538,42 @@ class App {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.time += dt; this.frame++;
-    const g = this.game, a = this.actors[0], m = this.mouse;
+    const g = this.game, p0 = this.players[0], m = this.mouse;
 
     if (this.started) {
-      // déplacement de la vue au clavier
-      const k = this.keys;
-      let px = 0, py = 0;
-      if (k.has('KeyW') || k.has('ArrowUp')) py -= 1;
-      if (k.has('KeyS') || k.has('ArrowDown')) py += 1;
-      if (k.has('KeyA') || k.has('ArrowLeft')) px -= 1;
-      if (k.has('KeyD') || k.has('ArrowRight')) px += 1;
-      if (px || py) { const sp = this.cam.dist * 0.95 * dt / Math.hypot(px, py); this.cam.x += px * sp; this.cam.y += py * sp; this.fly = null; }
-      if (this.fly) {
-        this.cam.x += (this.fly.x - this.cam.x) * Math.min(1, dt * 5); this.cam.y += (this.fly.y - this.cam.y) * Math.min(1, dt * 5);
-        if (Math.hypot(this.fly.x - this.cam.x, this.fly.y - this.cam.y) < 0.2) this.fly = null;
-      }
       if (!this.paused) {
-        this.updatePads(dt);
+        this.joinLeave();
+        for (const p of this.players) this.updatePlayer(p, dt);
         this.acc += dt;
         let n = 0;
         while (this.acc >= 1 / 60 && n++ < 5) { g.step(); this.acc -= 1 / 60; }
         if (this.acc > 0.2) this.acc = 0;
       }
-      this.aim(a);
-      const e = m.over ? g.entAt(a.cellX, a.cellY) : null;
-      this.hover = e && (!a.tool || a.tool === 'demolir') ? e : null;
+      // la caméra suit le bâtisseur ; à plusieurs, elle recule pour garder tout le monde
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of this.players) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+      const fit = Math.max(MIN_ZOOM * 0.7, Math.min(this.zoom, window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)));
+      // un léger décalage vers le curseur : on voit plus loin là où l'on regarde
+      const look = this.players.length === 1 && m.over ? 0.16 : 0;
+      const tx = (x0 + x1) / 2 + look * (m.x - window.innerWidth / 2) / fit, ty = (y0 + y1) / 2 + look * (m.y - window.innerHeight / 2) / fit;
+      const k = Math.min(1, dt * 6);
+      this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
+      this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
+      this.aim(p0);
+      const e = m.over ? g.entAt(p0.cx, p0.cy) : null;
+      this.hover = e && (!p0.tool || p0.tool === 'demolir') ? e : null;
     } else {
-      // écran-titre : la vue tourne lentement autour de la clairière
-      this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 5; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4; this.cam.dist = 34;
+      // écran-titre : la vue dérive lentement autour de la clairière
+      this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 6; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4; this.cam.zoom = 38 * this.dpr;
       g.step();
     }
 
     this.drain();
-    this.scene.placeCamera(this.cam.x, this.cam.y, this.cam.dist);
-    const b = this.scene.bounds;
-    g.world.ensureArea(b.x0, b.y0, b.x1, b.y1);     // le monde se génère devant la caméra : pas de bord
-    const build = this.started && a.tool && a.tool !== 'demolir' ? a.tool : null;
-    this.scene.render(g, {
-      time: this.time, dt, frame: this.frame, camX: this.cam.x, camY: this.cam.y, dist: this.cam.dist,
-      tool: build && m.over ? build : null, rot: a.rot, originX: a.originX, originY: a.originY, cellX: a.cellX, cellY: a.cellY,
-      ghostOk: a.ok, demolish: a.tool === 'demolir', hover: this.hover, selected: this.hud.selected,
-      cursors: this.actors.filter((p) => p.pad !== null).map((p) => ({ x: p.x, y: p.y, color: COLORS[p.id % 4] })),
-      rings: this.rings, marker: this.started ? this.marker() : null, tilt: this.tilt,
+    const z = this.cam.zoom / this.dpr, hw = window.innerWidth / 2 / z, hh = window.innerHeight / 2 / z;
+    g.world.ensureArea(Math.floor(this.cam.x - hw) - 3, Math.floor(this.cam.y - hh) - 3, Math.ceil(this.cam.x + hw) + 3, Math.ceil(this.cam.y + hh) + 3);   // le monde se génère devant soi
+    this.renderer.render(g, this.cam, {
+      time: this.time, frame: this.frame, dt, players: this.started ? this.players : [],
+      selected: this.hud.selected, hover: this.hover, rings: this.rings, marker: this.started ? this.marker() : null,
     });
     this.rings = this.rings.filter((r) => this.time - r.t0 < r.dur);
     this.audio.update(g.sun.night);
@@ -478,50 +588,57 @@ class App {
     requestAnimationFrame(() => this.loop());
   }
 
-  /** Infobulle au curseur : pourquoi on ne peut pas poser, ou ce qu'on survole. */
+  /** Infobulle au curseur : ce qu'on vise et ce que fera le clic. */
   private updateTip(): void {
-    const a = this.actors[0], m = this.mouse, g = this.game;
-    if (!m.over || m.panning || this.paused) { this.hud.tip(null); return; }
+    const p = this.players[0], m = this.mouse, g = this.game, w = g.world;
+    if (!m.over || this.paused) { this.hud.tip(null); return; }
     let html: string | null = null;
-    if (a.tool === 'demolir') html = this.hover ? `<b>Démolir : ${this.hover.def.name}</b><span class="k">Tout est remboursé</span>` : null;
-    else if (a.tool) {
-      const def = B[a.tool];
-      html = a.ok
-        ? `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' ? ' · glisser : tracer' : ''}${def.w + def.h > 2 || def.kind === 'belt' || def.kind === 'splitter' || def.kind === 'bridge' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
-        : `<b>${def.name}</b><span class="no">${a.reason}</span>`;
+    if (p.tool === 'demolir') html = this.hover ? `<b>Démolir : ${this.hover.def.name}</b><span class="k">Tout est remboursé</span>` : null;
+    else if (p.tool) {
+      const def = B[p.tool];
+      html = p.ok
+        ? `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' · glisser : tracer' : ''}${def.kind !== 'slab' && def.kind !== 'deco' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
+        : `<b>${def.name}</b><span class="no">${p.reason}</span>`;
     } else if (this.hover && (this.hover.def.kind === 'belt' || this.hover.def.kind === 'bridge' || this.hover.def.kind === 'deco')) {
       html = `<b>${this.hover.def.name}</b><span class="k">Clic droit : démolir · E : copier</span>`;
     } else if (this.hover) {
       const st = this.hud.statusLine(g, this.hover);
-      html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : détails</span>`;
+      html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir</span>`;
     } else {
-      const d = g.world.deposit(a.cellX, a.cellY);
-      if (d) html = `<b>${DEPOSITS[d]!.name}</b><span class="k">${g.world.amount(a.cellX, a.cellY)} unités ici · pose un Puits dessus</span>`;
+      const kind = this.gatherable(p.cx, p.cy);
+      if (kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_FER} Fer</span>`;
+      else if (kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(p.cx, p.cy) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
+      else if (kind === 'ore') { const d = DEPOSITS[w.deposit(p.cx, p.cy)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
     }
     this.hud.tip(html, m.x, m.y);
   }
 
-  /** Événements de la simulation → son et ondes visuelles. */
+  /** Événements de la simulation → son, particules, ondes. */
   private drain(): void {
-    const g = this.game;
+    const g = this.game, r = this.renderer;
+    const span = (window.innerWidth / (this.cam.zoom / this.dpr)) * 0.6;
     for (const ev of g.events) {
       const d = Math.hypot(ev.x - this.cam.x, ev.y - this.cam.y);
-      const near = this.started ? Math.max(0, 1 - d / (this.cam.dist * 0.9)) : 0;
-      const pan = Math.max(-1, Math.min(1, (ev.x - this.cam.x) / (this.cam.dist * 0.6)));
+      const near = this.started ? Math.max(0, 1 - d / span) : 0;
+      const pan = Math.max(-1, Math.min(1, (ev.x - this.cam.x) / (span * 0.7)));
       switch (ev.type) {
         case 'craft': case 'mine': this.audio.machine(near, pan); break;
-        case 'cut': this.audio.cut(near, pan); break;
-        case 'place': if (this.started) this.audio.place(ev.a); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: '#f1efe8', size: 0.7 + Math.sqrt(ev.a) * 0.8, dur: 0.35 }); break;
-        case 'remove': if (this.started) this.audio.remove(); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: '#ff6a5a', size: 0.7 + Math.sqrt(ev.a) * 0.8, dur: 0.3 }); break;
+        case 'cut': r.hit(ev.x, ev.y); r.burst('leaf', ev.x, ev.y - 0.3, PAL.leaf[3], 3); this.audio.cut(near, pan); break;
+        case 'fell': r.fell(g, ev.x, ev.y, ev.a); this.audio.cut(near, pan); break;
+        case 'hand': r.burst('chip', ev.x, ev.y, ITEMS[ev.a].color, 6); break;
+        case 'pick': r.burst('spark', ev.x, ev.y, PAL.signalHi, 10); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: PAL.signalHi, size: 1.2, dur: 0.4 }); if (this.started) this.audio.place(1); break;
+        case 'place': if (this.started) this.audio.place(ev.a); r.burst('dust', ev.x, ev.y + 0.3, 'rgba(190,180,160,', 3 + Math.min(8, ev.a)); break;
+        case 'remove': if (this.started) this.audio.remove(); r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4 + Math.min(8, ev.a)); r.burst('chip', ev.x, ev.y, PAL.steelHi, 5); break;
         case 'quota':
           if (this.started) { this.audio.quota(); this.hud.banner(g); }
-          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? '#7ff0d2' : '#ffb050', size: 24 + i * 20, dur: 2.6 });
+          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? PAL.glow : PAL.signalHi, size: 22 + i * 18, dur: 2.6 });
+          r.burst('star', ev.x, ev.y - 0.8, PAL.signalHi, 40); r.burst('star', ev.x, ev.y - 0.8, PAL.white, 25);
           break;
         default: break;
       }
     }
     g.events.length = 0;
-    if (this.rings.length > 10) this.rings.splice(0, this.rings.length - 10);
+    if (this.rings.length > 14) this.rings.splice(0, this.rings.length - 14);
   }
 }
 

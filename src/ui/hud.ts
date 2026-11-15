@@ -2,13 +2,13 @@
 // reconnaître plutôt que se souvenir (icône + mot), montrer la cause, dévoiler par couches, erreur récupérable.
 
 import {
-  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, UPGRADES, I, quotaAt,
+  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, I, quotaAt,
   type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
 import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
 import { prettyFormula } from '../sim/chem';
-import { buildingIcon } from '../render/icons';
+import { buildingIcon } from '../render/sprites';
 
 export interface HudHost {
   game(): Game;
@@ -18,7 +18,8 @@ export interface HudHost {
   locate(place: Place): void;
   setRecipe(e: Ent, key: string): void;
   setFilter(e: Ent, id: number): void;
-  buyUpgrade(key: string): void;
+  feed(e: Ent): void;
+  take(e: Ent): void;
   ping(list: Ent[]): void;
   menu(action: string, value?: string): void;
   playerLines(): string[];
@@ -31,7 +32,7 @@ const clock = (ticks: number) => `${Math.floor(ticks / 3600)} min ${String(Math.
 
 /** Icône d'objet : la forme double la couleur (rien d'essentiel ne dépend de la couleur seule). */
 export function itemIcon(it: ItemDef, size = 18): string {
-  const s = { boule: '<circle cx="8" cy="8" r="5.5"/>', bloc: '<rect x="3" y="3" width="10" height="10"/>', gemme: '<path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/>', lingot: '<path d="M4 5h8l2.5 6h-13Z"/>', bonbonne: '<rect x="5" y="2" width="6" height="12" rx="3"/>' }[it.shape];
+  const s = { boule: '<circle cx="8" cy="8" r="5.5"/>', bloc: '<rect x="3" y="3" width="10" height="10"/>', gemme: '<path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/>', lingot: '<path d="M4 5h8l2.5 6h-13Z"/>', plaque: '<rect x="1.5" y="5" width="13" height="6"/>', bobine: '<path fill-rule="evenodd" d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Zm0 4a2 2 0 1 1 0 4a2 2 0 0 1 0-4Z"/>', rouage: '<path d="M8 1.5l1.6 2.3 2.7-.6.2 2.8 2.5 1.2-1.6 2.3 1 2.6-2.8.3-1.1 2.5L8 13.6l-2.5 1.3-1.1-2.5-2.8-.3 1-2.6L1 7.2l2.5-1.2.2-2.8 2.7.6Z"/>' }[it.shape];
   return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 16 16" fill="${it.color}" stroke="#000" stroke-opacity=".55" stroke-width="1" aria-hidden="true">${s}</svg>`;
 }
 const itemTag = (id: number, n?: number | string) => `<button class="item" data-codex="i:${id}">${itemIcon(ITEMS[id])}${n !== undefined ? `<b>${n}</b> ` : ''}${esc(ITEMS[id].name)}</button>`;
@@ -68,21 +69,20 @@ export class Hud {
     $('codex-search').addEventListener('input', () => this.renderCodexList());
     $('opt-music').addEventListener('input', (ev) => host.menu('music', (ev.target as HTMLInputElement).value));
     $('opt-sfx').addEventListener('input', (ev) => host.menu('sfx', (ev.target as HTMLInputElement).value));
-    $('opt-tilt').addEventListener('change', (ev) => host.menu('tilt', String((ev.target as HTMLInputElement).checked)));
   }
 
   private onClick(ev: MouseEvent): void {
-    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-upgrade],[data-menu],[data-alert],[data-close],[data-go]');
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-close],[data-go]');
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
-    if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.barKey = ''; }
+    if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
     else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
     else if (d.go !== undefined) this.host.locate(d.go as Place);
     else if (d.recipe !== undefined && this.selected) { this.host.setRecipe(this.selected, d.recipe); this.renderPanel(g, true); }
     else if (d.filter !== undefined && this.selected) { this.host.setFilter(this.selected, +d.filter); this.renderPanel(g, true); }
     else if (d.codex !== undefined) this.openCodex(d.codex);
-    else if (d.upgrade !== undefined) { this.host.buyUpgrade(d.upgrade); this.renderPanel(g, true); }
+    else if (d.act !== undefined && this.selected) { if (d.act === 'feed') this.host.feed(this.selected); else this.host.take(this.selected); this.renderPanel(g, true); }
     else if (d.menu !== undefined) this.host.menu(d.menu);
     else if (d.alert !== undefined) {
       const [st, miss, key] = d.alert.split(':');
@@ -143,7 +143,7 @@ export class Hud {
       const done = this.host.stepDone(s);
       const now = !done && !seenNow;
       if (now) seenNow = true;
-      const go = now && s.t === 'build' && s.go ? `<button class="go" data-go="${s.go}">Y aller</button>` : '';
+      const go = now && (s.t === 'build' || s.t === 'gather') && s.go ? `<button class="go" data-go="${s.go}">Y aller</button>` : '';
       return `<li class="${done ? 'done' : now ? 'now' : ''}"><span>${esc(s.text)}</span>${go}</li>`;
     }).join('');
     const html = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${steps ? `<ul class="steps">${steps}</ul>` : ''}`;
@@ -155,12 +155,9 @@ export class Hud {
     const hh = Math.floor(s.hour), mm = Math.floor((s.hour % 1) * 60);
     const low = p.sat < 0.999 && p.lastDemand > 0;
     const use = p.capacity > 0 ? Math.min(1, p.lastDemand / p.capacity) : 0;
-    const savoir = g.savoir > 0 ? `<button class="chip savoir" data-menu="savoir" title="Clique : investir ton Savoir dans la Tour">◆ ${g.savoir} Savoir à investir</button>` : '';
     $('topbar').innerHTML = `
-      <div class="chip" title="Un jour dure 10 minutes. Le soleil alimente les héliostats et fait pousser la jungle."><b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b>${s.day ? 'jour' : g.bloom > 0.2 ? 'nuit de floraison' : 'nuit'}</div>
-      <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}${p.storeMax ? ` · réserve ${Math.round((100 * p.stored) / p.storeMax)} %` : ''}</div>
-      <div class="chip" title="CO₂ dans l’air. Plus il y en a, plus la jungle repousse vite : elle se nourrit de ce que l’usine rejette.">CO₂ <b>${Math.round(g.ppm())}</b> ppm</div>
-      <div class="chip ${g.jungleHealth < 0.5 ? 'bad' : ''}" title="Santé de la jungle autour des Éventails : canopée alentour, moins la fumée.">Jungle <b>${Math.round(g.jungleHealth * 100)} %</b></div>${savoir}`;
+      <div class="chip" title="Un jour dure 10 minutes. Les Héliostats ne produisent que le jour."><b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b>${s.day ? 'jour' : 'nuit'}</div>
+      <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}${p.storeMax ? ` · réserve ${Math.round((100 * p.stored) / p.storeMax)} %` : ''}</div>`;
   }
 
   private renderStock(g: Game): void {
@@ -171,7 +168,7 @@ export class Hud {
       if (n < 1 && Math.abs(rate) < 0.5) continue;
       html += `<button class="row" data-codex="i:${i}">${itemIcon(ITEMS[i])}<span class="name">${esc(ITEMS[i].name)}</span><span class="rate ${rate < -0.5 ? 'neg' : ''}">${Math.abs(rate) >= 0.5 ? (rate > 0 ? '+' : '−') + Math.abs(Math.round(rate)) + '/min' : ''}</span><b>${fmt(n)}</b></button>`;
     }
-    $('stock').innerHTML = `<div class="eyebrow">Stock de la Tour</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
+    $('stock').innerHTML = `<div class="eyebrow">Ton stock</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
   }
 
   private renderAlerts(g: Game): void {
@@ -237,7 +234,6 @@ export class Hud {
     if (e.status === Status.Working && g.power.sat < 0.999 && e.def.power && !['generator', 'solar', 'wind', 'hydro', 'battery'].includes(e.def.kind)) text = `Au ralenti : ${Math.round(g.power.sat * 100)} % du courant demandé`;
     if (e.def.kind === 'storage') text = `${e.outCount} / ${STORE_CAP} objets`;
     if (e.def.kind === 'hub') text = 'Reçoit tout ce qui arrive';
-    if (e.def.kind === 'tree') text = e.health > 0.6 ? 'En pleine santé' : e.health > 0.25 ? 'Affaibli' : 'Mourant';
     if (e.def.kind === 'splitter') text = e.def.filter ? (e.filter >= 0 ? `Laisse passer : ${ITEMS[e.filter].name}` : 'Choisis l’objet à laisser passer') : 'Répartit le flux';
     const cls = e.status === Status.Working || e.def.kind === 'hub' ? 'ok' : e.status === Status.Idle || e.status === Status.Dark || e.def.kind === 'splitter' || e.def.kind === 'storage' ? '' : 'bad';
     return { text, cls: e.def.kind === 'splitter' && e.def.filter && e.filter < 0 ? 'bad' : cls };
@@ -248,29 +244,29 @@ export class Hud {
     const k = e.def.kind;
     const st = this.statusLine(g, e);
     let body = '';
-    if (k === 'machine' || k === 'scrubber' || k === 'ring') {
+    const give = '<button class="act" data-act="feed">Donner depuis mon stock</button>', grab = '<button class="act" data-act="take">Prendre la sortie</button>';
+    if (k === 'machine') {
       const r = e.recipe;
       const list = e.def.recipes.filter((x) => g.quota >= x.unlock);
       if (list.length > 1) body += `<div class="recipes">${list.map((x) => `<button class="${x === r ? 'on' : ''}" data-recipe="${x.key}">${esc(x.name)}</button>`).join('')}</div>`;
       if (r) {
         body += `<div class="eq">${equation(r)}</div><p class="note">${esc(recipeWords(r))}. ${esc(r.note)}</p>`;
         body += `<div class="bar big"><i style="width:${(e.working ? (100 * e.progress) / r.time : 0).toFixed(0)}%"></i></div>`;
-        body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${k === 'scrubber' ? `<span class="meta">SO₂ capté : ${Math.floor(e.gas)}</span>` : ''}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}</div></div>`;
+        body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${give}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}${grab}</div></div>`;
         const perMin = (3600 / r.time) * e.def.speed;
         body += `<p class="meta">À plein régime : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} par minute · consomme ${e.def.power} W</p>`;
       }
-      if (k === 'ring') body += `<p class="meta">Santé de la jungle alentour : <b>${Math.round(e.health * 100)} %</b>. Le rendement lui est proportionnel${g.bloom > 0.1 ? ' — <b>floraison : ×2</b>' : ''}.</p>`;
     } else if (k === 'miner') {
       let left = 0;
       const cells = e.cells!;
       for (let i = 0; i < cells.length; i += 2) left += g.world.amount(cells[i], cells[i + 1]);
-      body += `<p class="meta">Reste à portée : <b>${fmt(left)}</b> · ${Math.round(60 * e.def.speed)} par minute · consomme ${e.def.power} W</p>`;
+      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · ${Math.round(60 * e.def.speed)} par minute · consomme ${e.def.power} W</p>`;
     } else if (k === 'sawmill') {
-      body += `<p class="meta">Jusqu’à 40 biomasses par minute. Une forêt à moitié pleine repousse le plus vite : en couper moins, c’est récolter plus longtemps.</p>`;
+      body += `<p class="meta">Jusqu’à 40 bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
     } else if (k === 'generator') {
-      body += `<div class="io"><div><span class="eyebrow">Combustible</span>${e.def.fuels.map((id) => itemTag(id, e.buf![id])).join('')}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que l’usine demande.</p>`;
+      body += `<div class="io"><div><span class="eyebrow">Combustible</span>${e.def.fuels.map((id) => itemTag(id, e.buf![id])).join('')}${give}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que l’usine demande.</p>`;
     } else if (k === 'solar') {
-      body += `<p class="meta">Éclairement : <b>${Math.round(e.light * 100)} %</b> → ${Math.round(e.light * e.def.power)} W${e.light < 0.05 && g.sun.day ? ' — à l’ombre d’un bâtiment' : ''}</p>`;
+      body += `<p class="meta">Éclairement : <b>${Math.round(e.light * 100)} %</b> → ${Math.round(e.light * e.def.power)} W</p>`;
     } else if (k === 'wind') {
       body += `<p class="meta">Vent : <b>${Math.round(g.wind * 100)} %</b> → ${Math.round(e.flow)} W</p>`;
     } else if (k === 'hydro') {
@@ -278,17 +274,14 @@ export class Hud {
     } else if (k === 'battery') {
       body += `<div class="bar big"><i style="width:${(100 * e.energy / ACCU_CAP).toFixed(0)}%"></i></div><p class="meta">${(e.energy / 1000).toFixed(1)} / ${ACCU_CAP / 1000} kJ · ${e.flow >= 0 ? 'fournit' : 'se charge de'} ${Math.abs(Math.round(e.flow))} W</p>`;
     } else if (k === 'storage') {
-      body += `<div class="io"><div><span class="eyebrow">Contenu</span>${ITEMS.filter((it) => e.out![it.id] > 0).map((it) => itemTag(it.id, e.out![it.id])).join('') || '—'}</div></div>`;
-    } else if (k === 'seeder') {
-      body += `<div class="io"><div><span class="eyebrow">Engrais</span>${itemTag(I.engrais, e.buf![I.engrais])}</div></div>`;
+      body += `<div class="io"><div><span class="eyebrow">Contenu</span>${ITEMS.filter((it) => e.out![it.id] > 0).map((it) => itemTag(it.id, e.out![it.id])).join('') || '—'}${grab}</div></div>`;
     } else if (k === 'splitter' && e.def.filter) {
       body += `<div class="filters">${ITEMS.filter((it) => g.stock[it.id] > 0 || g.made[it.id] || e.filter === it.id).map((it) => `<button class="${e.filter === it.id ? 'on' : ''}" data-filter="${it.id}">${itemIcon(it)}${esc(it.name)}</button>`).join('')}</div>`;
     } else if (k === 'hub') {
       body += `<p class="meta">Énergie fournie : ${e.def.power} W. Objets reçus : ${fmt(e.done)}.</p>`;
-      body += `<div class="eyebrow">Savoir : ${g.savoir} à investir</div><div class="upgrades">${UPGRADES.map((u) => `<button data-upgrade="${u.key}" ${g.savoir < 1 ? 'disabled' : ''}><b>${esc(u.name)} · niveau ${g.upgrades[u.key]}</b><span>${esc(u.desc)}</span></button>`).join('')}</div>`;
-      if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Quota</th><th>Durée</th><th>Bâtiments</th><th>CO₂ émis</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td><td>${fmt(r.co2)}</td></tr>`).join('')}</table>`;
+      if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Quota</th><th>Durée</th><th>Bâtiments</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td></tr>`).join('')}</table>`;
     }
-    const html = `<header><div><div class="eyebrow">${k === 'tree' ? 'Planète' : esc(CATEGORIES.find((c) => c.key === e.def.cat)?.name ?? 'Monument')}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
+    const html = `<header><div><div class="eyebrow">${esc(CATEGORIES.find((c) => c.key === e.def.cat)?.name ?? 'Monument')}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
       <div class="status ${st.cls}">${esc(st.text)}</div><p class="desc">${esc(e.def.desc)}</p>${body}`;
     if (!force && html === this.panelKey) return;
     this.panelKey = html;
@@ -302,8 +295,8 @@ export class Hud {
     const unlocked = BUILDINGS.filter((b) => b.cat && b.unlock === g.quota).map((b) => b.name);
     const el = $('banner');
     el.innerHTML = `<div class="eyebrow">Quota accompli</div><h1>${esc(done.title)}</h1>
-      <div class="metrics"><span><b>${clock(rec.ticks)}</b>durée</span><span><b>${rec.buildings}</b>bâtiments</span><span><b>${fmt(rec.co2)}</b>CO₂ émis</span></div>
-      <p class="lore">${esc(next.lore)}</p>${unlocked.length ? `<p class="unlock">Nouveau : ${unlocked.map(esc).join(' · ')}</p>` : ''}<p class="meta">+1 Savoir à investir dans la Tour</p>`;
+      <div class="metrics"><span><b>${clock(rec.ticks)}</b>durée</span><span><b>${rec.buildings}</b>bâtiments</span></div>
+      <p class="lore">${esc(next.lore)}</p>${unlocked.length ? `<p class="unlock">Nouveau : ${unlocked.map(esc).join(' · ')}</p>` : ''}`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.bannerTimer);
     this.bannerTimer = window.setTimeout(() => { el.hidden = true; }, 9000);
@@ -326,11 +319,11 @@ export class Hud {
     const q = (document.getElementById('codex-search') as HTMLInputElement).value.trim().toLowerCase();
     const match = (s: string) => !q || s.toLowerCase().includes(q);
     // on ne montre que ce qui a été découvert : pas de divulgâchage
-    const seen = (id: number) => id < 3 || id === I.biomasse || g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
+    const seen = (id: number) => id < 3 || id === I.bois || g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
     const items = ITEMS.filter((it) => seen(it.id) && (match(it.name) || match(it.formula))).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></button>`);
     const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
     const recs = RECIPES.filter((r) => g.quota >= r.unlock && match(r.name)).map((r) => `<button data-codex="r:${r.key}">${esc(r.name)}</button>`);
-    $('codex-list').innerHTML = `<div class="eyebrow">Objets</div>${items.join('')}<div class="eyebrow">Bâtiments</div>${builds.join('')}<div class="eyebrow">Réactions</div>${recs.join('')}`;
+    $('codex-list').innerHTML = `<div class="eyebrow">Objets</div>${items.join('')}<div class="eyebrow">Bâtiments</div>${builds.join('')}<div class="eyebrow">Recettes</div>${recs.join('')}`;
   }
 
   private renderCodexEntry(entry: string): void {
@@ -346,14 +339,14 @@ export class Hud {
       const used = RECIPES.filter((r) => known(r) && r.inputs.some(([x]) => x === it.id));
       const builds = BUILDINGS.filter((b) => g.unlocked(b) && b.cost.some(([x]) => x === it.id));
       html = `<h2>${itemIcon(it, 28)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></h2><p>${esc(it.desc)}</p>
-        <div class="eyebrow">D’où ça vient</div>${made.map(recipeCard).join('') || '<p class="meta">Extrait du sol, de la jungle ou de la rivière — ou pas encore découvert.</p>'}
+        <div class="eyebrow">D’où ça vient</div>${made.map(recipeCard).join('') || '<p class="meta">Se récolte dans le monde : à la main, ou avec un Puits ou une Scierie.</p>'}
         <div class="eyebrow">À quoi ça sert</div>${used.map(recipeCard).join('')}${builds.length ? `<p class="meta">Pour construire : ${builds.map((b) => `<button class="link" data-codex="b:${b.key}">${esc(b.name)}</button>`).join(', ')}</p>` : ''}${!used.length && !builds.length ? '<p class="meta">Rien de connu pour l’instant.</p>' : ''}`;
     } else if (type === 'b') {
       const b = B[id];
       const recs = b.recipes.filter(known);
       html = `<h2><img src="${buildingIcon(b.key)}" alt="" width="52" height="52"> ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
         <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${b.cost.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ${b.power} W` : ''}</p>
-        ${recs.length ? `<div class="eyebrow">Réactions</div>${recs.map(recipeCard).join('')}` : ''}`;
+        ${recs.length ? `<div class="eyebrow">Recettes</div>${recs.map(recipeCard).join('')}` : ''}`;
     } else {
       const r = RECIPES.find((x) => x.key === id)!;
       const b = where(r);

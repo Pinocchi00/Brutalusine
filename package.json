@@ -1,9 +1,9 @@
 {
   "name": "brutalusine",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
-  "description": "Brutalusine — une usine d'os dans une jungle qui respire. Jeu d'automatisation vue du dessus, coop local.",
+  "description": "Brutalusine — jeu d'automatisation d'usine en 2D vue de dessus, avec coop locale.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -12,14 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
-    "@fontsource/inter": "^5.3.0",
-    "three": "^0.187.0"
+    "@fontsource/inter": "^5.3.0"
   }
 }

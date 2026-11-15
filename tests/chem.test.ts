@@ -18,10 +18,10 @@ describe('chimie', () => {
   }
 
   it('la Vertèbre est la somme exacte de ses parties', () => {
-    expect(ITEMS[I.vertebre].atoms).toEqual({ Fe: 12, C: 10, Cu: 4, Si: 4, Ca: 4, O: 14, H: 12 });
+    expect(ITEMS[I.vertebre].atoms).toEqual({ Fe: 19, C: 5, Cu: 8, Si: 4, Ca: 4, O: 8 });
   });
 
-  it('carboniser la biomasse fait perdre de l’énergie (comme dans la réalité)', () => {
-    expect(6 * FUEL[I.carbone].energy).toBeLessThan(FUEL[I.biomasse].energy);
+  it('carboniser le bois fait perdre de l’énergie (comme dans la réalité)', () => {
+    expect(6 * FUEL[I.carbone].energy).toBeLessThan(FUEL[I.bois].energy);
   });
 });

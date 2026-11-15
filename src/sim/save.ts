@@ -4,13 +4,13 @@ import { B, R, type Dir } from './data';
 import { Game } from './game';
 
 export interface SaveData {
-  v: 1; seed: number; tick: number; nextId: number;
+  v: 2; seed: number; tick: number; nextId: number;
   stock: Float64Array; delivered: Float64Array;
-  quota: number; quotaStart: number; savoir: number; upgrades: Record<string, number>;
-  atmo: { co2: number; emitted: number; fixed: number };
+  quota: number; quotaStart: number; gathered: number;
+  atmo: { co2: number };
   made: Uint8Array; wind: number;
-  records: Game['records']; bloom: number; jungleHealth: number;
-  chunks: { cx: number; cy: number; canopy: Uint8Array; deposit: Uint8Array; amount: Uint16Array; slab: Uint8Array; smoke: Float32Array }[];
+  records: Game['records'];
+  chunks: { cx: number; cy: number; canopy: Uint8Array; deposit: Uint8Array; amount: Uint16Array; slab: Uint8Array; loot: Uint8Array; cap: Uint8Array }[];
   ents: EntSave[];
   extra?: unknown;
 }
@@ -19,7 +19,7 @@ interface EntSave {
   id: number; key: string; x: number; y: number; rot: number;
   isOut?: boolean; held?: number; rr?: number; filter?: number; recipe?: string;
   buf?: number[]; out?: number[]; progress?: number; working?: boolean; outRR?: number;
-  energy?: number; ptr?: number; health?: number; gas?: number; level?: number; done?: number; light?: number;
+  energy?: number; ptr?: number; level?: number; done?: number; light?: number;
   items?: number[];
 }
 
@@ -37,7 +37,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     }
   }
   const ents: EntSave[] = [];
-  for (const e of [...g.tickers, ...g.belts, ...g.trees.filter((t) => t.def.kind === 'tree')]) {
+  for (const e of [...g.tickers, ...g.belts]) {
     if (e.dead) continue;
     const s: EntSave = { id: e.id, key: e.def.key, x: e.x, y: e.y, rot: e.rot };
     if (e.isOut) s.isOut = true;
@@ -51,8 +51,6 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     if (e.outRR) s.outRR = e.outRR;
     if (e.energy) s.energy = e.energy;
     if (e.ptr) s.ptr = e.ptr;
-    if (e.health !== 1) s.health = e.health;
-    if (e.gas) s.gas = e.gas;
     if (e.level) s.level = e.level;
     if (e.done) s.done = e.done;
     if (e.def.kind === 'solar') s.light = e.light;
@@ -61,24 +59,24 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     ents.push(s);
   }
   return {
-    v: 1, seed: g.seed, tick: g.tick, nextId: g.nextId,
+    v: 2, seed: g.seed, tick: g.tick, nextId: g.nextId,
     stock: g.stock.slice(), delivered: g.delivered.slice(),
-    quota: g.quota, quotaStart: g.quotaStart, savoir: g.savoir, upgrades: { ...g.upgrades },
-    atmo: { ...g.atmo }, made: g.made.slice(), wind: g.wind, records: g.records.slice(), bloom: g.bloom, jungleHealth: g.jungleHealth,
-    chunks: g.world.list.map((c) => ({ cx: c.cx, cy: c.cy, canopy: c.canopy.slice(), deposit: c.deposit.slice(), amount: c.amount.slice(), slab: c.slab.slice(), smoke: c.smoke.slice() })),
+    quota: g.quota, quotaStart: g.quotaStart, gathered: g.gathered,
+    atmo: { ...g.atmo }, made: g.made.slice(), wind: g.wind, records: g.records.slice(),
+    chunks: g.world.list.map((c) => ({ cx: c.cx, cy: c.cy, canopy: c.canopy.slice(), deposit: c.deposit.slice(), amount: c.amount.slice(), slab: c.slab.slice(), loot: c.loot.slice(), cap: c.cap.slice() })),
     ents, extra,
   };
 }
 
 export function deserialize(d: SaveData): Game {
+  if (d.v !== 2) throw new Error('Sauvegarde d’une ancienne version');
   const g = new Game(d.seed, false);
   g.loading = true;
   for (const cd of d.chunks) {
     const c = g.world.chunk(cd.cx, cd.cy)!;
-    c.canopy.set(cd.canopy); c.deposit.set(cd.deposit); c.amount.set(cd.amount); c.slab.set(cd.slab); c.smoke.set(cd.smoke);
-    c.slabCount = 0; c.smokeSum = 0;
+    c.canopy.set(cd.canopy); c.deposit.set(cd.deposit); c.amount.set(cd.amount); c.slab.set(cd.slab); c.loot.set(cd.loot); c.cap.set(cd.cap);
+    c.slabCount = 0;
     for (let i = 0; i < c.slab.length; i++) if (c.slab[i]) c.slabCount++;
-    for (let i = 0; i < c.smoke.length; i++) c.smokeSum += c.smoke[i];
     c.version++;
   }
   for (const s of d.ents) {
@@ -88,15 +86,15 @@ export function deserialize(d: SaveData): Game {
     e.recipe = s.recipe ? R[s.recipe] : e.recipe;
     if (s.buf && e.buf) { e.buf.set(s.buf); e.out!.set(s.out!); e.outCount = s.out!.reduce((a, b) => a + b, 0); }
     e.progress = s.progress ?? 0; e.working = !!s.working; e.outRR = s.outRR ?? 0;
-    e.energy = s.energy ?? 0; e.ptr = s.ptr ?? 0; e.health = s.health ?? 1; e.gas = s.gas ?? 0;
+    e.energy = s.energy ?? 0; e.ptr = s.ptr ?? 0; e.born = -999;
     e.level = s.level ?? 0; e.done = s.done ?? 0; e.light = s.light ?? 1;
     if (s.items) e.saved = s.items.slice();
     if (e.def.kind === 'hub') g.hub = e;
   }
   g.nextId = d.nextId; g.tick = d.tick;
   g.stock.set(d.stock); g.delivered.set(d.delivered);
-  g.quota = d.quota; g.quotaStart = d.quotaStart; g.savoir = d.savoir; Object.assign(g.upgrades, d.upgrades);
-  Object.assign(g.atmo, d.atmo); g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice(); g.bloom = d.bloom; g.jungleHealth = d.jungleHealth;
+  g.quota = d.quota; g.quotaStart = d.quotaStart; g.gathered = d.gathered;
+  Object.assign(g.atmo, d.atmo); g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice();
   g.loading = false;
   g.topoDirty = true;
   g.refresh();          // les objets en transit retrouvent leur convoyeur dès le chargement

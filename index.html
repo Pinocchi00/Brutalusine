@@ -21,7 +21,7 @@
     </nav>
     <div id="sidebtns">
       <button data-menu="guide" title="Comment jouer (H)"><b>?</b><span>Guide</span></button>
-      <button data-menu="atlas" title="Atlas : objets, bâtiments, réactions (G)"><b>A</b><span>Atlas</span></button>
+      <button data-menu="atlas" title="Atlas : objets, bâtiments, recettes (G)"><b>A</b><span>Atlas</span></button>
       <button data-menu="pause" title="Pause et options (Échap)"><b>≡</b><span>Menu</span></button>
     </div>
     <div id="tip" hidden></div>
@@ -33,23 +33,21 @@
     <div class="card sheet">
       <header><h2>Comment jouer</h2><button class="x" data-close="guide" aria-label="Fermer">✕</button></header>
       <div class="guidegrid">
-        <article><h3><i>1</i> Le but</h3><p>Tu bâtis une usine qui tourne toute seule. Au centre, <b>la Tour</b> te donne un <b>quota</b> : une quantité d’objets à lui livrer. Tout ce qui entre dans la Tour compte, et rejoint ton stock pour construire.</p><p>Chaque quota accompli <b>débloque de nouveaux bâtiments</b> et fait grandir la Tour. Il y en a onze, puis des paliers sans fin.</p></article>
-        <article><h3><i>2</i> Trois gestes</h3><p><b>Poser</b> : choisis un bâtiment en bas, clique sur le sol. <b>R</b> le fait pivoter.</p><p><b>Relier</b> : choisis le Convoyeur, clique et <b>glisse</b>. Il tourne tout seul.</p><p><b>Regarder</b> : sans outil, clique sur un bâtiment pour voir ce qu’il fait et ce qui lui manque.</p><p>Clic droit lâche l’outil ; sans outil, il démolit. Démolir <b>rembourse tout</b>. <b>Ctrl+Z</b> annule.</p></article>
-        <article><h3><i>3</i> Les flux</h3><p>Chaque machine a une <b>flèche orange</b> : sa sortie. Elle accepte ses entrées par <b>tous les autres côtés</b>.</p><p>Un convoyeur qui pointe vers une machine la nourrit. Un convoyeur posé devant la flèche emporte ce qu’elle produit.</p><p>Une machine arrêtée affiche <b>un pictogramme</b> : l’objet qui lui manque, ⚡ pas assez de courant, ⏸ sortie bloquée.</p></article>
-        <article><h3><i>4</i> L’énergie</h3><p>Une machine consomme des watts <b>seulement quand elle travaille</b>. En haut de l’écran : <b>demande / capacité</b>.</p><p>Si la demande dépasse la capacité, <b>toute l’usine ralentit</b>. La Tour donne 300 W. Ensuite : Amphithéâtre (brûle biomasse ou charbon), Héliostats (le jour, hors de l’ombre), Éoliennes, Turbines, Accumulateurs pour la nuit.</p></article>
-        <article><h3><i>5</i> La chimie est vraie</h3><p>Chaque recette est une <b>vraie équation équilibrée</b> : 2 Fe₂O₃ + 3 C → 4 Fe + 3 CO₂. Les proportions du jeu sont celles de la nature.</p><p><b>Rien ne disparaît</b> : le CO₂ part dans l’air, le SO₂ retombe en fumée sur la jungle, la scorie reste sur tes convoyeurs jusqu’à ce que tu lui trouves une place.</p></article>
-        <article><h3><i>6</i> La jungle est vivante</h3><p>Elle <b>repousse</b> sur tout sol nu — plus vite quand l’air est chargé en CO₂. La Scierie la coupe : coupe trop, et il n’y a plus rien à couper.</p><p>La <b>fumée la tue</b>. Or les <b>Éventails</b>, ces grands arbres lumineux, ne donnent leur Lueur que si la jungle vit autour d’eux. Tôt ou tard, il faudra choisir comment cohabiter.</p></article>
-        <article><h3><i>7</i> Le jour et la nuit</h3><p>Un jour dure dix minutes. Les <b>ombres tournent</b> : un Héliostat à l’ombre d’un bâtiment ne produit rien. La nuit, plus de soleil du tout.</p><p>Les nuits où la jungle va bien, elle <b>fleurit</b> — et les Éventails donnent deux fois plus.</p></article>
-        <article><h3><i>8</i> Les commandes</h3>
+        <article><h3><i>1</i> Le but</h3><p>Tu bâtis une usine qui tourne toute seule. Au centre, <b>la Tour</b> te donne un <b>quota</b> : une quantité d’objets à réunir. Tout ce qui rejoint ton stock compte.</p><p>Chaque quota accompli <b>débloque de nouveaux bâtiments</b> et ajoute un gradin à la Tour. Il y en a neuf, puis des paliers sans fin.</p></article>
+        <article><h3><i>2</i> Ton bâtisseur</h3><p>Tu marches avec <b>ZQSD</b> ou les flèches (Maj pour courir). Tu peux aussi <b>cliquer sur le sol</b> : il y va.</p><p><b>Clic sur un arbre</b> : il le déracine, tu gagnes du bois. <b>Clic maintenu sur des rochers colorés</b> : il pioche. <b>Clic sur des débris</b> : il les ramasse.</p><p>À la main, c’est lent. C’est fait exprès : l’usine le fera mieux.</p></article>
+        <article><h3><i>3</i> Construire</h3><p>Choisis un bâtiment <b>en bas</b>, clique sur le sol. <b>R</b> le fait pivoter. Les arbres dessous sont arrachés tout seuls.</p><p>Le <b>Convoyeur</b> se trace en <b>glissant</b> ; il tourne et se raccorde tout seul.</p><p><b>Clic droit</b> lâche l’outil ; mains libres, il démolit. Démolir <b>rembourse tout</b>. <b>Ctrl+Z</b> annule.</p></article>
+        <article><h3><i>4</i> Les raccords</h3><p>Chaque machine a une <b>goulotte orange</b> : sa sortie. Tant qu’elle n’est reliée à rien, sa flèche clignote. Elle accepte ses entrées par <b>tous les autres côtés</b>.</p><p>Un convoyeur qui touche une machine y entre : une <b>bouche</b> apparaît. Un convoyeur qui en touche un autre par le côté s’y <b>déverse</b>.</p><p>Une machine arrêtée affiche <b>une bulle</b> : l’objet qui lui manque, ⚡ pas assez de courant, ⏸ sortie bloquée.</p></article>
+        <article><h3><i>5</i> L’énergie</h3><p>Une machine consomme des watts <b>seulement quand elle travaille</b>. En haut de l’écran : <b>demande / capacité</b>. Si la demande dépasse, <b>toute l’usine ralentit</b>.</p><p>La Tour donne 300 W. Ensuite : Brûleur (bois ou charbon), Héliostats (le jour), Éoliennes, Turbines, Accumulateurs pour la nuit.</p></article>
+        <article><h3><i>6</i> Les commandes</h3>
           <table class="keys">
-            <tr><td>Clic gauche</td><td>Poser · glisser pour tracer · inspecter</td></tr>
-            <tr><td>Glisser dans le vide</td><td>Déplacer la vue (aussi ZQSD, flèches, clic molette)</td></tr>
-            <tr><td>Molette</td><td>Zoom</td></tr>
+            <tr><td>ZQSD · flèches</td><td>Marcher (Maj : courir)</td></tr>
+            <tr><td>Clic gauche</td><td>Poser · glisser pour tracer · ouvrir une machine · récolter · aller</td></tr>
             <tr><td>Clic droit</td><td>Lâcher l’outil · sinon démolir</td></tr>
-            <tr><td>R · E · X</td><td>Pivoter · pipette · outil Démolir</td></tr>
+            <tr><td>Molette</td><td>Zoom</td></tr>
+            <tr><td>R · E · X</td><td>Pivoter · copier un bâtiment · outil Démolir</td></tr>
             <tr><td>1…9 · Tab</td><td>Bâtiment · catégorie suivante</td></tr>
             <tr><td>Ctrl+Z · Espace</td><td>Annuler · pause</td></tr>
-            <tr><td>Manette</td><td>A poser, B démolir, X pivoter, Y pipette, LB/RB outil</td></tr>
+            <tr><td>Manette</td><td>A agir, B démolir, X pivoter, Y copier, LB/RB outil</td></tr>
           </table>
         </article>
       </div>
@@ -59,7 +57,7 @@
 
   <div id="codex" class="overlay" hidden>
     <div class="card sheet">
-      <header><h2>Atlas</h2><input id="codex-search" type="search" placeholder="Chercher un objet, un bâtiment, une réaction…" aria-label="Chercher dans l’Atlas"><button class="x" data-close="codex" aria-label="Fermer">✕</button></header>
+      <header><h2>Atlas</h2><input id="codex-search" type="search" placeholder="Chercher un objet, un bâtiment, une recette…" aria-label="Chercher dans l’Atlas"><button class="x" data-close="codex" aria-label="Fermer">✕</button></header>
       <div class="cols"><div id="codex-list"></div><div id="codex-entry"><p class="meta">Tout ce que tu as découvert est ici. Chaque objet dit d’où il vient et à quoi il sert.</p></div></div>
     </div>
   </div>
@@ -77,7 +75,6 @@
       <div class="eyebrow">Options</div>
       <label class="opt">Musique <input id="opt-music" type="range" min="0" max="1" step="0.05" value="0.5"></label>
       <label class="opt">Bruitages <input id="opt-sfx" type="range" min="0" max="1" step="0.05" value="0.6"></label>
-      <label class="opt"><input id="opt-tilt" type="checkbox" checked> Effet maquette (flou des bords)</label>
       <div class="eyebrow">Coop locale</div>
       <ul id="players"></ul>
       <p class="meta">Appuyez sur <b>A</b> sur une manette pour rejoindre le chantier, <b>Select</b> pour le quitter.</p>
@@ -88,12 +85,12 @@
     <div class="titlecard">
       <div class="eyebrow">Béton contre canopée</div>
       <h1>BRUTALUSINE</h1>
-      <p>Une usine de béton brut dans une jungle vivante. Chaque réaction est une vraie équation. Rien ne disparaît. Le soleil tourne, les ombres aussi.</p>
+      <p>Une créature, une clairière, une jungle. Déracine, pioche, pose une dalle, trace un convoyeur — et regarde l’usine tourner toute seule.</p>
       <div class="stack row">
         <button class="big" id="btn-continue" hidden>Continuer</button>
         <button class="big" id="btn-new">Nouvelle partie</button>
       </div>
-      <p class="meta">Souris et clavier — et jusqu’à trois manettes pour bâtir à plusieurs sur le même écran.</p>
+      <p class="meta">Clavier et souris — et jusqu’à trois manettes pour bâtir à plusieurs sur le même écran.</p>
     </div>
   </div>
 
