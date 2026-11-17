@@ -9,7 +9,7 @@ import { outputPorts, type BeltPath } from '../sim/belts';
 import { CHUNK, GROUND_WATER } from '../sim/world';
 import { hash2 } from '../sim/rng';
 import { PAL, TerrainCache, mix } from './terrain';
-import { drawSprite, drawCritter, trees, IDLE, K, type SpriteState, type Critter } from './sprites';
+import { drawSprite, drawCritter, trees, plinthOf, IDLE, K, type SpriteState, type Critter } from './sprites';
 
 export interface Camera { x: number; y: number; zoom: number; }
 export interface PlayerView extends Critter {
@@ -17,7 +17,10 @@ export interface PlayerView extends Critter {
   tool: string | null; rot: number; ox: number; oy: number; ok: boolean;
   gx: number; gy: number; gprog: number;   // récolte en cours : case et avancement (0 = aucune)
   beam: number;                        // 0..1 : éclair de construction vers la case visée
+  route: RouteView[] | null;           // tracé de convoyeur en cours (posé au relâchement)
+  routeInto: boolean;                  // son bout se déverse dans une machine ou un tapis
 }
+export interface RouteView { x: number; y: number; dir: number; ok: boolean; }
 export interface Ring { x: number; y: number; t0: number; color: string; size: number; dur: number; }
 export interface RenderOpts {
   time: number; frame: number; dt: number; players: PlayerView[];
@@ -80,7 +83,7 @@ export class Renderer {
   /** Un arbre tombe : sa couronne bascule, ses feuilles volent. */
   fell(g: Game, x: number, y: number, size: number): void {
     const h = hash2(Math.floor(x), Math.floor(y), g.seed + 5);
-    this.felled.push({ x, y, r: 0.42 + 0.4 * (size / 255), v: variant(h), t0: this.time, dir: (h % 628) / 100 });
+    this.felled.push({ x, y, r: (0.42 + 0.4 * (size / 255)) * treeScale(h), v: variant(h), t0: this.time, dir: (h % 628) / 100 });
     this.burst('leaf', x, y - 0.2, PAL.leaf[2 + (h % 3)], 12);
     this.burst('dust', x, y + 0.1, 'rgba(120,100,70,', 4);
   }
@@ -203,7 +206,8 @@ export class Renderer {
           c.fillStyle = PAL.leaf[3]; c.beginPath(); c.ellipse(px - r * 0.5, py - r * 0.3, r * 0.75, r * 0.4, -0.6, 0, TAU); c.ellipse(px + r * 0.5, py - r * 0.3, r * 0.75, r * 0.4, 0.6, 0, TAU); c.fill();
           continue;
         }
-        const r = 0.42 + 0.4 * (v / 255);
+        // tailles variées : des sous-bois, des couronnes moyennes, et de rares géants qui dominent la canopée
+        const r = (0.42 + 0.4 * (v / 255)) * treeScale(h);
         const hitT = this.shake.get(ty * 65536 + tx);
         const sh = hitT !== undefined && o.time - hitT < 0.4 ? Math.sin((o.time - hitT) * 50) * 0.12 * (1 - (o.time - hitT) / 0.4) : 0;
         const sway = Math.sin(o.time * 0.9 + tx * 0.7 + ty * 0.45) * 0.035 * wind + sh;
@@ -455,7 +459,7 @@ export class Renderer {
     const st = this.st, k = e.def.kind;
     st.w = e.w; st.h = e.h; st.rot = e.rot; st.t = e.anim; st.act = e.act; st.time = o.time + e.id * 0.37; st.night = g.sun.night;
     st.prog = e.recipe && e.working ? e.progress / e.recipe.time : k === 'miner' ? e.progress / 60 : 0;
-    st.color = PAL.signal; st.level = 0; st.mark = null; st.flag = e.isOut; st.pulse = e.pulse; st.aim = 0;
+    st.color = PAL.signal; st.level = 0; st.mark = null; st.flag = e.isOut; st.pulse = e.pulse; st.aim = 0; st.plinth = plinthOf(e.def.key);
     if (e.recipe && e.recipe.outputs.length) st.color = ITEMS[e.recipe.outputs[0][0]].color;
     if (k === 'hub') st.level = e.level;
     else if (k === 'solar') { st.level = e.light; st.aim = g.sun.day ? Math.atan2(g.sun.sy, g.sun.sx) * 0.35 : 0; }
@@ -537,6 +541,70 @@ export class Renderer {
     c.beginPath(); c.arc(x + w / 2, y + h / 2, SAW_RANGE + 0.4, 0, TAU); c.stroke(); c.setLineDash([]);
   }
 
+  /** Tracé de convoyeur avant la pose : chaque case et son sens ; au bout, la bouche s'il se raccorde. */
+  private routeGhost(c: Ctx, p: PlayerView, o: RenderOpts): void {
+    const r = p.route!;
+    c.save();
+    c.lineJoin = 'round'; c.lineCap = 'butt';
+    for (const t of r) {
+      c.fillStyle = t.ok ? 'rgba(127,240,210,0.16)' : 'rgba(255,90,70,0.3)';
+      c.fillRect(t.x, t.y, 1, 1);
+    }
+    // le tapis, d'un seul trait, comme il sera
+    c.globalAlpha = 0.75; c.beginPath();
+    for (let i = 0; i < r.length; i++) {
+      const t = r[i], cx = t.x + 0.5, cy = t.y + 0.5, inDir = i > 0 ? r[i - 1].dir : t.dir;
+      if (i === 0) c.moveTo(cx - DX[t.dir] * 0.5, cy - DY[t.dir] * 0.5);
+      const ex = cx + DX[t.dir] * 0.5, ey = cy + DY[t.dir] * 0.5;
+      if (inDir !== t.dir && inDir !== ((t.dir + 2) & 3)) c.arcTo(cx, cy, ex, ey, 0.5); else c.lineTo(ex, ey);
+    }
+    c.strokeStyle = PAL.steelHi; c.lineWidth = 0.84; c.stroke();
+    c.strokeStyle = PAL.dark; c.lineWidth = 0.68; c.stroke();
+    c.globalAlpha = 1;
+    // le sens de marche, une flèche par case
+    for (const t of r) {
+      c.save(); c.translate(t.x + 0.5, t.y + 0.5); c.rotate(t.dir * Math.PI / 2);
+      c.fillStyle = t.ok ? PAL.signal : '#FF6A5A'; c.beginPath(); c.moveTo(-0.12, -0.17); c.lineTo(0.17, 0); c.lineTo(-0.12, 0.17); c.closePath(); c.fill();
+      c.restore();
+    }
+    const last = r[r.length - 1];
+    if (last) {
+      c.save(); c.translate(last.x + 0.5 + DX[last.dir] * 0.5, last.y + 0.5 + DY[last.dir] * 0.5); c.rotate(last.dir * Math.PI / 2);
+      if (p.routeInto) {
+        // raccordé : une bouche verte qui bat
+        const b = 0.85 + 0.15 * Math.sin(o.time * 6);
+        c.fillStyle = PAL.glow; c.globalAlpha = b; c.fillRect(-0.08, -0.46, 0.16, 0.92); c.globalAlpha = 1;
+        c.strokeStyle = PAL.ink; c.lineWidth = 0.04; c.strokeRect(-0.08, -0.46, 0.16, 0.92);
+      } else {
+        // ligne morte : un butoir
+        c.fillStyle = PAL.signal; c.fillRect(-0.1, -0.42, 0.1, 0.84);
+      }
+      c.restore();
+    }
+    c.restore();
+  }
+
+  /** Convoyeur en main : les entrées de la Tour s'allument, on voit où viser. */
+  private hubMouths(c: Ctx, g: Game, o: RenderOpts): void {
+    const h = g.hub;
+    if (!h) return;
+    const b = Math.abs(Math.sin(o.time * 3.2)) * 0.18;
+    for (let d = 0; d < 4; d++) {
+      // milieu de chaque face, une case au-dehors, flèche vers l'intérieur
+      const mx = h.x + (h.w - 1) / 2 + 0.5, my = h.y + (h.h - 1) / 2 + 0.5;
+      const px = mx + DX[d] * (h.w / 2 + 0.5), py = my + DY[d] * (h.h / 2 + 0.5);
+      // côté pris : un bâtiment, ou un tapis qui entre déjà ; un tapis qui passe à côté laisse l'entrée libre
+      const occ = g.entAt(Math.floor(px), Math.floor(py));
+      if (occ && (occ.def.kind !== 'belt' || occ.rot === ((d + 2) & 3))) continue;
+      c.save(); c.translate(px, py); c.rotate(((d + 2) & 3) * Math.PI / 2);
+      c.globalAlpha = 0.85;
+      c.fillStyle = PAL.signal; c.strokeStyle = PAL.ink; c.lineWidth = 0.04;
+      c.beginPath(); c.moveTo(-0.3 + b, -0.3); c.lineTo(0.18 + b, 0); c.lineTo(-0.3 + b, 0.3); c.closePath(); c.fill(); c.stroke();
+      c.restore();
+    }
+    c.globalAlpha = 1;
+  }
+
   private ghost(c: Ctx, g: Game, p: PlayerView, o: RenderOpts): void {
     if (!p.tool) return;
     if (p.tool === 'demolir') {
@@ -548,6 +616,8 @@ export class Renderer {
       return;
     }
     const def = B[p.tool];
+    if (def.kind === 'belt') this.hubMouths(c, g, o);
+    if (def.kind === 'belt' && p.route) { this.routeGhost(c, p, o); return; }
     const [fw, fh] = g.footprint(def, p.rot);
     const ok = p.ok, col = ok ? PAL.glow : '#FF6A5A';
     c.fillStyle = ok ? 'rgba(127,240,210,0.2)' : 'rgba(255,90,70,0.28)';
@@ -561,7 +631,7 @@ export class Renderer {
       c.fillStyle = PAL.steelHi; c.fillRect(-0.5, -0.42, 1, 0.84); c.fillStyle = PAL.dark; c.fillRect(-0.5, -0.34, 1, 0.68);
       c.fillStyle = PAL.signal; c.beginPath(); c.moveTo(-0.14, -0.2); c.lineTo(0.2, 0); c.lineTo(-0.14, 0.2); c.closePath(); c.fill();
     } else if (def.kind === 'slab') { c.fillStyle = PAL.roof; c.fillRect(-0.47, -0.47, 0.94, 0.94); }
-    else drawSprite(c, def.key, { ...IDLE, w: fw, h: fh, rot: p.rot, time: o.time, level: 0 });
+    else drawSprite(c, def.key, { ...IDLE, w: fw, h: fh, rot: p.rot, time: o.time, level: 0, plinth: plinthOf(def.key) });
     c.restore();
     this.ranges(c, def.key, p.ox, p.oy, fw, fh);
     // la sortie de la machine, bien visible avant de poser
@@ -574,6 +644,12 @@ export class Renderer {
       c.restore();
     }
   }
+}
+
+/** Taille d'un arbre selon sa case : 0,8 à 1,15 ; un sur seize est un géant (1,5). Rendu seulement. */
+function treeScale(h: number): number {
+  const u = (h >>> 20) & 15;
+  return u === 0 ? 1.5 : 0.8 + 0.35 * (((h >>> 24) & 255) / 255);
 }
 
 /** Espèce d'arbre d'une case : surtout des feuillus, quelques palmes, de rares arbres à fleurs. */

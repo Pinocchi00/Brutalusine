@@ -8,10 +8,13 @@ export function buildDemo(g: Game): string[] {
   const log: string[] = [];
   g.quota = 12;
   g.stock.fill(5000);
+  // une pose refusée est notée dans le journal ; son tampon est alors un tampon factice, sans effet
+  const sink = { buf: new Int32Array(64) };
   const P = (k: string, x: number, y: number, r = 0, o: { filter?: number; recipe?: string } = {}) => {
     const res = g.place(k, x, y, r, { ...o, free: true });
     if (!res.ok) log.push(`${k}@${x},${y}: ${res.reason}`);
-    return g.entAt(x, y)!;
+    const e = res.ok ? g.entAt(x, y) : null;   // jamais le bâtiment qui occupait déjà la case
+    return e && e.buf ? e : sink;
   };
   const belt = (x0: number, y0: number, x1: number, y1: number, r: number) => {
     let x = x0, y = y0;
@@ -35,8 +38,8 @@ export function buildDemo(g: Game): string[] {
   // un échantillon de chaque famille
   const fa = P('four_arc', -8, -4); fa.buf![I.quartz] = 50; fa.buf![I.carbone] = 50;
   P('entrepot', -5, -3); P('lampadaire', 4, 5); P('lampadaire', 8, 6); P('lampadaire', -3, 5);
-  P('four', -5, 6).buf![I.calcaire] = 60; P('presse', -9, 6).buf![I.fer] = 80; P('atelier', -9, 1).buf![I.cuivre] = 40; P('cloitre', -13, 1);
-  g.entAt(-9, 1)!.buf![I.silicium] = 20;
+  P('four', -5, 6).buf![I.calcaire] = 60; P('presse', -9, 6).buf![I.fer] = 80; P('cloitre', -13, 1);
+  const at = P('atelier', -9, 1); at.buf![I.cuivre] = 40; at.buf![I.silicium] = 20;
   const be = P('betonniere', -13, 6); be.buf![I.chaux] = 40; be.buf![I.quartz] = 20;
   P('aiguillage', 6, -9); P('pont', 8, -9); P('pont', 11, -9); belt(4, -9, 5, -9, 0); belt(12, -9, 14, -9, 0); belt(9, -11, 9, -7, 1);
   for (let i = 0; i < 1500; i++) g.step();

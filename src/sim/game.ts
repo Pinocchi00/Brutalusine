@@ -30,6 +30,12 @@ export interface PlaceResult { ok: boolean; reason: string; }
 export interface PlaceOpts { recipe?: string; filter?: number; isOut?: boolean; free?: boolean; }
 export interface RemoveInfo { key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 
+/** Ce qui a une direction : une sortie (machines, puits, entrepôt), un sens (convoyeur, répartiteur). */
+export function rotatable(def: BuildingDef): boolean {
+  const k = def.kind;
+  return k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'storage' || k === 'splitter' || k === 'belt';
+}
+
 export class Stats {
   static WIN = 60;
   prod = new Float32Array(NITEMS * Stats.WIN);
@@ -236,6 +242,41 @@ export class Game {
     return info;
   }
 
+  /**
+   * Fait pivoter sur place le bâtiment posé en (x, y) : d'un quart de tour, ou jusqu'à `to`. Gratuit.
+   * Le coin nord-ouest reste fixe ; un bâtiment non carré doit avoir la place de se tourner.
+   */
+  rotate(x: number, y: number, to?: Dir): PlaceResult & { from: Dir } {
+    const e = this.entAt(x, y);
+    const res = { ok: false, reason: '', from: (e?.rot ?? 0) as Dir };
+    if (!e) { res.reason = 'Rien à pivoter ici'; return res; }
+    if (!rotatable(e.def)) {
+      res.reason = e.def.kind === 'hub' ? 'La Tour ne pivote pas'
+        : e.def.kind === 'bridge' ? 'Un pont ne pivote pas : démolis-le et repose-le'
+        : `${e.def.name} n’a pas de sortie à orienter`;
+      return res;
+    }
+    const rot = (to ?? ((e.rot + 1) & 3)) as Dir;
+    if (rot === e.rot) { res.ok = true; return res; }
+    const [fw, fh] = this.footprint(e.def, rot);
+    const w = this.world;
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
+      const cx = e.x + i, cy = e.y + j;
+      const o = w.ent(cx, cy);
+      if (o === e.id) continue;
+      if (o) { res.reason = 'Pas la place pour pivoter'; return res; }
+      if (w.ground(cx, cy) === GROUND_WATER) { res.reason = 'Impossible sur l’eau'; return res; }
+    }
+    for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) w.setEnt(e.x + i, e.y + j, 0);
+    e.rot = rot; e.w = fw; e.h = fh;
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { this.pave(e.x + i, e.y + j); w.setEnt(e.x + i, e.y + j, e.id); }
+    if (e.cells) { e.cells = []; for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) e.cells.push(e.x + i, e.y + j); }
+    this.topoDirty = true; this.version++;
+    this.events.push({ type: 'place', x: e.cx, y: e.cy, a: 1 });
+    res.ok = true;
+    return res;
+  }
+
   setRecipe(e: Ent, r: Recipe): void {
     if (!e.def.recipes.includes(r) || e.recipe === r) return;
     if (e.working && e.recipe) for (const [id, n] of e.recipe.inputs) this.stock[id] += n;
@@ -329,6 +370,16 @@ export class Game {
         }
         return false;
       }
+      default: return false;
+    }
+  }
+
+  /** Cette entité prendrait-elle un objet arrivant dans la direction dir ? Mêmes règles que `accept`, sans effet. */
+  takesFrom(e: Ent, dir: number): boolean {
+    switch (e.def.kind) {
+      case 'hub': case 'storage': case 'generator': return true;
+      case 'splitter': return dir === e.rot;
+      case 'machine': return e.recipe !== null;
       default: return false;
     }
   }

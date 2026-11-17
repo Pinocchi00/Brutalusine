@@ -84,7 +84,7 @@ export class BeltPath {
 const isBeltLike = (e: Ent | undefined | null): boolean => !!e && !e.dead && (e.def.kind === 'belt' || e.def.kind === 'bridge');
 
 /** Un convoyeur accepte tout sauf de face ; une entrée de pont n'accepte que par l'arrière. */
-function accepts(t: Ent, moveDir: number): boolean {
+export function accepts(t: Ent, moveDir: number): boolean {
   if (t.def.kind === 'belt') return moveDir !== ((t.rot + 2) & 3);
   return !t.isOut && moveDir === t.rot;
 }

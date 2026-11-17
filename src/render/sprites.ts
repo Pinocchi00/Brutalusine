@@ -20,9 +20,20 @@ export interface SpriteState {
   mark: string | null; // couleur du filtre (trieur)
   flag: boolean;       // sortie de pont
   pulse: number;       // 0..1 : vient de produire / de recevoir
+  plinth: string;      // teinte du socle : la famille du bâtiment, lisible même de loin
 }
 
-export const IDLE: SpriteState = { w: 1, h: 1, rot: 0, t: 0, act: 0, prog: 0, color: PAL.signal, night: 0, level: 0, time: 0, aim: 0, mark: null, flag: false, pulse: 0 };
+export const IDLE: SpriteState = { w: 1, h: 1, rot: 0, t: 0, act: 0, prog: 0, color: PAL.signal, night: 0, level: 0, time: 0, aim: 0, mark: null, flag: false, pulse: 0, plinth: PAL.roofLo };
+
+/**
+ * Le socle dit la famille, en matières sourdes (l'orange reste le seul accent) :
+ * terre ocre pour l'extraction, béton suié pour la fonte, béton froid pour la fabrication,
+ * acier pour l'énergie, béton clair pour la logistique.
+ */
+const PLINTH: Record<string, string> = {
+  logistique: PAL.roofLo, extraction: '#A88F6B', fonte: '#6F6862', fabrication: '#A3AEB4', energie: '#7E8794',
+};
+export function plinthOf(key: string): string { const cat = B[key]?.cat; return (cat && PLINTH[cat]) || PAL.roofLo; }
 
 type Ctx = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
@@ -51,7 +62,7 @@ function glow(c: Ctx, x: number, y: number, r: number, col: string, a: number): 
   const old = c.globalAlpha; c.globalAlpha = old * Math.min(1, a); c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.globalAlpha = old;
 }
 /** Socle commun : la dalle un peu surélevée sur laquelle repose la machine. */
-function base(c: Ctx, s: SpriteState, z = 0.25, top = PAL.roofLo): void { block(c, -s.w / 2 + 0.04, -s.h / 2 + 0.04, s.w - 0.08, s.h - 0.08, 0, z, top, PAL.wallLo); }
+function base(c: Ctx, s: SpriteState, z = 0.25, top = s.plinth): void { block(c, -s.w / 2 + 0.04, -s.h / 2 + 0.04, s.w - 0.08, s.h - 0.08, 0, z, top, PAL.wallLo); }
 /** Cheminée avec son foyer rougeoyant. */
 function stack(c: Ctx, x: number, y: number, r: number, z0: number, z1: number, s: SpriteState): void {
   cyl(c, x, y, r, z0, z1, PAL.steel, PAL.dark);
@@ -447,7 +458,7 @@ export function buildingIcon(key: string): string {
   } else if (key === 'dalle') {
     c.fillStyle = PAL.wallLo; c.fillRect(-0.5, -0.36, 1, 1); c.fillStyle = PAL.roof; c.fillRect(-0.5, -0.5, 1, 1);
     c.fillStyle = PAL.joint; c.fillRect(-0.015, -0.5, 0.03, 1); c.fillRect(-0.5, -0.015, 1, 0.03);
-  } else drawSprite(c, key, { ...IDLE, w: def.w, h: def.h, act: 0.8, prog: 0.7, t: 0.6, time: 0.4, level: key === 'tour' ? 2 : 0.7, color: key === 'puits' || key === 'foreuse' ? '#D4552B' : '#C3CAD6' });
+  } else drawSprite(c, key, { ...IDLE, w: def.w, h: def.h, act: 0.8, prog: 0.7, t: 0.6, time: 0.4, level: key === 'tour' ? 2 : 0.7, plinth: plinthOf(key), color: key === 'puits' || key === 'foreuse' ? '#D4552B' : '#C3CAD6' });
   url = cv.toDataURL();
   iconCache.set(key, url);
   return url;

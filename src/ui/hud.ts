@@ -63,6 +63,8 @@ export class Hud {
   private panelKey = '';
   private quotaKey = '';
   private lastTool: string | null = null;
+  private alertsOpen = false;
+  private alertsKey = '';
 
   constructor(private host: HudHost) {
     document.addEventListener('click', (ev) => this.onClick(ev));
@@ -72,11 +74,12 @@ export class Hud {
   }
 
   private onClick(ev: MouseEvent): void {
-    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-close],[data-go]');
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-close],[data-go]');
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
-    if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
+    if (d.alertToggle !== undefined) { this.alertsOpen = !this.alertsOpen; this.renderAlerts(g); }
+    else if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
     else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
     else if (d.go !== undefined) this.host.locate(d.go as Place);
     else if (d.recipe !== undefined && this.selected) { this.host.setRecipe(this.selected, d.recipe); this.renderPanel(g, true); }
@@ -98,11 +101,11 @@ export class Hud {
     if (e) this.renderPanel(this.host.game(), true);
   }
 
-  toast(text: string): void {
+  toast(text: string, ms = 2600): void {
     const el = $('toast');
     el.textContent = text; el.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+    this.toastTimer = window.setTimeout(() => el.classList.remove('show'), ms);
   }
 
   /** Infobulle au curseur : ce qu'on survole, ou pourquoi on ne peut pas poser. */
@@ -183,9 +186,16 @@ export class Hud {
       const gr = groups.get(key);
       if (gr) gr.n++; else groups.set(key, { n: 1, text: `${e.def.name} : ${cause}` });
     }
+    // une seule ligne repliée quand plusieurs causes s'accumulent : les bulles sur les machines disent déjà le détail
+    const list = [...groups];
     let html = '';
-    for (const [key, gr] of [...groups].slice(0, 4)) html += `<button class="alert" data-alert="${key}"><b>${gr.n}</b> ${esc(gr.text)}<span class="see">montrer</span></button>`;
-    $('alerts').innerHTML = html;
+    if (list.length > 1) {
+      const total = list.reduce((s, [, gr]) => s + gr.n, 0);
+      html += `<button class="alert sum" data-alert-toggle="1" aria-expanded="${this.alertsOpen}"><b>${total}</b> machines arrêtées<span class="see">${this.alertsOpen ? 'replier' : 'détails'}</span></button>`;
+    }
+    if (list.length === 1 || this.alertsOpen) for (const [key, gr] of list.slice(0, 5)) html += `<button class="alert" data-alert="${key}"><b>${gr.n}</b> ${esc(gr.text)}<span class="see">montrer</span></button>`;
+    if (!list.length) this.alertsOpen = false;
+    if (html !== this.alertsKey) { this.alertsKey = html; $('alerts').innerHTML = html; }
   }
 
   private renderBar(g: Game): void {

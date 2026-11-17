@@ -4,16 +4,17 @@
 
 import './ui/style.css';
 import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_FER, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
-import { Game } from './sim/game';
 import type { Ent } from './sim/ent';
 import { GROUND_WATER } from './sim/world';
 import { serialize, deserialize, writeSave, readSave } from './sim/save';
-import { Renderer, type Camera, type PlayerView, type Ring } from './render/renderer';
+import { Game, rotatable } from './sim/game';
+import { beltRoute } from './sim/route';
+import { Renderer, type Camera, type PlayerView, type Ring, type RouteView } from './render/renderer';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
 
-interface UndoOp { type: 'place' | 'remove'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
+interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
 
 const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
@@ -31,6 +32,14 @@ class Player implements PlayerView {
   hitTimer = 0;
   aimX = 0; aimY = 1.6;
   dragLast: [number, number] | null = null;
+  anchor: [number, number] | null = null;   // convoyeur : case où le tracé a commencé
+  xFirst: boolean | null = null;            // convoyeur : le L part le long de x (sinon de y) ; décidé au premier pas
+  elbowSet = false;                         // convoyeur : le joueur a choisi le coude (R) ; on ne le change plus pour lui
+  elbowShown = true;                        // convoyeur : le coude du tracé affiché (xFirst, ou l'autre s'il seul se raccorde)
+  routeKey = '';                            // convoyeur : ce dont dépend le tracé calculé (pour ne pas le refaire)
+  routeOk = true; routeReason = '';         // convoyeur : verdict du tracé calculé
+  route: RouteView[] | null = null;         // convoyeur : le tracé en cours, posé au relâchement
+  routeInto = false;                        // le bout du tracé se déverse dans quelque chose
   gesture: UndoOp[] | null = null;
   undo: UndoOp[][] = [];
   lastRemove = '';
@@ -50,6 +59,7 @@ class App {
   keys = new Set<string>();
   cam: Camera = { x: 0.5, y: 2.5, zoom: 44 };
   zoom = 44;
+  look = { x: 0, y: 0 };      // décalage de la caméra vers le curseur (en cases)
   mouse = { x: 0, y: 0, over: false, left: false, right: false };
   hover: Ent | null = null;
   rings: Ring[] = [];
@@ -105,7 +115,7 @@ class App {
     window.addEventListener('keyup', (ev) => this.keys.delete(ev.code));
     window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = false; });
     const cv = this.canvas, m = this.mouse, p = this.players[0];
-    cv.addEventListener('mouseenter', () => { m.over = true; });
+    cv.addEventListener('mouseenter', (ev) => { m.x = ev.clientX; m.y = ev.clientY; m.over = true; });   // la position d'abord : sinon l'infobulle part au coin
     cv.addEventListener('mouseleave', () => { m.over = false; });
     cv.addEventListener('mousemove', (ev) => {
       m.x = ev.clientX; m.y = ev.clientY; m.over = true;
@@ -147,7 +157,7 @@ class App {
     if (this.keys.has(ev.code)) return;
     this.keys.add(ev.code);
     switch (ev.code) {
-      case 'KeyR': p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); break;
+      case 'KeyR': this.turn(p); break;
       case 'KeyE': this.pipette(p); break;
       case 'KeyX': p.tool = p.tool === 'demolir' ? null : 'demolir'; p.task = null; this.hud.select(null); this.audio.ui(); break;
       case 'Tab': this.hud.nextCategory(g, ev.shiftKey ? -1 : 1); this.audio.ui(); break;
@@ -170,9 +180,8 @@ class App {
     document.getElementById('hud')!.hidden = false;
     this.audio.start();
     this.hud.update(this.game);
-    let seen = false;
-    try { seen = localStorage.getItem('brutalusine.guide3') === '1'; localStorage.setItem('brutalusine.guide3', '1'); } catch { /* stockage indisponible */ }
-    if (fresh && !seen) this.hud.showGuide(true);
+    // on apprend en faisant : les étapes à gauche guident, le guide complet reste sur H
+    if (fresh) this.hud.toast('Suis les étapes à gauche · H : comment jouer', 7000);
   }
 
   private escape(): void {
@@ -253,7 +262,9 @@ class App {
     const t = this.placeOf(pl);
     if (!t) return;
     const p = this.players[0];
-    p.task = { kind: 'walk', x: Math.floor(t.x), y: Math.floor(t.y), stuck: 0, best: 1e9 };
+    // un débris : on s'arrête juste au sud, pour ne pas le cacher sous le bâtisseur (c'est à lui de cliquer dessus)
+    const dy = pl === 'debris' ? 1 : 0;
+    p.task = { kind: 'walk', x: Math.floor(t.x), y: Math.floor(t.y) + dy, stuck: 0, best: 1e9 };
     this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.2, color: PAL.signalHi, size: 5, dur: 2 });
   }
 
@@ -287,6 +298,10 @@ class App {
       const res = g.canPlace(def, p.ox, p.oy, p.rot);
       p.ok = res.ok; p.reason = res.reason;
     }
+    if (p.anchor) {
+      if (p.tool && B[p.tool].kind === 'belt') this.updateRoute(p);
+      else this.clearRoute(p);   // outil lâché en plein tracé
+    }
   }
 
   /** Ce qu'on peut récolter à la main sur une case. */
@@ -315,6 +330,10 @@ class App {
   }
 
   private secondaryDown(p: Player): void {
+    if (p.anchor) {                                   // clic droit en plein tracé : on l'abandonne, l'outil reste en main
+      this.clearRoute(p); p.gesture = null;
+      this.audio.ui(); return;
+    }
     if (p.tool) { p.tool = null; this.audio.ui(); return; }
     if (p.task) { p.task = null; p.gprog = 0; return; }
     p.gesture = []; p.lastRemove = ''; this.removeAt(p);
@@ -331,25 +350,14 @@ class App {
   private tryPlace(p: Player, first: boolean): void {
     const g = this.game;
     const def = B[p.tool!];
-    if (def.kind === 'belt' && !first && p.dragLast) {
-      // le convoyeur suit le curseur, case par case, et s'oriente tout seul
-      let [lx, ly] = p.dragLast;
-      let guard = 0;
-      while ((lx !== p.cx || ly !== p.cy) && guard++ < 80) {
-        const dx = p.cx - lx, dy = p.cy - ly;
-        const dir = (Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3) as Dir;
-        const nx = lx + DX[dir], ny = ly + DY[dir];
-        const prev = g.entAt(lx, ly);
-        if (prev && prev.def.kind === 'belt') this.placeOne(p, 'convoyeur', lx, ly, dir);
-        const next = g.entAt(nx, ny);
-        if (next && next.def.kind !== 'belt') break;              // on s'arrête contre une machine : le flux y entre
-        if (!this.placeOne(p, 'convoyeur', nx, ny, dir)) break;
-        lx = nx; ly = ny; p.rot = dir;
-      }
-      p.dragLast = [lx, ly];
+    if (def.kind === 'belt') {
+      // le convoyeur se trace en L de la case de départ au curseur ; il n'est posé qu'au relâchement
+      if (first || !p.anchor) { this.clearRoute(p); p.anchor = [p.cx, p.cy]; }
+      this.updateRoute(p);
+      p.dragLast = [p.cx, p.cy];
       return;
     }
-    if (!first && def.kind !== 'slab' && def.kind !== 'belt' && (def.w > 1 || def.h > 1)) return;   // pas de pose en rafale pour les grands bâtiments
+    if (!first && def.kind !== 'slab' && (def.w > 1 || def.h > 1)) return;   // pas de pose en rafale pour les grands bâtiments
     const res = g.canPlace(def, p.ox, p.oy, p.rot);
     if (!res.ok) { if (first) { this.audio.deny(); this.hud.toast(res.reason); } }
     else this.placeOne(p, def.key, p.ox, p.oy, p.rot);
@@ -365,7 +373,60 @@ class App {
     if (info) { p.gesture.push({ type: 'remove', ...info }); p.beam = 1; }
   }
 
+  private clearRoute(p: Player): void {
+    p.anchor = null; p.route = null; p.xFirst = null; p.elbowSet = false; p.routeInto = false; p.routeKey = '';
+  }
+
+  /** Recalcule le tracé du convoyeur et ce qu'il coûtera, case par case. */
+  private updateRoute(p: Player): void {
+    const g = this.game, def = B.convoyeur;
+    if (!p.anchor) { p.route = null; return; }
+    const [ax, ay] = p.anchor, dx = p.cx - ax, dy = p.cy - ay;
+    if (!dx && !dy) { p.xFirst = null; p.elbowSet = false; }              // revenu au départ : le coude se redécidera
+    else if (p.xFirst === null) p.xFirst = Math.abs(dx) >= Math.abs(dy);  // le premier pas choisit le coude
+    // rien n'a changé depuis le dernier calcul : on garde le tracé (aim() tourne plusieurs fois par image)
+    const key = `${ax},${ay},${p.cx},${p.cy},${p.xFirst},${p.elbowSet},${p.rot},${g.version},${def.cost.map(([id]) => Math.floor(g.stock[id])).join('/')}`;
+    if (key === p.routeKey && p.route) { p.ok = p.routeOk; p.reason = p.routeReason; return; }
+    p.routeKey = key;
+    let r = beltRoute(g, ax, ay, p.cx, p.cy, p.xFirst ?? true, p.rot as Dir);
+    p.elbowShown = p.xFirst ?? true;
+    if (!r.into && dx && dy && !p.elbowSet) {
+      // si seul l'autre coude se raccorde (à la Tour, à une machine, à un tapis), c'est lui qu'on voulait —
+      // pour ce point-ci seulement : le coude choisi au premier pas reste la règle
+      const alt = beltRoute(g, ax, ay, p.cx, p.cy, !p.xFirst, p.rot as Dir);
+      if (alt.into) { r = alt; p.elbowShown = !p.xFirst; }
+    }
+    const left = def.cost.map(([id, n]) => [id, Math.floor(g.stock[id]), n]);
+    p.ok = r.cells.length > 0; p.reason = r.cells.length ? '' : 'Case occupée';
+    p.route = r.cells.map((c) => {
+      const res = g.canPlace(def, c.x, c.y, c.dir, true);
+      let ok = res.ok, why = res.reason;
+      const exists = g.entAt(c.x, c.y)?.def.kind === 'belt';
+      if (ok && !exists) {
+        const short = left.find(([, have, n]) => have < n);
+        if (short) { ok = false; why = `Il manque ${ITEMS[short[0]].name}`; }
+        else for (const l of left) l[1] -= l[2];
+      }
+      if (!ok && p.ok) { p.ok = false; p.reason = why; }
+      return { x: c.x, y: c.y, dir: c.dir, ok };
+    });
+    p.routeInto = r.into !== null;
+    p.routeOk = p.ok; p.routeReason = p.reason;
+  }
+
   private endGesture(p: Player): void {
+    if (p.route && p.tool && B[p.tool].kind === 'belt') {
+      this.updateRoute(p);
+      const route = p.route ?? [];
+      let placed = 0;
+      for (const c of route) {
+        if (!c.ok) break;
+        if (this.placeOne(p, 'convoyeur', c.x, c.y, c.dir)) placed++;
+      }
+      if (!route.length || placed < route.length) { this.audio.deny(); this.hud.toast(p.reason || 'Le tracé s’arrête ici'); }
+      if (route.length) p.rot = route[route.length - 1].dir;
+    }
+    this.clearRoute(p);
     if (p.gesture?.length) p.undo.push(p.gesture);
     p.gesture = null; p.dragLast = null; p.lastRemove = '';
   }
@@ -381,6 +442,22 @@ class App {
     this.audio.ui();
   }
 
+  /**
+   * R : pendant un tracé, le L change de coude ; outil en main, l'aperçu pivote ;
+   * mains libres, le bâtiment visé pivote sur place.
+   */
+  private turn(p: Player): void {
+    // R change le coude qu'on voit (qui peut être celui choisi automatiquement), et ce choix devient définitif
+    if (p.anchor && p.xFirst !== null) { p.xFirst = !p.elbowShown; p.elbowSet = true; this.aim(p); this.audio.ui(); return; }
+    if (p.tool && p.tool !== 'demolir') { p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); return; }
+    if (p.tool) return;
+    const e = this.game.entAt(p.cx, p.cy);
+    if (!e) return;
+    const res = this.game.rotate(p.cx, p.cy);
+    if (!res.ok) { this.audio.deny(); this.hud.toast(res.reason); return; }
+    if (res.from !== e.rot) p.undo.push([{ type: 'rotate', key: e.def.key, x: e.x, y: e.y, rot: res.from }]);
+  }
+
   private undo(p: Player): void {
     const ops = p.undo.pop();
     if (!ops) { this.hud.toast('Rien à annuler'); return; }
@@ -388,6 +465,11 @@ class App {
     for (let i = ops.length - 1; i >= 0; i--) {
       const op = ops[i];
       if (op.type === 'place') g.remove(op.x, op.y);
+      else if (op.type === 'rotate') {
+        // seulement si c'est bien le même bâtiment, au même coin
+        const e = g.entAt(op.x, op.y);
+        if (e && e.def.key === op.key && e.x === op.x && e.y === op.y) g.rotate(op.x, op.y, op.rot as Dir);
+      }
       else g.place(op.key, op.x, op.y, op.rot, { recipe: op.recipe, filter: op.filter, isOut: op.isOut });
     }
     this.audio.remove();
@@ -448,7 +530,7 @@ class App {
       const moved = Math.floor(p.x + p.aimX) !== p.cx || Math.floor(p.y + p.aimY) !== p.cy;
       this.aim(p);
       sprint = b[7]; hold = b[0] && !p.tool;
-      if (down(2)) { p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); }
+      if (down(2)) this.turn(p);
       if (down(3)) this.pipette(p);
       if (down(4) || down(5)) {
         const tools: (string | null)[] = [null, ...BUILDINGS.filter((d) => d.cat && g.unlocked(d)).map((d) => d.key)];
@@ -554,8 +636,10 @@ class App {
       for (const p of this.players) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
       const fit = Math.max(MIN_ZOOM * 0.7, Math.min(this.zoom, window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)));
       // un léger décalage vers le curseur : on voit plus loin là où l'on regarde
-      const look = this.players.length === 1 && m.over ? 0.16 : 0;
-      const tx = (x0 + x1) / 2 + look * (m.x - window.innerWidth / 2) / fit, ty = (y0 + y1) / 2 + look * (m.y - window.innerHeight / 2) / fit;
+      // … figé tant qu'on a un outil en main ou un bouton enfoncé : le monde ne glisse pas sous le curseur pendant qu'on vise
+      if (this.players.length > 1 || (!m.over && !p0.tool)) { this.look.x = 0; this.look.y = 0; }   // outil en main : figé, même au-dessus de l'interface
+      else if (!p0.tool && !m.left) { this.look.x = 0.16 * (m.x - window.innerWidth / 2) / fit; this.look.y = 0.16 * (m.y - window.innerHeight / 2) / fit; }
+      const tx = (x0 + x1) / 2 + this.look.x, ty = (y0 + y1) / 2 + this.look.y;
       const k = Math.min(1, dt * 6);
       this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
       this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
@@ -597,13 +681,15 @@ class App {
     else if (p.tool) {
       const def = B[p.tool];
       html = p.ok
-        ? `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' · glisser : tracer' : ''}${def.kind !== 'slab' && def.kind !== 'deco' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
+        ? p.route
+          ? `<b>${def.name} · ${p.route.length} case${p.route.length > 1 ? 's' : ''}</b><span class="${p.routeInto ? 'ok' : 'k'}">${p.routeInto ? 'Raccordé : le flux entrera au bout' : 'Relâche pour poser'}</span><br><span class="k">R : changer le coude · clic droit : annuler</span>`
+          : `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' · glisser : tracer' : ''}${def.kind !== 'slab' && def.kind !== 'deco' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
         : `<b>${def.name}</b><span class="no">${p.reason}</span>`;
     } else if (this.hover && (this.hover.def.kind === 'belt' || this.hover.def.kind === 'bridge' || this.hover.def.kind === 'deco')) {
-      html = `<b>${this.hover.def.name}</b><span class="k">Clic droit : démolir · E : copier</span>`;
+      html = `<b>${this.hover.def.name}</b><span class="k">${this.hover.def.kind === 'belt' ? 'R : pivoter · ' : ''}Clic droit : démolir · E : copier</span>`;
     } else if (this.hover) {
       const st = this.hud.statusLine(g, this.hover);
-      html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir</span>`;
+      html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir${rotatable(this.hover.def) ? ' · R : pivoter' : ''}</span>`;
     } else {
       const kind = this.gatherable(p.cx, p.cy);
       if (kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_FER} Fer</span>`;

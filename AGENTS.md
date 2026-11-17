@@ -5,7 +5,8 @@ Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirig
 
 ## Commandes
 
-- `npm run dev` : serveur de développement (port 5173)
+- `npm run dev` : serveur de développement (port 5173 imposé : si un autre projet l'occupe, le lancement échoue
+  clairement plutôt que d'ouvrir le mauvais jeu ; `npx vite --port 5174` pour en prendre un autre)
 - `npm test` : tests de simulation (Vitest, sans navigateur)
 - `npm run typecheck` : vérification TypeScript
 - `npm run build` : build de production dans `dist/`
@@ -17,6 +18,7 @@ Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirig
   - `data.ts` : objets, recettes, bâtiments, quotas et leurs étapes guidées (tout le contenu est ici)
   - `game.ts` : `step()`, pose et démolition, récolte à la main, machines, énergie, repousse, quotas, `ledger()`
   - `belts.ts` : convoyeurs par chemins (coût constant par chemin et par pas)
+  - `route.ts` : le tracé d'un convoyeur en L (un seul virage), utilisé par le geste et testé seul
   - `world.ts` : monde infini par blocs de 32×32 ; chaque case porte un arbre ou rien
   - `sun.ts`, `chem.ts`, `rng.ts`, `save.ts`, `ent.ts`
 - `src/render/` : rendu Canvas 2D
@@ -36,6 +38,8 @@ Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirig
   Le plaisir doit venir des flux, pas de systèmes ajoutés.
 - **Des raccords lisibles** : virages courbes, bouche d'entrée, goulotte de sortie, déversement en T.
 - **Des animations de bâtiments et de convoyeurs soignées**, mais brutes : béton, acier, un accent orange.
+- **Un geste de construction précis** : la caméra ne glisse pas quand on vise avec un outil ; le convoyeur se
+  trace en L avec aperçu et se pose au relâchement ; R fait pivoter un bâtiment déjà posé.
 
 ## Invariants
 
