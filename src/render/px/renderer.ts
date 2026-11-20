@@ -16,7 +16,7 @@ import { hash } from './noise';
 import { pen, type Pen } from './pen';
 import { animTime } from './clock';
 import { PixelFx, type BurstKind } from './fx';
-import { GroundCache } from './ground';
+import { GROUND_PX, GroundCache, chunkMostlyWater } from './ground';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import {
@@ -64,7 +64,13 @@ interface Frame {
   ctx: CanvasRenderingContext2D;
   P: Pen;
   now: number;
+  fade: number;
   shown: Shown[];
+}
+
+/** L'échelle entière à plusieurs : le minimum de l'échelle choisie et de celle qui tient tout le monde. */
+export function coopScale(chosen: number, fit: number, bounds: { min: number; max: number }): number {
+  return Math.max(bounds.min, Math.min(bounds.max, Math.floor(Math.min(chosen, fit))));
 }
 
 /** La taille de houppier à donner à un arbre selon sa canopée (0-255). */
@@ -158,15 +164,16 @@ export class PxRenderer {
     ctx.fillRect(0, 0, view.bufW, view.bufH);
     ctx.setTransform(1, 0, 0, 1, -view.originX, -view.originY);
 
-    const frame: Frame = { g, opts, view, ctx, P: pen(ctx), now: this.now, shown: [] };
     const fade = g.sun.day ? Math.min(1, g.sun.elev * 4) : 0;
+    const frame: Frame = { g, opts, view, ctx, P: pen(ctx), now: this.now, fade, shown: [] };
     this.lit.length = 0;
+    this.ground.beginFrame();
     this.addGround(frame);
     this.addBelts(frame);
-    this.queue.add('cast', () => { ctx.globalAlpha = fade; });
+    if (fade > 0) this.queue.add('cast', () => { ctx.globalAlpha = fade; });
     this.addTrees(frame);
     this.addBuildings(frame);
-    this.queue.add('cast', () => { ctx.globalAlpha = 1; });
+    if (fade > 0) this.queue.add('cast', () => { ctx.globalAlpha = 1; });
     this.addPlayers(frame);
     this.addEffects(frame);
     this.addLight(frame);
@@ -188,7 +195,15 @@ export class PxRenderer {
         const image = this.ground.get(chunk, g.world, f.opts.frame);
         const X = cx * CHUNK * TILE_PX;
         const Y = cy * CHUNK * TILE_PX;
-        this.queue.add('ground', () => ctx.drawImage(image, X, Y));
+        if (image) {
+          this.queue.add('ground', () => ctx.drawImage(image, X, Y));
+        } else {
+          const fill = chunkMostlyWater(chunk) ? C.q4 : C.m2;
+          this.queue.add('ground', () => {
+            ctx.fillStyle = fill;
+            ctx.fillRect(X, Y, GROUND_PX, GROUND_PX);
+          });
+        }
       }
     }
   }
@@ -242,7 +257,7 @@ export class PxRenderer {
     const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + jitter + sway + shake);
     const Y = Math.round(base - sprite.img.height);
     const shadowX = (tx + 0.5) * TILE_PX + jitter;
-    this.queue.add('cast', () => f.P.ell(shadowX + radius * 1.15, base + 2, radius * 1.6, radius * 0.34, C.shade));
+    if (f.fade > 0) this.queue.add('cast', () => f.P.ell(shadowX + radius * 1.15, base + 2, radius * 1.6, radius * 0.34, C.shade));
     this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
   }
 
@@ -254,7 +269,7 @@ export class PxRenderer {
     const base = (ty + 0.85) * TILE_PX;
     const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + (hx - 0.5) * 8);
     const Y = Math.round(base - sprite.img.height + (hy - 0.5) * 4);
-    this.queue.add('cast', () => f.P.ell((tx + 0.5) * TILE_PX, base - 2, sprite.img.width * 0.55, 4, C.shadeL));
+    if (f.fade > 0) this.queue.add('cast', () => f.P.ell((tx + 0.5) * TILE_PX, base - 2, sprite.img.width * 0.55, 4, C.shadeL));
     this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
   }
 
@@ -263,12 +278,12 @@ export class PxRenderer {
     const { g, ctx, P, now, view } = f;
     for (const e of g.tickers) {
       if (!this.visible(view, e)) continue;
-      const sprite = placeholderSprite(e.def);
+      const sprite = placeholderSprite(e.def, e.w, e.h);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
       const foot = (e.y + e.h) * TILE_PX;
-      this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
+      if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       this.queue.addTall(foot, X, () => {
         ctx.drawImage(sprite.img, X, Y);
@@ -345,7 +360,7 @@ export class PxRenderer {
         continue;
       }
       const [fw, fh] = g.footprint(def, p.rot);
-      const sprite = placeholderSprite(def);
+      const sprite = placeholderSprite(def, fw, fh);
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;

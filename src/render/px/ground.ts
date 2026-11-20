@@ -229,38 +229,66 @@ function scrapPixel(s: GroundSample): number {
   return edge ? RGB.ink : 0;
 }
 
-/** Une entrée du cache : le canevas peint et la version du bloc qu'il représente. */
+/** La signature de ce que le sol peint vraiment : eau, dalles et débris, sans les arbres. */
+export function groundSignature(chunk: Chunk): number {
+  let sig = 0;
+  for (let i = 0; i < CHUNK * CHUNK; i++) {
+    const cell = chunk.ground[i] | (chunk.slab[i] << 1) | (chunk.loot[i] << 2);
+    sig = (sig * 33 + (i + 1) * (cell + 1)) | 0;
+  }
+  return sig;
+}
+
+/** Vrai si au moins la moitié des cases du bloc est de l'eau. */
+export function chunkMostlyWater(chunk: Chunk): boolean {
+  let water = 0;
+  for (let i = 0; i < CHUNK * CHUNK; i++) {
+    if (chunk.ground[i] === GROUND_WATER) water++;
+  }
+  return water * 2 >= CHUNK * CHUNK;
+}
+
+/** Une entrée du cache : le canevas peint et la signature du sol qu'il représente. */
 interface CacheEntry {
   canvas: HTMLCanvasElement;
-  version: number;
+  sig: number;
   used: number;
 }
 
 /** Le cache des blocs de sol, limité aux 64 blocs les plus récemment vus. */
 export class GroundCache {
   private readonly entries = new Map<Chunk, CacheEntry>();
+  private budget = 0;
+
+  /** Ouvre une image : un seul bloc sera peint, sauf si rien n'est encore peint du tout. */
+  beginFrame(): void {
+    this.budget = this.entries.size === 0 ? Number.MAX_SAFE_INTEGER : 1;
+  }
 
   /** Oublie tous les blocs peints. */
   clear(): void {
     this.entries.clear();
   }
 
-  /** Le canevas peint d'un bloc, repeint si son contenu a changé. */
-  get(chunk: Chunk, world: World, frame: number): HTMLCanvasElement {
+  /** Le canevas peint d'un bloc, `null` s'il attend son tour ; repeint si son sol a changé. */
+  get(chunk: Chunk, world: World, frame: number): HTMLCanvasElement | null {
     let entry = this.entries.get(chunk);
     if (!entry) {
+      if (this.budget <= 0) return null;
       const { canvas } = makeSurface(GROUND_PX, GROUND_PX);
-      entry = { canvas, version: -1, used: frame };
+      entry = { canvas, sig: NaN, used: frame };
       this.entries.set(chunk, entry);
     }
     entry.used = frame;
-    if (entry.version !== chunk.version) {
+    const sig = groundSignature(chunk);
+    if (entry.sig !== sig && this.budget > 0) {
+      this.budget--;
       const ctx = entry.canvas.getContext('2d');
       if (!ctx) throw new Error('Contexte 2D indisponible');
       const image = ctx.createImageData(GROUND_PX, GROUND_PX);
       image.data.set(paintChunk(chunk, world));
       ctx.putImageData(image, 0, 0);
-      entry.version = chunk.version;
+      entry.sig = sig;
     }
     this.evict();
     return entry.canvas;
