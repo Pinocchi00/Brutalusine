@@ -114,15 +114,15 @@ const CHAR_PAL = { a: C.st1, 1: C.ch0, 2: C.ch1, 3: C.ch2, 4: '#141117', s: C.ch
 const OREI_ROWS = ['...0011...', '..011122..', '.01k2m223.', '0112k23333', '.12222333.', '..22333...'] as const;
 const OREI_PAL = { 0: '#dcc6b6', 1: '#ae9282', 2: '#866c60', 3: '#5f4b45', m: C.irm, k: C.ir1 } as const;
 
-const BUILD_W = 40, BUILD_H = 30, BUILD_UP = 20;
+const BUILD_W = 44, BUILD_H = 42, BUILD_UP = 20;
 
 /** Le petit bâtiment de test : une caisse de béton, une cheminée d'acier, des assises de pierre. */
 function building(api: Api) {
   return api.build(BUILD_W, BUILD_H, BUILD_UP, (P, up, lights) => {
-    api.box(P, 4, up + 16, 30, 18, 12, api.M.conc);
-    api.cyl(P, 30, up + 4, 6, 14, api.M.steel);
-    api.courses(P, 4, up + 34, 30, 8, 21);
-    lights.push({ k: 'win', x: 10, y: up + 20, w: 4, h: 3 });
+    api.box(P, 4, up + 8, 32, 14, 10, api.M.conc);
+    api.cyl(P, 32, up + 4, 6, 18, api.M.steel);
+    api.courses(P, 4, up + 32, 32, 8, 21);
+    lights.push({ k: 'win', x: 10, y: up + 12, w: 4, h: 3 });
   });
 }
 
@@ -166,13 +166,13 @@ const ellipses = (P: Pen): void => {
 };
 CASES.push({ kind: 'pixels', name: 'crayon · ell et disc fractionnaires', w: 30, h: 22, draw: (api, ctx) => ellipses(api.pen(ctx)) });
 
-const strokes = (P: Pen): void => {
+const strokes = (api: Api, P: Pen): void => {
   for (const [x0, y0, x1, y1] of [[4, 30, 34, 4], [6, 6, 32, 26], [34, 2, 2, 30]]) {
-    stroke(P, x0, y0, x1, y1, 2.5, C.ink);
-    edges(P, x0, y0, x1, y1, C.s1, C.s3);
+    api.stroke(P, x0, y0, x1, y1, 2.5, C.ink);
+    api.edges(P, x0, y0, x1, y1, C.s1, C.s3);
   }
 };
-CASES.push({ kind: 'pixels', name: 'stroke et edges, trois directions', w: 38, h: 34, draw: (api, ctx) => strokes(api.pen(ctx)) });
+CASES.push({ kind: 'pixels', name: 'stroke et edges, trois directions', w: 38, h: 34, draw: (api, ctx) => strokes(api, api.pen(ctx)) });
 
 // --- les finitions ---------------------------------------------------------------------
 CASES.push({
@@ -271,16 +271,30 @@ for (const [name, rows, pal, spriteWidth, spriteHeight] of [
 
 // --- le bâtiment de test ---------------------------------------------------------------
 CASES.push({
-  kind: 'pixels', name: 'build · image', w: 42, h: 52,
+  kind: 'pixels', name: 'build · image', w: 46, h: 64,
   draw: (api, ctx) => ctx.drawImage(building(api).img, 0, 0),
 });
 CASES.push({
-  kind: 'pixels', name: 'build · silhouette d’ombre', w: 42, h: 52,
+  kind: 'pixels', name: 'build · silhouette d’ombre', w: 46, h: 64,
   draw: (api, ctx) => ctx.drawImage(building(api).shadow, 0, 0),
 });
+
+const SHADOW_X = 16, SHADOW_Y = 12, CAMERA_X = 7, CAMERA_Y = 5;
+
 CASES.push({
-  kind: 'pixels', name: 'castShadow · ombre portée', w: 80, h: 70,
-  draw: (api, ctx) => api.castShadow(ctx, building(api), 16, 12),
+  kind: 'pixels', name: 'castShadow · ombre portée', w: 160, h: 90,
+  draw: (api, ctx) => api.castShadow(ctx, building(api), SHADOW_X, SHADOW_Y),
+});
+CASES.push({
+  kind: 'pixels', name: 'castShadow · translation préalable', w: 160, h: 90,
+  draw: (api, ctx) => {
+    ctx.translate(CAMERA_X, CAMERA_Y);
+    api.castShadow(ctx, building(api), SHADOW_X, SHADOW_Y);
+  },
+  // La maquette emploie setTransform et ignore donc une translation déjà posée : on lui
+  // décale X et Y de la caméra pour obtenir la même image, alors que le portage compose
+  // cette translation avec sa propre transformation.
+  reference: (ref, ctx) => ref.api.castShadow(ctx, building(ref.api), SHADOW_X + CAMERA_X, SHADOW_Y + CAMERA_Y),
 });
 
 // --- les valeurs pures -----------------------------------------------------------------
@@ -300,8 +314,8 @@ CASES.push({
   compare: (reference, port) => countValues((i) => reference.vnoise(i * 0.37 - 12, i * 0.23 - 7, 5), (i) => port.vnoise(i * 0.37 - 12, i * 0.23 - 7, 5)),
 });
 CASES.push({
-  kind: 'values', name: 'bump · 1000 valeurs',
-  compare: (reference, port) => countValues((i) => reference.bump(i / 999), (i) => port.bump(i / 999)),
+  kind: 'values', name: 'bump · 1000 valeurs, bornes comprises',
+  compare: (reference, port) => countValues((i) => reference.bump(-0.5 + i * 2 / 999), (i) => port.bump(-0.5 + i * 2 / 999)),
 });
 CASES.push({
   kind: 'values', name: 'EASE · 1000 valeurs',
@@ -326,7 +340,7 @@ function paint(api: Api, w: number, h: number, draw: (ctx: CanvasRenderingContex
 
 /** Carte des différences : magenta pour un pixel différent, gris sombre sinon. */
 function differenceMap(a: HTMLCanvasElement, b: HTMLCanvasElement, w: number, h: number): { canvas: HTMLCanvasElement; diff: number } {
-  const { canvas, ctx } = PORT.makeSurface(w, h);
+  const { canvas, ctx } = makeSurface(w, h, { read: true });
   const da = a.getContext('2d')?.getImageData(0, 0, w, h);
   const db = b.getContext('2d')?.getImageData(0, 0, w, h);
   if (!da || !db) throw new Error('Lecture des pixels impossible');

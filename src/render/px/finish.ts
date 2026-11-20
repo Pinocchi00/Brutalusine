@@ -4,13 +4,13 @@
  */
 import { C } from './palette';
 import { hexToRgb } from './noise';
-import { makeSurface } from './surface';
+import { copySurface, makeSurface } from './surface';
 import { pen } from './pen';
 
 /** Entoure la silhouette d'un contour d'un pixel, élargi d'un pixel de chaque côté. */
 export function outline(src: HTMLCanvasElement, col: string): HTMLCanvasElement {
   const w = src.width + 2, h = src.height + 2;
-  const { canvas, ctx } = makeSurface(w, h);
+  const { canvas, ctx } = makeSurface(w, h, { read: true });
   ctx.drawImage(src, 1, 1);
   const d = ctx.getImageData(0, 0, w, h), a = d.data;
   const [R, G, B] = hexToRgb(col), mark: number[] = [];
@@ -22,13 +22,13 @@ export function outline(src: HTMLCanvasElement, col: string): HTMLCanvasElement 
   }
   for (const k of mark) { a[k] = R; a[k + 1] = G; a[k + 2] = B; a[k + 3] = 255; }
   ctx.putImageData(d, 0, 0);
-  return canvas;
+  return copySurface(canvas);
 }
 
 /** Dore d'un demi-ton le bord éclairé de la silhouette, là où le contour sombre affleure. */
 export function rim(src: HTMLCanvasElement, col: string): HTMLCanvasElement {
   const w = src.width, h = src.height;
-  const { canvas, ctx } = makeSurface(w, h);
+  const { canvas, ctx } = makeSurface(w, h, { read: true });
   ctx.drawImage(src, 0, 0);
   const d = ctx.getImageData(0, 0, w, h), a = d.data;
   const [R, G, B] = hexToRgb(col), out: number[] = [];
@@ -48,7 +48,7 @@ export function rim(src: HTMLCanvasElement, col: string): HTMLCanvasElement {
     a[k + 2] = Math.round((a[k + 2] + B) / 2);
   }
   ctx.putImageData(d, 0, 0);
-  return canvas;
+  return copySurface(canvas);
 }
 
 /** La finition complète d'un sprite : contour à l'encre, puis liseré doré. */
