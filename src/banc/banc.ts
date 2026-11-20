@@ -331,9 +331,14 @@ CASES.push({
   },
 });
 
-/** Peint une surface et renvoie son canevas. */
-function paint(api: Api, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
-  const { canvas, ctx } = api.makeSurface(w, h);
+/**
+ * Peint une surface et renvoie son canevas.
+ * Les deux côtés peignent sur une surface de lecture forcée (calculée par le processeur) :
+ * on compare la logique, pas le moteur de rendu. Un canevas accéléré mélange l'alpha 0,28
+ * légèrement autrement, ce qui ferait diverger les ombres sans changer leur dessin.
+ */
+function paint(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+  const { canvas, ctx } = makeSurface(w, h, { read: true });
   draw(ctx);
   return canvas;
 }
@@ -393,11 +398,11 @@ async function main(): Promise<void> {
 
     let result: BenchResult;
     if (c.kind === 'pixels') {
-      const refCanvas = paint(reference, c.w, c.h, (ctx) => {
+      const refCanvas = paint(c.w, c.h, (ctx) => {
         if (c.reference) c.reference({ api: reference, raw }, ctx);
         else c.draw(reference, ctx);
       });
-      const portCanvas = paint(PORT, c.w, c.h, (ctx) => c.draw(PORT, ctx));
+      const portCanvas = paint(c.w, c.h, (ctx) => c.draw(PORT, ctx));
       const { canvas: diffCanvas, diff } = differenceMap(refCanvas, portCanvas, c.w, c.h);
       result = { name: c.name, diff, total: c.w * c.h };
       const row = document.createElement('div');
