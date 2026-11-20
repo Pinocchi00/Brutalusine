@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHUNK, GROUND_WATER, Chunk, World } from '../src/sim/world';
-import { GROUND_PX, paintChunk } from '../src/render/px/ground';
+import { GROUND_PX, groundSignature, paintChunk } from '../src/render/px/ground';
+import { coopScale } from '../src/render/px/renderer';
 import { TILE_PX, computeView, screenToWorld } from '../src/render/px/view';
 
 /** Compte les octets qui diffèrent entre deux peintures. */
@@ -53,6 +54,64 @@ describe('peinture du sol', () => {
     const first = paintChunk(chunk, world);
     const second = paintChunk(chunk, world);
     expect(differences(first, second)).toBe(0);
+  });
+});
+
+describe('signature du sol', () => {
+  it('garde la même signature quand seule la canopée change', () => {
+    const before = sampleChunk();
+    const after = sampleChunk();
+    after.canopy[(10 << 5) | 10] = 220;
+    after.canopy[(11 << 5) | 10] = 0;
+    after.version++;
+    expect(groundSignature(after)).toBe(groundSignature(before));
+  });
+
+  it('change quand une dalle apparaît', () => {
+    const before = sampleChunk();
+    const after = sampleChunk();
+    after.slab[(2 << 5) | 2] = 1;
+    expect(groundSignature(after)).not.toBe(groundSignature(before));
+  });
+
+  it('change quand une dalle se déplace à nombre égal', () => {
+    const before = sampleChunk();
+    const after = sampleChunk();
+    after.slab[(10 << 5) | 20] = 0;
+    after.slab[(10 << 5) | 15] = 1;
+    expect(groundSignature(after)).not.toBe(groundSignature(before));
+  });
+
+  it('change quand un débris apparaît', () => {
+    const before = sampleChunk();
+    const after = sampleChunk();
+    after.loot[(5 << 5) | 5] = 1;
+    expect(groundSignature(after)).not.toBe(groundSignature(before));
+  });
+
+  it('change quand une case passe de la terre à l’eau', () => {
+    const before = sampleChunk();
+    const after = sampleChunk();
+    after.ground[(20 << 5) | 2] = GROUND_WATER;
+    expect(groundSignature(after)).not.toBe(groundSignature(before));
+  });
+});
+
+describe('échelle en coop', () => {
+  const bounds = { min: 1, max: 5 };
+
+  it('garde l’échelle choisie quand elle tient tout le monde', () => {
+    expect(coopScale(3, 4.6, bounds)).toBe(3);
+  });
+
+  it('réduit à celle qui tient tout le monde, arrondie vers le bas', () => {
+    expect(coopScale(4, 2.9, bounds)).toBe(2);
+  });
+
+  it('ramène toujours le résultat entier dans les bornes', () => {
+    expect(coopScale(9, 9, bounds)).toBe(5);
+    expect(coopScale(1, 0.4, bounds)).toBe(1);
+    expect(Number.isInteger(coopScale(3, 2.4, bounds))).toBe(true);
   });
 });
 

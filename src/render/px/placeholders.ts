@@ -145,24 +145,24 @@ function iconFor(def: BuildingDef): FamilyIcon {
   return 'arrows';
 }
 
-/** Décrit le volume provisoire d'un bâtiment ; la dalle est le sol et renvoie `null`. */
-export function placeholderSpec(def: BuildingDef): PlaceholderSpec | null {
+/** Décrit le volume provisoire d'un bâtiment dans ses dimensions effectives ; la dalle renvoie `null`. */
+export function placeholderSpec(def: BuildingDef, w = def.w, h = def.h): PlaceholderSpec | null {
   if (def.kind === 'slab') return null;
   const flat = def.kind === 'belt';
   const raw = Math.round(def.height * 24);
   const matKey = materialFor(def);
   return {
     key: def.key,
-    w: def.w * 24,
-    h: def.h * 24,
+    w: w * 24,
+    h: h * 24,
     up: flat ? raw : Math.max(6, raw),
     matKey,
     mat: M[matKey],
     chimney: def.cat === 'fonte' || def.key === 'bruleur',
     icon: iconFor(def),
-    plinth: def.w >= 2 && def.h >= 2,
+    plinth: w >= 2 && h >= 2,
     flat,
-    windows: def.kind === 'hub' ? 2 : def.kind === 'machine' ? (def.w >= 3 ? 2 : 1) : 0,
+    windows: def.kind === 'hub' ? 2 : def.kind === 'machine' ? (w >= 3 ? 2 : 1) : 0,
   };
 }
 
@@ -243,16 +243,18 @@ function drawPlaceholder(P: Pen, spec: PlaceholderSpec, lights: Light[]): void {
   });
 }
 
-/** Dessine une fois le volume provisoire d'un bâtiment et le garde en cache ; la dalle renvoie `null`. */
-export function placeholderSprite(def: BuildingDef): Sprite | null {
-  if (sprites.has(def.key)) return sprites.get(def.key) ?? null;
-  const spec = placeholderSpec(def);
+/** Dessine une fois le volume provisoire aux dimensions données et le garde en cache ; la dalle renvoie `null`. */
+export function placeholderSprite(def: BuildingDef, w = def.w, h = def.h): Sprite | null {
+  if (def.kind === 'slab') return null;
+  const key = `${def.key}@${w}x${h}`;
+  if (sprites.has(key)) return sprites.get(key) ?? null;
+  const spec = placeholderSpec(def, w, h);
   if (!spec) {
-    sprites.set(def.key, null);
+    sprites.set(key, null);
     return null;
   }
   const sprite = build(spec.w, spec.h, spec.up, (P, _up, lights) => drawPlaceholder(P, spec, lights));
-  sprites.set(def.key, sprite);
+  sprites.set(key, sprite);
   return sprite;
 }
 

@@ -39,6 +39,15 @@ describe('placeholderSpec', () => {
     }
   });
 
+  it('suit les dimensions effectives d’un bâtiment tourné', () => {
+    const rotated = placeholderSpec(B.betonniere, 2, 3);
+    expect(rotated?.w).toBe(48);
+    expect(rotated?.h).toBe(72);
+    const straight = placeholderSpec(B.betonniere);
+    expect(straight?.w).toBe(72);
+    expect(straight?.h).toBe(48);
+  });
+
   it('tire la hauteur de def.height, avec un minimum de 6 sauf pour le plat', () => {
     for (const def of BUILDINGS) {
       const spec = placeholderSpec(def);

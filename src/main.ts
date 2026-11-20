@@ -10,7 +10,7 @@ import { serialize, deserialize, writeSave, readSave } from './sim/save';
 import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
 import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
-import { PxRenderer } from './render/px/renderer';
+import { PxRenderer, coopScale } from './render/px/renderer';
 import { TILE_PX, pickScale, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
@@ -683,17 +683,18 @@ class App {
       const k = Math.min(1, dt * 6);
       this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
       if (this.pixel) {
-        // échelle entière : la plus grande qui tienne tout le monde, ou celle choisie à un joueur
+        // échelle entière : le minimum de l'échelle choisie et de celle qui tient tout le monde
         const b = scaleBounds(this.canvas.width, this.canvas.height);
         let s: number;
         if (this.players.length > 1) {
           const fitPx = Math.min(window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)) * this.dpr;
-          s = Math.floor(fitPx / TILE_PX);
+          s = coopScale(this.scale, fitPx / TILE_PX, b);
         } else {
           s = Math.round((this.zoom * this.dpr) / TILE_PX);
           this.scale = Math.max(b.min, Math.min(b.max, s));
+          s = this.scale;
         }
-        this.cam.zoom = TILE_PX * Math.max(b.min, Math.min(b.max, s));
+        this.cam.zoom = TILE_PX * s;
       } else {
         this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
       }
