@@ -10,6 +10,8 @@ import { edges, pen, stroke, type Pen } from '../render/px/pen';
 import { finish, fromRows, outline, rim } from '../render/px/finish';
 import { box, chev, courses, crate, cyl, logEnds, moss } from '../render/px/volumes';
 import { build, castShadow } from '../render/px/sprite';
+import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
+import { TILE_PX } from '../render/px/view';
 
 /** L'API commune aux deux côtés : la maquette et le portage exposent les mêmes fonctions. */
 interface Api {
@@ -43,15 +45,27 @@ interface Api {
   castShadow: typeof castShadow;
   stroke: typeof stroke;
   edges: typeof edges;
+  beltTile(P: Pen, X: number, Y: number, inD: number, outD: number, off: number): void;
+  beltTileImage(inD: number, outD: number, off: number): HTMLCanvasElement;
+  pathPos(tiles: readonly PathTile[], s: number): readonly [number, number] | null;
+}
+
+/** Un tapis de la scène de la maquette, réduit à ce dont le banc a besoin. */
+interface MaquetteBelt {
+  item: CanvasImageSource;
+  speed: number;
+  gap: number;
+  tiles: readonly PathTile[];
 }
 
 /** Ce que la maquette expose réellement : `mk` renvoie un couple et `sm` est le lissage. */
-interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface'> {
+interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface' | 'beltTileImage'> {
   sm: typeof smooth;
   mk(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D];
   LOG: HTMLCanvasElement;
   CHAR: HTMLCanvasElement;
   OREI: HTMLCanvasElement;
+  BELTS: readonly MaquetteBelt[];
 }
 
 interface PixelCase {
@@ -91,6 +105,11 @@ const PORT: Api = {
   makeSurface, pen, outline, rim, finish, fromRows,
   box, cyl, chev, moss, courses, crate, logEnds,
   build, castShadow, stroke, edges,
+  beltTile, beltTileImage,
+  pathPos: (tiles, s) => {
+    const q = pathPos(tiles, s);
+    return q ? [q.x, q.y] as const : null;
+  },
 };
 
 /** Adapte l'objet de la maquette à l'API commune. */
@@ -105,6 +124,13 @@ function adapt(raw: MaquetteRaw): Api {
     pen: raw.pen, outline: raw.outline, rim: raw.rim, finish: raw.finish, fromRows: raw.fromRows,
     box: raw.box, cyl: raw.cyl, chev: raw.chev, moss: raw.moss, courses: raw.courses, crate: raw.crate, logEnds: raw.logEnds,
     build: raw.build, castShadow: raw.castShadow, stroke: raw.stroke, edges: raw.edges,
+    beltTile: raw.beltTile,
+    beltTileImage: (inD, outD, off) => {
+      const [canvas, ctx] = raw.mk(TILE_PX, TILE_PX);
+      raw.beltTile(raw.pen(ctx), 0, 0, inD, outD, off);
+      return canvas;
+    },
+    pathPos: (tiles, s) => raw.pathPos(tiles, s),
   };
   return api;
 }
@@ -304,6 +330,26 @@ CASES.push({
   reference: (ref, ctx) => ref.api.castShadow(ctx, building(ref.api), SHADOW_X + CAMERA_X, SHADOW_Y + CAMERA_Y),
 });
 
+// --- les tapis -------------------------------------------------------------------------
+const TURN_DIRS: [number, number][] = [];
+for (let inD = 0; inD < 4; inD++) {
+  TURN_DIRS.push([inD, (inD + 1) & 3]);
+  TURN_DIRS.push([inD, (inD + 3) & 3]);
+}
+const TILE_DIRS: [number, number][] = [0, 1, 2, 3].map((d) => [d, d] as [number, number]);
+TILE_DIRS.push(...TURN_DIRS);
+for (const [inD, outD] of TILE_DIRS) {
+  CASES.push({
+    kind: 'pixels',
+    name: inD === outD ? `tapis · droit ${inD} · 6 phases` : `tapis · virage ${inD}→${outD} · 6 phases`,
+    w: TILE_PX * 6,
+    h: TILE_PX,
+    draw: (api, ctx) => {
+      for (let ph = 0; ph < 6; ph++) ctx.drawImage(api.beltTileImage(inD, outD, ph), ph * TILE_PX, 0);
+    },
+  });
+}
+
 // --- les valeurs pures -----------------------------------------------------------------
 CASES.push({
   kind: 'values', name: 'rng · 1000 valeurs',
@@ -409,6 +455,28 @@ async function main(): Promise<void> {
   document.body.appendChild(frame);
   const raw = await waitForMaquette(frame);
   const reference = adapt(raw);
+
+  raw.BELTS.forEach((belt, index) => {
+    CASES.push({
+      kind: 'values',
+      name: `pathPos · tapis ${index + 1} · 40 positions`,
+      compare: (ref, port) => {
+        const length = belt.tiles.length * TILE_PX;
+        let diff = 0;
+        for (let n = 0; n < 40; n++) {
+          const s = (n / 40) * length;
+          const a = ref.pathPos(belt.tiles, s);
+          const b = port.pathPos(belt.tiles, s);
+          if (!a !== !b) {
+            diff++;
+            continue;
+          }
+          if (a && b && (a[0] !== b[0] || a[1] !== b[1])) diff++;
+        }
+        return { diff, total: 40 };
+      },
+    });
+  });
 
   const results: BenchResult[] = [];
   for (const c of CASES) {
