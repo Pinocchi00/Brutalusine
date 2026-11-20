@@ -48,6 +48,9 @@ export const EASE: Record<'io' | 'out' | 'back', (u: number) => number> = {
 
 /** Décompose une couleur `#rrggbb` en trois canaux 0-255 (la maquette l'appelait `rgb`). */
 export function hexToRgb(hex: string): [number, number, number] {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    throw new Error(`Couleur hexadécimale invalide : « ${hex} » (attendu #rrggbb)`);
+  }
   return [
     parseInt(hex.slice(1, 3), 16),
     parseInt(hex.slice(3, 5), 16),

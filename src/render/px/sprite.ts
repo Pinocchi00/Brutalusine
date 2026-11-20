@@ -55,7 +55,7 @@ export function castShadow(ctx: CanvasRenderingContext2D, sprite: Sprite, X: num
   const gy = Y + sprite.img.height - 2, K = 1.1, tt = 0.16;
   ctx.save();
   ctx.globalAlpha = 0.28;
-  ctx.setTransform(1, 0, -K, -tt, K * gy, gy * (1 + tt));
+  ctx.transform(1, 0, -K, -tt, K * gy, gy * (1 + tt));
   ctx.drawImage(sprite.shadow, X, Y);
   ctx.restore();
 }

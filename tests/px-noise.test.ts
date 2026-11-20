@@ -75,6 +75,13 @@ describe('couleurs', () => {
     expect(hexToRgb('#fffbf0')).toEqual([255, 251, 240]);
   });
 
+  it('hexToRgb refuse tout ce qui n’est pas #rrggbb', () => {
+    expect(() => hexToRgb('rgba(72,44,104,0.32)')).toThrow(/hexadécimale/);
+    expect(() => hexToRgb('#abc')).toThrow(/hexadécimale/);
+    expect(() => hexToRgb('1a1018')).toThrow(/hexadécimale/);
+    expect(() => hexToRgb('#gggggg')).toThrow(/hexadécimale/);
+  });
+
   it('rgba compose la même chaîne que la maquette', () => {
     expect(rgba('#48286a', 0.28)).toBe('rgba(72,40,106,0.28)');
   });
