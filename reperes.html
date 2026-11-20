@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="data:," />
+  <title>Repères pixel — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 24px; background: #16121a; color: #ead7b8; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 4px; font-size: 20px; color: #ffcc5c; }
+    p { margin: 0 0 20px; color: #958170; }
+    #boards { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+    figure { flex: 0 0 auto; margin: 0; padding: 8px; border: 1px solid #3a323c; border-radius: 6px; background: #1f1924; }
+    figcaption { margin: 0 0 6px; font-size: 11px; color: #ddd6d0; }
+    canvas { display: block; image-rendering: pixelated; border: 1px solid #2b1d26; }
+  </style>
+</head>
+<body>
+  <h1>Repères pixel</h1>
+  <p>Chaque repère sur un fond d'herbe, agrandi ×4 sans lissage et animé.</p>
+  <div id="boards"></div>
+  <script type="module" src="/src/banc/reperes.ts"></script>
+</body>
+</html>
