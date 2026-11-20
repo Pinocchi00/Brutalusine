@@ -37,11 +37,13 @@ describe('peinture du sol', () => {
   it('peint chaque pixel en opaque et couvre tous les tons', () => {
     const pixels = paintChunk(sampleChunk(), new World(7));
     const colors = new Set<number>();
+    let transparent = 0;
     for (let i = 0; i < pixels.length; i += 4) {
-      expect(pixels[i + 3]).toBe(255);
+      if (pixels[i + 3] !== 255) transparent++;
       colors.add((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
     }
     // Eau (plusieurs bandes), herbe (plusieurs tons) et béton : bien plus que trois couleurs.
+    expect(transparent).toBe(0);
     expect(colors.size).toBeGreaterThan(12);
   });
 
