@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Effets pixel — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 24px; background: #16121a; color: #ead7b8; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 4px; font-size: 20px; color: #ffcc5c; }
+    p { margin: 0 0 16px; color: #958170; }
+    canvas { display: block; image-rendering: pixelated; border: 1px solid #2b1d26; background: #9cbf57; }
+  </style>
+</head>
+<body>
+  <h1>Effets pixel</h1>
+  <p>Chaque seconde, une rafale de chaque sorte. Cliquez pour frapper l'arbre ; un arbre tombe toutes les trois secondes.</p>
+  <canvas id="vue"></canvas>
+  <script type="module" src="/src/banc/effets.ts"></script>
+</body>
+</html>
