@@ -9,6 +9,9 @@ export type Draw = () => void;
 /** Les couches, dans l'ordre de dessin. */
 export type Layer = 'ground' | 'flat' | 'cast' | 'tall' | 'fx' | 'light';
 
+/** Les couches dessinées à plat, dans leur ordre d'ajout : tout sauf les objets hauts. */
+export type FlatLayer = Exclude<Layer, 'tall'>;
+
 const LAYERS: readonly Layer[] = ['ground', 'flat', 'cast', 'tall', 'fx', 'light'];
 
 /**
@@ -18,11 +21,10 @@ const LAYERS: readonly Layer[] = ['ground', 'flat', 'cast', 'tall', 'fx', 'light
  * L'ordre d'ajout sert de dernier critère, ce qui rend le tri stable et déterministe.
  */
 export class DrawQueue {
-  private readonly layers: Record<Layer, Draw[]> = {
+  private readonly layers: Record<FlatLayer, Draw[]> = {
     ground: [],
     flat: [],
     cast: [],
-    tall: [],
     fx: [],
     light: [],
   };
@@ -43,12 +45,7 @@ export class DrawQueue {
   }
 
   /** Ajoute un dessin à une couche à plat, dessiné dans l'ordre d'ajout. */
-  add(layer: Layer, draw: Draw): void {
-    if (layer === 'tall') {
-      // Un objet haut sans pied ni x se range à l'origine, en fin d'ordre d'ajout.
-      this.addTall(0, 0, draw);
-      return;
-    }
+  add(layer: FlatLayer, draw: Draw): void {
     this.layers[layer].push(draw);
   }
 
@@ -89,7 +86,9 @@ export class DrawQueue {
 
   /** Vide la file en gardant les tableaux alloués pour l'image suivante. */
   clear(): void {
-    for (const layer of LAYERS) this.layers[layer].length = 0;
+    for (const layer of LAYERS) {
+      if (layer !== 'tall') this.layers[layer].length = 0;
+    }
     this.footY.length = 0;
     this.tallX.length = 0;
     this.tallDraw.length = 0;

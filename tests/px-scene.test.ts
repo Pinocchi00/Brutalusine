@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DrawQueue, type Layer } from '../src/render/px/scene';
+import { DrawQueue, type FlatLayer } from '../src/render/px/scene';
 
 const median = (values: number[]): number => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
+type AddLayer = Parameters<DrawQueue['add']>[0];
+type AddRejectsTall = 'tall' extends AddLayer ? never : true;
+const addRejectsTall: AddRejectsTall = true;
 
 describe('ordre des couches', () => {
   it('dessine sol, plat, ombres, hauts, effets puis lumière, quel que soit l’ordre des ajouts', () => {
@@ -17,10 +21,14 @@ describe('ordre des couches', () => {
     expect(seen).toEqual(['ground', 'flat', 'cast', 'tall', 'fx', 'light']);
   });
 
+  it('refuse la couche tall dans add, vérifié au typage', () => {
+    expect(addRejectsTall).toBe(true);
+  });
+
   it('garde l’ordre d’ajout à l’intérieur d’une couche', () => {
     const queue = new DrawQueue();
     const seen: string[] = [];
-    const layers: Layer[] = ['ground', 'flat', 'cast', 'fx', 'light'];
+    const layers: FlatLayer[] = ['ground', 'flat', 'cast', 'fx', 'light'];
     for (const layer of layers) {
       queue.add(layer, () => seen.push(`${layer}a`));
       queue.add(layer, () => seen.push(`${layer}b`));
