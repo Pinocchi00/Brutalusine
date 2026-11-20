@@ -28,6 +28,7 @@ export interface PlaceholderSpec {
   icon: FamilyIcon;
   plinth: boolean;
   flat: boolean;
+  windows: number;
 }
 
 /** Les quatre gisements minables, de 1 à 4 comme dans `DEPOSITS`. */
@@ -104,6 +105,8 @@ const DEPOSIT_TINT: Record<DepositType, readonly [string, string]> = {
   4: [C.ma2, C.ma3],
 };
 
+const TREE_RADII: Record<1 | 2 | 3, number> = { 1: 10, 2: 14, 3: 18 };
+
 const sprites = new Map<string, Sprite | null>();
 const items = new Map<number, HTMLCanvasElement>();
 
@@ -159,6 +162,7 @@ export function placeholderSpec(def: BuildingDef): PlaceholderSpec | null {
     icon: iconFor(def),
     plinth: def.w >= 2 && def.h >= 2,
     flat,
+    windows: def.kind === 'hub' ? 2 : def.kind === 'machine' ? (def.w >= 3 ? 2 : 1) : 0,
   };
 }
 
@@ -192,22 +196,36 @@ function drawPlaceholder(P: Pen, spec: PlaceholderSpec, lights: Light[]): void {
     drawBelt(P, spec, lights);
     return;
   }
-  const { w, h, up, mat, plinth, chimney, icon } = spec;
-  let roofY: number, roofD: number, bodyW: number, bodyX: number;
+  const { w, h, up, mat, plinth, chimney, icon, windows } = spec;
+  let roofY: number, roofD: number, bodyH: number, bodyW: number, bodyX: number;
   if (plinth) {
     const foot = 4, inset = 3;
-    box(P, 1, up - 2, w - 2, h - 4, foot, mat);
+    box(P, 0, up - foot, w, h, foot, M.concD);
     bodyX = inset;
     bodyW = w - inset * 2;
-    roofY = 8;
-    roofD = h - 10;
-    box(P, bodyX, roofY, bodyW, roofD, Math.max(3, up - 4), mat);
+    roofY = 6;
+    roofD = h - inset * 2;
+    bodyH = Math.max(3, up - foot);
+    box(P, bodyX, roofY, bodyW, roofD, bodyH, mat);
   } else {
     bodyX = 2;
     bodyW = w - 4;
     roofY = 3;
     roofD = h - 6;
-    box(P, bodyX, roofY, bodyW, roofD, up, mat);
+    bodyH = up;
+    box(P, bodyX, roofY, bodyW, roofD, bodyH, mat);
+  }
+  P.r(bodyX, roofY, bodyW, 1, mat.hi);
+  P.r(bodyX, roofY, 1, roofD, mat.hi);
+  P.r(bodyX, roofY + roofD - 1, bodyW, 1, mat.fl);
+  P.r(bodyX + bodyW - 1, roofY, 1, roofD, mat.fl);
+  const faceY = roofY + roofD;
+  const winH = Math.max(4, Math.round(bodyH * 0.38));
+  const winY = faceY + Math.max(2, Math.round((bodyH - winH) * 0.45));
+  for (let i = 0; i < windows; i++) {
+    const winX = Math.round(bodyX + (bodyW * (i + 1)) / (windows + 1) - 1);
+    P.r(winX, winY, 2, winH, C.ink2);
+    lights.push({ k: 'win', x: winX, y: winY, w: 2, h: winH });
   }
   if (chimney) {
     const rad = Math.max(3, Math.min(6, Math.round(w / 10)));
@@ -256,21 +274,23 @@ export function placeholderTree(size: 1 | 2 | 3): Sprite {
   const key = `tree:${size}`;
   const cached = sprites.get(key);
   if (cached) return cached;
-  const w = 16 + size * 8, h = 8 + size * 3, up = 8 + size * 6;
+  const rad = TREE_RADII[size];
+  const w = rad * 2 + 12, h = 10 + size * 4, up = 10 + size * 8;
   const sprite = build(w, h, up, (P) => {
     const cx = w / 2;
-    P.r(cx - 2, h + up - 12, 4, 10, C.e3);
-    P.r(cx - 1, h + up - 12, 1, 9, C.e2);
-    P.p(cx + 2, h + up - 3, C.e4);
-    const cy = h + up - up * 0.7 - 2;
-    const rad = 4 + size * 2.4;
+    const cy = h + up - up * 0.78 - 2;
+    const tw = 4 + size;
+    const ground = h + up - 2;
+    P.r(cx - Math.ceil(tw / 2), cy, tw, ground - cy, C.e3);
+    P.r(cx - Math.ceil(tw / 2) + 1, cy, 1, ground - cy - 1, C.e2);
+    P.p(cx + Math.floor(tw / 2), ground - 1, C.e4);
     P.disc(cx, cy, rad, C.g5);
     P.disc(cx - 1, cy - 1, rad - 1, C.g4);
     P.disc(cx - 2, cy - 2, rad - 2, C.g3);
     P.disc(cx - 3, cy - 3, rad - 4, C.g2);
-    P.disc(cx - 4, cy - 4, Math.max(1, rad - 7), C.g1);
-    for (let k = 0; k < size * 4; k++) {
-      const a = (k / (size * 4)) * Math.PI * 2;
+    P.disc(cx - 4, cy - 4, Math.max(2, rad - 7), C.g1);
+    for (let k = 0; k < size * 5; k++) {
+      const a = (k / (size * 5)) * Math.PI * 2;
       const px = Math.round(cx - 2 + Math.cos(a) * rad * 0.72);
       const py = Math.round(cy - 2 + Math.sin(a) * rad * 0.6);
       P.p(px, py, k % 3 === 0 ? C.g1 : C.g4);

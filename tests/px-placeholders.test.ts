@@ -91,6 +91,24 @@ describe('placeholderSpec', () => {
     expect(chimneys).toEqual(expected);
   });
 
+  it('pose un socle sur tout bâtiment de 2 × 2 ou plus', () => {
+    for (const def of BUILDINGS) {
+      const spec = placeholderSpec(def);
+      if (!spec) continue;
+      expect(spec.plinth, def.key).toBe(def.w >= 2 && def.h >= 2 && !spec.flat);
+    }
+  });
+
+  it('ouvre des fenêtres aux machines et à la Tour seulement', () => {
+    for (const def of BUILDINGS) {
+      const spec = placeholderSpec(def);
+      if (!spec) continue;
+      if (def.kind === 'hub') expect(spec.windows, def.key).toBe(2);
+      else if (def.kind === 'machine') expect(spec.windows, def.key).toBeGreaterThanOrEqual(1);
+      else expect(spec.windows, def.key).toBe(0);
+    }
+  });
+
   it('suit la famille pour le repère du toit, l’œil orange pour la Tour', () => {
     for (const def of BUILDINGS) {
       const spec = placeholderSpec(def);
