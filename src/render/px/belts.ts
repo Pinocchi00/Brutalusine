@@ -2,7 +2,7 @@
  * Les tapis du rendu pixel : la tuile de 24 px de la maquette, son cache, la géométrie du
  * chemin et la position des objets qui glissent dessus. Le dessin est identique à la maquette.
  */
-import { BELT_SPEED, DX, DY, TILE_U, UPS } from '../../sim/data';
+import { BELT_SPEED, DX, DY, TILE_U } from '../../sim/data';
 import type { Game } from '../../sim/game';
 import type { BeltPath } from '../../sim/belts';
 import { C } from './palette';
@@ -195,27 +195,17 @@ export function pathItemPixels(p: BeltPath, pos: number): BeltPoint {
   return { x: x * T, y: y * T, z: z * T };
 }
 
-/** La taille d'une image, quand la source en expose une. */
-function imageSize(src: CanvasImageSource): { width: number; height: number } {
-  const sized = src as unknown as { width?: unknown; height?: unknown };
-  const width = typeof sized.width === 'number' ? sized.width : 0;
-  const height = typeof sized.height === 'number' ? sized.height : 0;
-  return { width, height };
-}
-
-/** Dessine les tapis visibles et les objets posés dessus, en pixels monde ; `now` est en secondes. */
+/** Dessine les tapis visibles et les objets posés dessus, en pixels monde ; la bande suit exactement la simulation. */
 export function drawBelts(
-  P: Pen,
   ctx: CanvasRenderingContext2D,
   g: Game,
   x0: number,
   y0: number,
   x1: number,
   y1: number,
-  now: number,
-  itemImg: (id: number) => CanvasImageSource,
+  itemImg: (id: number) => HTMLCanvasElement,
 ): void {
-  const phase = now * ((BELT_SPEED * UPS) / TILE_U) * T;
+  const phase = (g.tick * BELT_SPEED / TILE_U) * T;
   const paths = g.paths;
   for (let i = 0; i < paths.length; i++) {
     const p = paths[i];
@@ -238,12 +228,9 @@ export function drawBelts(
       const q = pathItemPixels(p, pos);
       if (q.x < x0 * T || q.x > (x1 + 1) * T || q.y < y0 * T || q.y > (y1 + 1) * T) continue;
       const img = itemImg(p.types[k]);
-      const size = imageSize(img);
-      const px = Math.round(q.x - size.width / 2);
-      const py = Math.round(q.y - q.z - size.height / 2 - 1);
+      const px = Math.round(q.x - img.width / 2);
+      const py = Math.round(q.y - q.z - img.height / 2 - 1);
       ctx.drawImage(img, px, py);
     }
   }
-  // Le crayon reste dans la signature publique ; les tuiles passent par le cache.
-  void P;
 }
