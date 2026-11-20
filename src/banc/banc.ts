@@ -65,6 +65,8 @@ interface PixelCase {
   h: number;
   /** Écart maximal toléré par canal (0 par défaut : pixels identiques exigés). */
   tolerance?: number;
+  /** Agrandissement d'affichage (×4 par défaut). */
+  zoom?: number;
   draw(api: Api, ctx: CanvasRenderingContext2D): void;
   reference?(ref: { api: Api; raw: MaquetteRaw }, ctx: CanvasRenderingContext2D): void;
 }
@@ -286,13 +288,16 @@ CASES.push({
 });
 
 // --- les lumières animées ---------------------------------------------------------------
-const LIGHT_CELL = 24, LIGHT_HEIGHT = 36;
+const LIGHT_CELL = 24, LIGHT_HEIGHT = 36, LIGHT_COLUMNS = 40;
+const BEAT_SAMPLES = 512, LIGHT_SAMPLES = 256;
 
-// Les instants du fanal tombent juste sur les bornes de ses deux battements : c = 0, 0,35, 0,45 et 0,8.
-const BEAT_INSTANTS: readonly number[] = [0, 0.175, 0.35, 0.45, 0.625, 0.8, 1.25, 2, 3, 4.35, 4.45, 4.8];
+/** Des instants régulièrement espacés sur une période complète, sans le doublon de fin. */
+function periodInstants(period: number, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => period * i / count);
+}
 
 /** Les instants d'un feu : juste à l'allumage, juste à l'extinction, juste avant et en plein repos. */
-function blinkInstants(per: number): number[] {
+function blinkBounds(per: number): number[] {
   const instants: number[] = [];
   for (let k = 0; k < 3; k++) {
     instants.push(per * k, per * k + 0.35, per * k + 0.9, per * k + 0.35 - 1e-9);
@@ -300,52 +305,72 @@ function blinkInstants(per: number): number[] {
   return instants;
 }
 
-// Les autres lumières : douze instants variés, dont les bornes du fanal.
-const LIGHT_INSTANTS: readonly number[] = [0, 0.13, 0.35, 0.45, 0.8, 1.1, 1.75, 2.5, 3.2, 4, 5.7, 7.3];
+// Les bornes du fanal : le début et la fin de chacun de ses deux battements (c = 0, 0,35, 0,45 et 0,8).
+const BEAT_BOUNDS: readonly number[] = [0, 0.175, 0.35, 0.45, 0.625, 0.8, 1.25, 2, 3, 4.35, 4.45, 4.8];
+// Les bornes des autres lumières : douze instants variés, dont celles du fanal.
+const LIGHT_BOUNDS: readonly number[] = [0, 0.13, 0.35, 0.45, 0.8, 1.1, 1.75, 2.5, 3.2, 4, 5.7, 7.3];
 
 interface LightCase {
   label: string;
   lights: Light[];
-  instants: readonly number[];
+  /** La période de l'animation, sur laquelle on échantillonne finement. */
+  period: number;
+  samples: number;
+  bounds: readonly number[];
 }
 
+// Le fanal reçoit 512 points sur sa période de 4 : l'écart de 0,0078 tombe dans l'étroite
+// fenêtre de couleur 0,70–0,75, alors que 256 points suffisent aux autres lumières.
 const LIGHT_CASES: readonly LightCase[] = [
-  { label: 'beat · défaut', lights: [{ k: 'beat', x: 8, y: 20 }], instants: BEAT_INSTANTS },
-  { label: 'beat · rayon', lights: [{ k: 'beat', x: 8, y: 20, r: 4 }], instants: BEAT_INSTANTS },
-  { label: 'beat · phase', lights: [{ k: 'beat', x: 8, y: 20, ph: 0.7 }], instants: BEAT_INSTANTS },
-  { label: 'lens · défaut', lights: [{ k: 'lens', x: 8, y: 20 }], instants: LIGHT_INSTANTS },
-  { label: 'lens · rayon', lights: [{ k: 'lens', x: 8, y: 20, r: 4 }], instants: LIGHT_INSTANTS },
-  { label: 'lens · phase', lights: [{ k: 'lens', x: 8, y: 20, ph: 1.1 }], instants: LIGHT_INSTANTS },
-  { label: 'win · défaut', lights: [{ k: 'win', x: 6, y: 16, w: 7, h: 5 }], instants: LIGHT_INSTANTS },
-  { label: 'win · période', lights: [{ k: 'win', x: 6, y: 16, w: 4, h: 2, per: 3 }], instants: LIGHT_INSTANTS },
-  { label: 'win · phase', lights: [{ k: 'win', x: 6, y: 16, w: 6, h: 4, ph: 0.9 }], instants: LIGHT_INSTANTS },
-  { label: 'blink · défaut', lights: [{ k: 'blink', x: 8, y: 20 }], instants: blinkInstants(2.5) },
-  { label: 'blink · période et couleurs', lights: [{ k: 'blink', x: 8, y: 20, per: 1.4, c: C.good, off: C.ink }], instants: blinkInstants(1.4) },
-  { label: 'blink · phase', lights: [{ k: 'blink', x: 8, y: 20, ph: 0.8 }], instants: blinkInstants(2.5) },
-  { label: 'fire · défaut', lights: [{ k: 'fire', x: 6, y: 20 }], instants: LIGHT_INSTANTS },
-  { label: 'fire · largeur', lights: [{ k: 'fire', x: 6, y: 20, w: 7 }], instants: LIGHT_INSTANTS },
-  { label: 'fire · phase', lights: [{ k: 'fire', x: 6, y: 20, ph: 1.6 }], instants: LIGHT_INSTANTS },
-  { label: 'ember · défaut', lights: [{ k: 'ember', x: 8, y: 20 }], instants: LIGHT_INSTANTS },
-  { label: 'ember · largeur et hauteur', lights: [{ k: 'ember', x: 6, y: 18, w: 5, h: 3 }], instants: LIGHT_INSTANTS },
-  { label: 'ember · phase', lights: [{ k: 'ember', x: 8, y: 20, ph: 2.2 }], instants: LIGHT_INSTANTS },
+  { label: 'beat · défaut', lights: [{ k: 'beat', x: 8, y: 20 }], period: 4, samples: BEAT_SAMPLES, bounds: BEAT_BOUNDS },
+  { label: 'beat · rayon', lights: [{ k: 'beat', x: 8, y: 20, r: 4 }], period: 4, samples: BEAT_SAMPLES, bounds: BEAT_BOUNDS },
+  { label: 'beat · phase', lights: [{ k: 'beat', x: 8, y: 20, ph: 0.7 }], period: 4, samples: BEAT_SAMPLES, bounds: BEAT_BOUNDS },
+  { label: 'lens · défaut', lights: [{ k: 'lens', x: 8, y: 20 }], period: 5, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'lens · rayon', lights: [{ k: 'lens', x: 8, y: 20, r: 4 }], period: 5, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'lens · phase', lights: [{ k: 'lens', x: 8, y: 20, ph: 1.1 }], period: 5, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'win · défaut', lights: [{ k: 'win', x: 6, y: 16, w: 7, h: 5 }], period: 7, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'win · période', lights: [{ k: 'win', x: 6, y: 16, w: 4, h: 2, per: 3 }], period: 3, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'win · phase', lights: [{ k: 'win', x: 6, y: 16, w: 6, h: 4, ph: 0.9 }], period: 7, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'blink · défaut', lights: [{ k: 'blink', x: 8, y: 20 }], period: 2.5, samples: LIGHT_SAMPLES, bounds: blinkBounds(2.5) },
+  { label: 'blink · période et couleurs', lights: [{ k: 'blink', x: 8, y: 20, per: 1.4, c: C.good, off: C.ink }], period: 1.4, samples: LIGHT_SAMPLES, bounds: blinkBounds(1.4) },
+  { label: 'blink · phase', lights: [{ k: 'blink', x: 8, y: 20, ph: 0.8 }], period: 2.5, samples: LIGHT_SAMPLES, bounds: blinkBounds(2.5) },
+  { label: 'fire · défaut', lights: [{ k: 'fire', x: 6, y: 20 }], period: 1 / 1.4, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'fire · largeur', lights: [{ k: 'fire', x: 6, y: 20, w: 7 }], period: 1 / 1.4, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'fire · phase', lights: [{ k: 'fire', x: 6, y: 20, ph: 1.6 }], period: 1 / 1.4, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'ember · défaut', lights: [{ k: 'ember', x: 8, y: 20 }], period: 1 / 0.45, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'ember · largeur et hauteur', lights: [{ k: 'ember', x: 6, y: 18, w: 5, h: 3 }], period: 1 / 0.45, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
+  { label: 'ember · phase', lights: [{ k: 'ember', x: 8, y: 20, ph: 2.2 }], period: 1 / 0.45, samples: LIGHT_SAMPLES, bounds: LIGHT_BOUNDS },
 ];
 
+/** L'abscisse de l'instant `i` dans la grille du cas. */
+function instantX(i: number): number {
+  return (i % LIGHT_COLUMNS) * LIGHT_CELL + 4;
+}
+
+/** L'ordonnée de l'instant `i` dans la grille du cas. */
+function instantY(i: number): number {
+  return Math.floor(i / LIGHT_COLUMNS) * LIGHT_HEIGHT;
+}
+
 for (const lightCase of LIGHT_CASES) {
+  const instants = [...periodInstants(lightCase.period, lightCase.samples), ...lightCase.bounds];
+  const rows = Math.ceil(instants.length / LIGHT_COLUMNS);
   CASES.push({
     kind: 'pixels',
-    name: `drawLights · ${lightCase.label} · ${lightCase.instants.length} instants`,
-    w: LIGHT_CELL * lightCase.instants.length,
-    h: LIGHT_HEIGHT,
+    name: `drawLights · ${lightCase.label} · ${instants.length} instants`,
+    w: LIGHT_COLUMNS * LIGHT_CELL,
+    h: rows * LIGHT_HEIGHT,
+    zoom: 1,
     draw: (api, ctx) => {
       const P = api.pen(ctx);
-      lightCase.instants.forEach((t, i) => api.drawLights(P, lightCase.lights, i * LIGHT_CELL + 4, 0, t));
+      instants.forEach((t, i) => api.drawLights(P, lightCase.lights, instantX(i), instantY(i), t));
     },
     // La maquette lit son horloge globale : `setNow` la règle, et son `drawLights` ignore le cinquième argument.
     reference: (ref, ctx) => {
       const P = ref.api.pen(ctx);
-      lightCase.instants.forEach((t, i) => {
+      instants.forEach((t, i) => {
         ref.raw.setNow(t);
-        ref.api.drawLights(P, lightCase.lights, i * LIGHT_CELL + 4, 0, t);
+        ref.api.drawLights(P, lightCase.lights, instantX(i), instantY(i), t);
       });
     },
   });
@@ -502,7 +527,7 @@ async function main(): Promise<void> {
       countText = `${exact} / ${result.total} exactement identiques · ${diff} hors tolérance${tolerance > 0 ? ` (±${tolerance})` : ''}`;
       const row = document.createElement('div');
       row.className = 'row';
-      row.append(figure('Référence', refCanvas), figure('Portage', portCanvas), figure('Différences', diffCanvas));
+      row.append(figure('Référence', refCanvas, c.zoom), figure('Portage', portCanvas, c.zoom), figure('Différences', diffCanvas, c.zoom));
       section.appendChild(row);
     } else {
       const { diff, total } = c.compare(reference, PORT);
