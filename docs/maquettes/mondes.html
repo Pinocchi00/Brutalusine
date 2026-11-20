@@ -1,0 +1,661 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trois mondes pour Brutalusine</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Pixelify+Sans:wght@500..700&display=swap">
+<style>
+/* Beaucoup d'air : une idée par écran. Colonne de 1040 px, images de jeu à l'échelle entière, texte en 58 caractères. */
+:root {
+  --ground: #0c0e15; --panel: #141722; --line: #242838;
+  --fg: #efe9da; --fg-2: #cdc6b6; --mute: #8f8a80;
+  --gold: #f2b65a; --night: #8fb3ff; --ink: #d9c6a0; --signal: #f5891f; --leaf: #8fcf7a;
+  --pixel: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
+  --text: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--fg); font: 18px/1.7 var(--text); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); padding-block: 72px 160px; display: grid; gap: 168px; }
+h1, h2, h3 { font-family: var(--pixel); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(38px, 6vw, 68px); line-height: 1.02; }
+h2 { font-size: clamp(30px, 4.2vw, 46px); line-height: 1.08; }
+h3 { font-size: 20px; line-height: 1.3; }
+p { margin: 0; }
+.eyebrow { font-family: var(--pixel); font-size: 14px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mute); }
+.lead { font-size: 21px; line-height: 1.6; color: var(--fg-2); max-width: 58ch; }
+section { display: grid; gap: 40px; min-width: 0; }
+.intro { display: grid; gap: 28px; }
+
+/* ce que j'ai entendu */
+.heard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px 64px; }
+.heard div { display: grid; gap: 10px; align-content: start; }
+.heard b { font-family: var(--pixel); font-weight: 600; font-size: 24px; color: var(--fg); }
+.heard p { color: var(--fg-2); font-size: 17px; max-width: 40ch; }
+
+/* un monde */
+.world { display: grid; gap: 36px; }
+.world .name { display: grid; gap: 14px; }
+.world .promise { font-size: 22px; line-height: 1.55; color: var(--fg-2); max-width: 52ch; font-style: italic; }
+.view { overflow-x: auto; max-width: 100%; }
+.view canvas { display: block; margin: 0 auto; image-rendering: pixelated; max-width: none; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; }
+.facts div { display: grid; gap: 8px; align-content: start; }
+.facts h3 { font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mute); }
+.facts p, .facts li { font-size: 16.5px; color: var(--fg-2); line-height: 1.6; }
+.facts ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.w-or .name h2 { color: var(--gold); }
+.w-nuit .name h2 { color: var(--night); }
+.w-encre .name h2 { color: var(--ink); }
+
+/* cabinet */
+.cabinet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px 32px; }
+.cabinet figure { margin: 0; display: grid; gap: 14px; justify-items: center; text-align: center; }
+.cabinet canvas { image-rendering: pixelated; display: block; max-width: 100%; height: auto; }
+.cabinet figcaption { display: grid; gap: 4px; max-width: 30ch; }
+.cabinet figcaption b { font-family: var(--pixel); font-weight: 600; font-size: 18px; }
+.cabinet figcaption span { font-size: 15.5px; color: var(--fg-2); line-height: 1.55; }
+
+/* listes calmes */
+.calm { display: grid; gap: 28px; max-width: 64ch; margin: 0; padding: 0; list-style: none; }
+.calm li { display: grid; gap: 4px; }
+.calm b { font-family: var(--pixel); font-weight: 600; font-size: 19px; }
+.calm span { color: var(--fg-2); font-size: 17px; }
+.ask { display: grid; gap: 32px; max-width: 62ch; margin: 0; padding: 0; list-style: none; counter-reset: q; }
+.ask li { display: grid; grid-template-columns: 44px 1fr; gap: 4px 12px; counter-increment: q; }
+.ask li::before { content: counter(q); font-family: var(--pixel); font-size: 26px; color: var(--signal); line-height: 1.2; grid-row: span 2; }
+.ask b { font-family: var(--pixel); font-weight: 600; font-size: 20px; line-height: 1.35; }
+.ask span { color: var(--fg-2); font-size: 16.5px; }
+.ctl { display: flex; justify-content: center; gap: 10px; }
+button.px { font: 600 15px/1 var(--pixel); color: var(--fg); background: #1c2030; border: 2px solid #07070a; box-shadow: inset 2px 2px 0 #353a4e, inset -2px -2px 0 #101119; padding: 9px 14px 10px; cursor: pointer; }
+button.px[aria-pressed="true"] { background: var(--signal); color: #1b0d02; box-shadow: inset 2px 2px 0 #ffc255, inset -2px -2px 0 #a14a0c; }
+button.px:focus-visible { outline: 3px solid var(--night); outline-offset: 2px; }
+@media (max-width: 820px) {
+  .heard, .facts { grid-template-columns: 1fr; gap: 32px; }
+  .cabinet { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wrap { gap: 120px; }
+}
+@media (max-width: 480px) { .cabinet { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <section class="intro" aria-labelledby="t">
+    <div class="eyebrow">Brutalusine · recherche de direction</div>
+    <h1 id="t">Trois mondes où l'on aimerait se perdre</h1>
+    <p class="lead">Tu ne cherches pas un plus joli jeu d'usine. Tu cherches un endroit où l'on respire. Voici la même clairière, dessinée trois fois, dans trois mondes différents. Aucun n'est fini ; chacun est une porte. Dis-moi laquelle s'ouvre en toi.</p>
+  </section>
+
+  <section aria-labelledby="s-heard">
+    <div class="eyebrow">Ce que j'ai entendu</div>
+    <h2 id="s-heard" style="max-width:20ch">Quatre promesses, avant tout dessin</h2>
+    <div class="heard">
+      <div><b>De l'espace</b><p>Peu d'informations, beaucoup d'air. Une prairie, une rivière, quelques arbres qu'on remarque un par un.</p></div>
+      <div><b>Du calme</b><p>Rien ne presse. Rien ne clignote pour rien. L'eau lèche le sable, le feu crépite, on peut regarder.</p></div>
+      <div><b>Une matière qui vit</b><p>Chaque minerai scintille à sa manière, chaque feu brûle selon ce qu'il mange, le lourd prend son temps.</p></div>
+      <div><b>Construire petit à petit</b><p>Couper, casser, ramasser, porter. Poser un convoyeur case après case. La première machine est un événement.</p></div>
+    </div>
+  </section>
+
+  <section class="world w-or" aria-labelledby="s-or">
+    <div class="name"><div class="eyebrow">Monde 1</div><h2 id="s-or">L'heure dorée</h2><p class="promise">Une fin d'après-midi qui ne finit jamais. Le béton tiédit, la mousse le gagne, la poussière danse dans la lumière.</p></div>
+    <div class="view"><canvas data-mode="or" width="320" height="180" role="img" aria-label="La clairière à l'heure dorée : lumière chaude, ombres longues, poussières dans les rayons, papillons."></canvas></div>
+    <div class="facts">
+      <div><h3>Ce qu'on ressent</h3><p>La chaleur d'un dimanche. Le bruit de l'eau. L'envie de rester assis près du feu à regarder les tapis tourner.</p></div>
+      <div><h3>Ce qui vit</h3><ul><li>Des poussières d'or qui dérivent dans les rayons.</li><li>Des papillons qui se posent sur les fleurs.</li><li>Des ombres longues qui tournent lentement.</li></ul></div>
+      <div><h3>Le risque</h3><p>Trop de douceur : l'usine peut paraître décorative. Il faudra que les machines gardent leur poids et leur bruit.</p></div>
+    </div>
+  </section>
+
+  <section class="world w-nuit" aria-labelledby="s-nuit">
+    <div class="name"><div class="eyebrow">Monde 2</div><h2 id="s-nuit">Lanternes</h2><p class="promise">La nuit ne tombe jamais tout à fait. Chaque minerai a sa lumière ; construire, c'est allumer une constellation.</p></div>
+    <div class="view"><canvas data-mode="nuit" width="320" height="180" role="img" aria-label="La clairière en lumière de nuit : le quartz scintille, le cuivre respire en vert, des lucioles autour du feu, des fleurs bleues allumées."></canvas></div>
+    <div class="facts">
+      <div><h3>Ce qu'on ressent</h3><p>La magie d'une veillée. On s'émerveille de chaque lumière nouvelle ; la Tour est un phare au loin.</p></div>
+      <div><h3>Ce qui vit</h3><ul><li>Le quartz scintille cristal après cristal.</li><li>Le cuivre respire, lentement, en vert.</li><li>Des lucioles, des fleurs bleues qui s'allument.</li></ul></div>
+      <div><h3>Le risque</h3><p>La lisibilité dans le sombre. Il faut une lumière douce partout, jamais de noir complet.</p></div>
+    </div>
+  </section>
+
+  <section class="world w-encre" aria-labelledby="s-encre">
+    <div class="name"><div class="eyebrow">Monde 3</div><h2 id="s-encre">Le monde se colore</h2><p class="promise">Au départ, le monde est un croquis à l'encre sur papier. Chaque feu allumé, chaque machine posée lui rend ses couleurs autour d'elle.</p></div>
+    <div class="view"><canvas data-mode="encre" width="320" height="180" role="img" aria-label="La clairière à moitié dessinée à l'encre sépia ; la couleur revient en cercles autour du feu, du four et de la Tour."></canvas></div>
+    <div class="facts">
+      <div><h3>Ce qu'on ressent</h3><p>La fierté tranquille de rendre un lieu à la vie. On voit son progrès sans un seul chiffre.</p></div>
+      <div><h3>Ce qui vit</h3><ul><li>Les halos de couleur respirent et s'étendent.</li><li>Les terres lointaines restent en hachures.</li><li>Rien ne se perd : on repeint le monde.</li></ul></div>
+      <div><h3>Le risque</h3><p>Les zones à l'encre peuvent sembler vides. La frontière entre encre et couleur devra être très soignée.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-cab">
+    <div class="eyebrow">Commun aux trois mondes</div>
+    <h2 id="s-cab" style="max-width:22ch">Le cabinet de la matière vivante</h2>
+    <p class="lead">Ce qui rend un monde précieux, c'est que rien n'y est inerte. Chaque échantillon ci-dessous a sa propre façon d'exister.</p>
+    <div class="cabinet" id="cabinet"></div>
+  </section>
+
+  <section aria-labelledby="s-world">
+    <div class="eyebrow">Ce que j'ai corrigé dans ces vues</div>
+    <h2 id="s-world" style="max-width:22ch">Un monde qu'on parcourt</h2>
+    <ul class="calm">
+      <li><b>Une prairie, pas une jungle</b><span>Cinq arbres dans la clairière. Chacun a sa taille, son tronc, son ombre ; on les remarque un par un. La forêt dense reste aux confins, comme une frontière à franchir plus tard.</span></li>
+      <li><b>Une vraie rive</b><span>Le rivage n'est plus découpé en cases : eau profonde, eau claire où l'on voit les galets, écume qui va et vient, sable mouillé, sable sec, puis l'herbe. Les rochers ont leurs remous.</span></li>
+      <li><b>On récolte à la main</b><span>Le bâtisseur abat un arbre, coup après coup ; les copeaux sautent, les feuilles tombent, « +1 Bois » s'élève un instant. Le bois va dans une caisse, la caisse nourrit le premier convoyeur.</span></li>
+      <li><b>Le lourd prend son temps</b><span>Sur le même genre de tapis, les copeaux filent tandis que les blocs de béton avancent lentement, en soulevant un peu de poussière à chaque rouleau.</span></li>
+      <li><b>L'interface s'efface</b><span>Il ne reste qu'une ligne en haut à gauche : l'objectif. Le reste se lit dans le monde : la lumière dit l'heure, la caisse dit le stock, les gains flottent une seconde puis disparaissent.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="s-ask">
+    <div class="eyebrow">À toi</div>
+    <h2 id="s-ask" style="max-width:22ch">Cinq questions pour trouver ce qui n'appartient qu'à toi</h2>
+    <p class="lead">L'originalité ne viendra pas d'une technique de dessin. Elle viendra de ce que tu aimes. Réponds comme tu veux, en une phrase ou en dix.</p>
+    <ol class="ask">
+      <li><b>Quel moment de la journée te ressemble ?</b><span>L'aube, l'heure dorée, la pluie, la nuit… Chacun donne une palette entière.</span></li>
+      <li><b>Un lieu réel où tu t'es senti en paix ?</b><span>Une plage, un grenier, une forêt, une gare vide. On peut en tirer les couleurs, les sons, la matière.</span></li>
+      <li><b>Une musique que tu écouterais en jouant ?</b><span>Elle dira le rythme du monde : les machines peuvent battre à son tempo.</span></li>
+      <li><b>Qui est le bâtisseur, et pourquoi construit-il ?</b><span>Un exilé qui rebâtit sa maison ? Un enfant ? Un vieux robot qui se souvient ? Une seule phrase peut changer tout le jeu.</span></li>
+      <li><b>Au bout d'une heure, de quoi veux-tu être fier ?</b><span>D'une usine immense, ou d'un coin de monde parfait que tu as rendu beau ?</span></li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const W = 320, H = 180;
+const C = {
+  ink: '#121119', ink2: '#1f1f2b',
+  c0: '#f3eee2', c1: '#d8d0bd', c2: '#b4ab95', c3: '#8b826e', c4: '#635c4e', c5: '#433e35',
+  s0: '#c3cad2', s1: '#929ca8', s2: '#68717e', s3: '#474e59', s4: '#2e333c',
+  o0: '#fff0b3', o1: '#ffc255', o2: '#f5891f', o3: '#c25711', o4: '#702a0b',
+  g1: '#8cc86a', g2: '#53a056', g3: '#2f7548', g4: '#1c5339', g5: '#123a2b', g6: '#0a231a',
+  m0: '#c3e08e', m1: '#93c46a', m2: '#6fa752', m3: '#518a44', m4: '#376a3b',
+  e0: '#d1b083', e1: '#ad8a5f', e2: '#8a6942', e3: '#694e30', e4: '#493522',
+  sd0: '#ecd3a3', sd1: '#d6b785', sd2: '#bb966b', sd3: '#9c7c57',
+  sh0: '#a4e0d4', sh1: '#63c0c4', sh2: '#3d9db2', w0: '#d6f6f2', w1: '#7fd3dc', w3: '#1d6684', w4: '#13435d', w5: '#0d3149',
+  fe0: '#f2906a', fe1: '#d24a2c', fe2: '#8e2a1d', fe3: '#561813',
+  qz0: '#effeff', qz1: '#9eecff', qz2: '#4bb6e0', qz3: '#2a6d96',
+  cu0: '#b6f8de', cu1: '#4fd8a8', cu2: '#22917a',
+  st0: '#d2ccbe', st1: '#a39d8f', st2: '#77716a', st3: '#555049',
+  coal0: '#5d5a6c', coal1: '#363441', coal2: '#201f28', vio: '#9b8cff',
+  pink: '#f58bb0', blue: '#8ab8ff', white: '#fffaf0', fly: '#eaff9a', red: '#ff5a4a',
+  ui0: '#1a1b25', ui1: '#3c4057', ui2: '#101119',
+};
+
+// ------------------------------------------------------------------ outils
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hash(x, y, s) { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 982451653)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, sm = (t) => t * t * (3 - 2 * t); const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s), u = sm(xf), v = sm(yf); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const rgba = (h, a) => { const [r, g, b] = rgb(h); return `rgba(${r},${g},${b},${a})`; };
+function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingEnabled = false; return [c, x]; }
+function pen(x) {
+  const r = (a, b, w, h, col) => { a = Math.round(a); b = Math.round(b); w = Math.round(w); h = Math.round(h); if (w <= 0 || h <= 0) return; x.fillStyle = col; x.fillRect(a, b, w, h); };
+  const p = (a, b, col) => r(a, b, 1, 1, col);
+  const line = (x0, y0, x1, y1, col, th = 1) => {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+    for (let g = 0; g < 400; g++) { r(x0, y0, th, th, col); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+  };
+  const ell = (cx, cy, rx, ry, col) => {
+    for (let yy = Math.floor(cy - ry); yy < Math.ceil(cy + ry); yy++) {
+      const dy = (yy + 0.5 - cy) / ry; if (Math.abs(dy) > 1) continue;
+      const hw = rx * Math.sqrt(1 - dy * dy), a = Math.round(cx - hw), b = Math.round(cx + hw);
+      if (b > a) { x.fillStyle = col; x.fillRect(a, yy, b - a, 1); }
+    }
+  };
+  const disc = (cx, cy, rad, col) => ell(cx, cy, rad, rad, col);
+  const dith = (a, b, w, h, col, ph = 0) => { x.fillStyle = col; for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if ((a + i + b + j + ph) % 2 === 0) x.fillRect(a + i, b + j, 1, 1); };
+  return { r, p, line, ell, disc, dith };
+}
+function dual(a, b) { const o = {}; for (const k of Object.keys(a)) o[k] = (...args) => { a[k](...args); b[k](...args); }; return o; }
+function outline(src, col) {
+  const w = src.width + 2, h = src.height + 2, [c, x] = mk(w, h);
+  x.drawImage(src, 1, 1);
+  const d = x.getImageData(0, 0, w, h), a = d.data, [R, G, B] = rgb(col), mark = [];
+  const on = (i, j) => i >= 0 && j >= 0 && i < w && j < h && a[(j * w + i) * 4 + 3] > 0;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) mark.push((j * w + i) * 4);
+  for (const k of mark) { a[k] = R; a[k + 1] = G; a[k + 2] = B; a[k + 3] = 255; }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+
+// ---------------------------------------------------------- police bitmap
+const GLYPHS = {
+  B: '###.|#..#|#..#|###.|#..#|#..#|###.', o: '....|....|.##.|#..#|#..#|#..#|.##.', i: '#|.|#|#|#|#|#', s: '....|....|.###|#...|.##.|...#|###.',
+  '+': '...|...|.#.|###|.#.|...|...', 1: '.#.|##.|.#.|.#.|.#.|.#.|###', 8: '.##.|#..#|#..#|.##.|#..#|#..#|.##.', 3: '###.|...#|...#|.##.|...#|...#|###.', 0: '.##.|#..#|#.##|##.#|#..#|#..#|.##.',
+  '/': '..#|..#|.#.|.#.|.#.|#..|#..', m: '.....|.....|##.#.|#.#.#|#.#.#|#.#.#|#.#.#', n: '....|....|###.|#..#|#..#|#..#|#..#', e: '....|....|.##.|#..#|####|#...|.###',
+  r: '...|...|#.#|##.|#..|#..|#..', a: '....|....|.##.|...#|.###|#..#|.###', d: '...#|...#|.###|#..#|#..#|#..#|.###', f: '.##|#..|###|#..|#..|#..|#..', M: '#...#|##.##|#.#.#|#.#.#|#...#|#...#|#...#',
+};
+const GL = {}; for (const k of Object.keys(GLYPHS)) { const rows = GLYPHS[k].split('|'); GL[k] = { rows, w: Math.max(...rows.map((r) => r.length)) }; }
+function textW(s) { let w = 0; for (const ch of s) w += (ch === ' ' ? 3 : (GL[ch] || { w: 3 }).w) + 1; return Math.max(0, w - 1); }
+function text(ctx, s, x, y, col) {
+  ctx.fillStyle = col; let cx = Math.round(x); y = Math.round(y);
+  for (const ch of s) { if (ch === ' ') { cx += 4; continue; } const g = GL[ch]; if (!g) { cx += 4; continue; } g.rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') ctx.fillRect(cx + i, y + j, 1, 1); }); cx += g.w + 1; }
+}
+
+// --------------------------------------------------------------- matières
+const M = {
+  conc: { t: C.c1, hi: C.c0, sh: C.c2, f: C.c3, fl: C.c4, seam: C.c4 },
+  concD: { t: C.c2, hi: C.c1, sh: C.c3, f: C.c4, fl: C.c5, seam: C.c5 },
+  dark: { t: C.s3, hi: C.s2, sh: C.s4, f: C.s4, fl: C.ink2, seam: C.ink2 },
+  wood: { t: C.e1, hi: C.e0, sh: C.e2, f: C.e2, fl: C.e3, seam: C.e3 },
+};
+function box(P, x, y, w, d, h, m, tex = true) {
+  P.r(x, y, w, d, m.t); P.r(x, y, w, 1, m.hi); P.r(x, y, 1, d, m.hi); P.r(x + w - 1, y + 1, 1, d - 1, m.sh);
+  if (h <= 0) return;
+  P.r(x, y + d, w, h, m.f); P.r(x + w - 1, y + d, 1, h, m.fl); P.r(x, y + d + h - 1, w, 1, m.fl);
+  if (tex && h >= 5) for (let i = x + 8; i < x + w - 3; i += 8) P.r(i, y + d + 1, 1, h - 2, m.seam);
+  if (tex && h >= 7) for (let i = x + 4; i < x + w - 3; i += 8) { P.p(i, y + d + 2, m.seam); P.p(i, y + d + h - 3, m.seam); }
+}
+function cyl(P, cx, top, rad, h, m) {
+  const ry = Math.max(1, Math.round(rad * 0.5)), lw = Math.max(1, Math.round(rad * 0.45)), rw = Math.max(1, Math.round(rad * 0.5));
+  P.ell(cx, top + h, rad, ry, m.fl); P.r(cx - rad, top, rad * 2, h, m.f); P.r(cx - rad, top, lw, h, m.t); P.r(cx - rad + 1, top, 1, h, m.hi);
+  P.r(cx + rad - rw, top, rw, h, m.fl); P.ell(cx, top, rad, ry, m.sh); P.ell(cx, top - 0.5, Math.max(1, rad - 1), Math.max(1, ry - 1), m.t);
+}
+function chev(P, cx, cy, dir, col) {
+  for (const [a, b] of [[-1, -2], [0, -1], [1, 0], [0, 1], [-1, 2], [-2, -2], [-1, -1], [0, 0], [-1, 1], [-2, 2]]) { let x = a, y = b; for (let k = 0; k < dir; k++) [x, y] = [-y, x]; P.p(cx + x, cy + y, col); }
+}
+
+// ------------------------------------------------- la Tour et le four, avec une mousse qui gagne le béton
+function moss(P, x, y, w, h, seed, n) { const r = rng(seed); for (let k = 0; k < n; k++) { const a = x + Math.floor(r() * w), b = y + Math.floor(r() * h); P.p(a, b, r() < 0.5 ? C.m3 : C.m2); if (r() < 0.4) P.p(a + 1, b, C.m3); } }
+const SPR = {
+  tour: { w: 3, h: 3, up: 44, fn(P, G, N, f) {
+    const U = 44;
+    box(P, 0, U + 2, 48, 43, 3, M.concD); box(P, 3, U - 6, 42, 34, 12, M.conc); box(P, 9, U - 16, 30, 22, 11, M.conc); box(P, 15, U - 26, 18, 12, 10, M.conc);
+    moss(P, 3, U + 22, 42, 6, 5, 26); moss(P, 0, U + 40, 48, 5, 6, 30); moss(P, 9, U + 2, 12, 4, 7, 8);
+    P.r(19, U + 30, 10, 8, C.ink2); P.r(20, U + 31, 8, 6, C.s4); chev(G, 24, U + 34, 3, C.o2);
+    for (const x of [13, 21, 27, 33]) { P.r(x, U + 9, 2, 4, C.s3); N.r(x, U + 9, 2, 4, C.o1); }
+    cyl(P, 24, U - 31, 4, 8, M.dark);
+    const beat = [0, 3, 1, 3, 0, 0, 0, 0][f];   // un double battement, comme un cœur
+    G.ell(24, U - 31, 3, 2, [C.o3, C.o2, C.o1, C.o0][beat]); G.p(24, U - 32, C.white);
+    P.r(24, U - 41, 1, 8, C.s3); if (f % 4 < 2) G.p(24, U - 42, C.o1); else P.p(24, U - 42, C.o3);
+  } },
+  four: { w: 2, h: 2, up: 24, smoke: [24, 2], fn(P, G, N, f) {
+    const U = 24;
+    box(P, 0, U + 1, 32, 28, 3, M.concD); cyl(P, 24, U - 20, 3, 18, M.dark); box(P, 2, U - 2, 28, 18, 12, M.conc);
+    P.dith(3, U - 1, 26, 3, C.c2, 0); moss(P, 2, U + 22, 28, 5, 9, 18);
+    P.r(10, U + 18, 12, 9, C.ink2); P.r(11, U + 17, 10, 1, C.ink2);
+    // des braises de charbon : un rougeoiement lent, de petites flammes bleues
+    const br = [0, 1, 2, 2, 1, 0, 0, 1][f];
+    G.r(11, U + 21, 10, 6, [C.o4, C.o3, C.o2][br]);
+    for (let i = 0; i < 8; i++) G.p(12 + i, U + 23 + (i % 2), (i + f) % 3 ? C.o2 : C.o1);
+    for (const i of [13, 16, 19]) if ((i + f) % 2) G.p(i, U + 20, C.blue);
+  } },
+};
+const sprCache = new Map();
+function sprite(key, f) {
+  const id = key + f; if (sprCache.has(id)) return sprCache.get(id);
+  const d = SPR[key], W2 = d.w * 16, H2 = d.h * 16 + d.up, [bc, bx] = mk(W2, H2), [ec, ex] = mk(W2, H2), P = pen(bx), E = pen(ex);
+  d.fn(P, dual(P, E), E, f);
+  const img = outline(bc, C.ink), [e2, x2] = mk(W2 + 2, H2 + 2); x2.drawImage(ec, 1, 1);
+  const [sc, sxx] = mk(W2 + 2, H2 + 2); sxx.drawImage(img, 0, 0); sxx.globalCompositeOperation = 'source-in'; sxx.fillStyle = '#0d0920'; sxx.fillRect(0, 0, W2 + 2, H2 + 2);
+  const s = { img, emis: e2, shadow: sc, up: d.up, d }; sprCache.set(id, s); return s;
+}
+function castShadow(ctx, s, X, Y, k, t, a) {
+  const gy = Y + s.img.height - 2;
+  ctx.save(); ctx.globalAlpha = a; ctx.setTransform(1, 0, -k, -t, k * gy, gy * (1 + t)); ctx.drawImage(s.shadow, X, Y); ctx.restore();
+}
+
+// ------------------------------------------------------------- petits objets
+const SHAPES = { gem: ['...1...', '..112..', '.11223.', '1122233', '.22233.', '..233..', '...3...'], log: ['.......', '.41112.', '4322223', '4322223', '.43333.', '.......', '.......'] };
+const itemCache = new Map();
+function itemImg(shape, ramp) {
+  const id = shape + ramp.join(); if (itemCache.has(id)) return itemCache.get(id);
+  const [c, x] = mk(7, 7), P = pen(x);
+  SHAPES[shape].forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') P.p(i, j, ramp[+ch - 1]); }));
+  const img = outline(c, C.ink); itemCache.set(id, img); return img;
+}
+const WOOD = () => itemImg('log', [C.e1, C.e2, C.e3, C.e0]);
+const ORE = () => itemImg('gem', [C.fe0, C.fe1, C.fe2]);
+
+function critterImg(f) {
+  // le bâtisseur qui abat un arbre : lever, frapper, revenir
+  const [c, x] = mk(24, 22), [e, ex] = mk(24, 22), P = pen(x), E = pen(ex), G = dual(P, E);
+  const pose = [0, 0, 1, 2, 2, 3, 3, 3][f], bob = pose === 2 ? 1 : 0;
+  P.line(7, 9 + bob, 4, 3, C.c2); P.line(10, 8 + bob, 12, 2, C.c2); G.r(3, 2, 2, 2, C.o2); G.r(11, 1, 2, 2, C.o2);
+  P.r(5, 19, 3, 2, C.c3); P.r(10, 19, 3, 2, C.c3);
+  P.ell(9, 14 + bob, 5.5, 6, C.c2); P.ell(8.5, 13.5 + bob, 4.8, 5.2, C.c0); P.ell(7.5, 12 + bob, 2.4, 2.4, C.white);
+  P.disc(10.5, 13 + bob, 2.6, C.ink2); G.disc(11, 13 + bob, 1.4, C.o2); P.p(10, 12 + bob, C.white);
+  const axe = [[[13, 13], [10, 4], [8, 2]], [[13, 13], [17, 6], [17, 3]], [[13, 14], [20, 14], [20, 12]], [[13, 15], [16, 18], [16, 17]]][pose];
+  P.line(axe[0][0], axe[0][1], axe[1][0], axe[1][1], C.e2); P.r(axe[2][0], axe[2][1], 3, 3, C.s1); P.p(axe[2][0], axe[2][1], C.s0);
+  const img = outline(c, C.ink), [e2, x2] = mk(26, 24); x2.drawImage(e, 1, 1);
+  return { img, emis: e2 };
+}
+const CRIT = Array.from({ length: 8 }, (_, f) => critterImg(f));
+
+function canopyImg(R, seed, kind) {
+  const S = Math.ceil(R * 2 + 6), [c, x] = mk(S, S), P = pen(x), r = rng(seed), cx = S / 2, cy = S / 2;
+  if (kind === 'palm') {
+    for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + r() * 0.4, len = R * (0.85 + r() * 0.2); for (let s = 1; s < len; s++) { const px = cx + Math.cos(a) * s, py = cy + Math.sin(a) * s * 0.8 + (s / len) * (s / len) * 3; P.r(px, py, 2, 1, s < len * 0.45 ? C.g3 : C.g2); if (s % 3 === 0) { P.p(px + Math.sin(a) * 1.6, py - Math.cos(a) * 1.6, C.g1); P.p(px - Math.sin(a) * 1.6, py + Math.cos(a) * 1.6, C.g3); } } }
+    P.disc(cx, cy, 2, C.e2);
+  } else {
+    const blob = (ox, oy, rr, col, n) => { P.disc(cx + ox, cy + oy, rr, col); for (let k = 0; k < n; k++) { const a = k / n * 6.283 + r() * 0.5; P.disc(cx + ox + Math.cos(a) * rr * 0.85, cy + oy + Math.sin(a) * rr * 0.85, rr * (0.28 + r() * 0.12), col); } };
+    blob(0, 0, R * 0.92, C.g4, 11); blob(-0.6, -1.4, R * 0.72, C.g3, 9); blob(-1.4, -2.6, R * 0.46, C.g2, 7);
+    for (let k = 0; k < R * 1.6; k++) { const a = r() * 6.283, d = r() * R * 0.55, px = cx - 2 + Math.cos(a) * d, py = cy - 3 + Math.sin(a) * d * 0.8; if (px + py < cx + cy - 2) P.r(px, py, 2, 1, r() < 0.5 ? C.g1 : C.m0); }
+    if (kind === 'flower') for (let k = 0; k < 7; k++) { const a = r() * 6.283, d = R * (0.3 + r() * 0.5); P.r(cx + Math.cos(a) * d, cy + Math.sin(a) * d - 1, 2, 2, C.pink); P.p(cx + Math.cos(a) * d, cy + Math.sin(a) * d - 1, C.white); }
+  }
+  return outline(c, C.g6);
+}
+function rockImg(w, h, ramp, seed) {
+  const [c, x] = mk(Math.ceil(w * 2 + 4), Math.ceil(h * 2 + 4)), P = pen(x), r = rng(seed), cx = w + 2, cy = h + 2;
+  P.ell(cx, cy, w, h, ramp[2]); P.ell(cx - 0.7, cy - 0.9, w * 0.8, h * 0.72, ramp[1]); P.r(cx - w * 0.55, cy - h * 0.6, 2, 1, ramp[0]);
+  for (let k = 0; k < w; k++) { const a = r() * 6.283, d = r() * 0.6; P.p(cx + Math.cos(a) * w * d, cy + Math.sin(a) * h * d, r() < 0.5 ? ramp[0] : ramp[2]); }
+  return outline(c, C.ink);
+}
+const STONE = [C.st0, C.st1, C.st2], IRON = [C.fe0, C.fe1, C.fe2];
+/** Une roche grise traversée de veines de minerai : on lit la pierre d'abord, le métal ensuite. */
+function oreRock(w, h, seed, ore) {
+  const [c, x] = mk(Math.ceil(w * 2 + 4), Math.ceil(h * 2 + 4)), P = pen(x), r = rng(seed), cx = w + 2, cy = h + 2;
+  P.ell(cx, cy, w, h, C.st2); P.ell(cx - 0.8, cy - 1, w * 0.8, h * 0.72, C.st1); P.r(cx - w * 0.55, cy - h * 0.62, 2, 1, C.st0);
+  P.line(cx - w * 0.6, cy + h * 0.2, cx + w * 0.3, cy - h * 0.1, C.st3);
+  for (let k = 0; k < w * 1.6; k++) { const a = r() * 6.283, d = r() * 0.7, px = cx + Math.cos(a) * w * d, py = cy + Math.sin(a) * h * d; P.r(px, py, r() < 0.5 ? 2 : 1, 1, ore[1]); if (r() < 0.35) P.p(px, py - 1, ore[0]); if (r() < 0.3) P.p(px + 1, py + 1, ore[2]); }
+  return outline(c, C.ink);
+}
+
+// ---------------------------------------------------------------- le lieu
+const SHORE = Array.from({ length: H + 1 }, (_, y) => 80 + 13 * Math.sin(y / 26) + 5 * Math.sin(y / 9 + 1.3) + (vnoise(0.5, y * 0.07, 5) - 0.5) * 6);
+const inPlaza = (x, y) => { const ex = (x - 262) / 64, ey = (y - 100) / 50; return ex * ex + ey * ey + (hash(x >> 2, y >> 2, 13) - 0.5) * 0.22 < 1; };
+function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); }
+const onPath = (x, y) => segDist(x, y, 150, 128, 222, 116) < 3.5 + (hash(x >> 1, y >> 1, 14) - 0.5) * 2;
+function paintGround() {
+  const [c, x] = mk(W, H), img = x.createImageData(W, H), d = img.data;
+  const put = (i, j, hex) => { const [r, g, b] = rgb(hex), k = (j * W + i) * 4; d[k] = r; d[k + 1] = g; d[k + 2] = b; d[k + 3] = 255; };
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const dd = SHORE[j] - i; let col;
+    if (dd > 2) {
+      if (dd > 36) col = vnoise(i * 0.06, j * 0.09, 3) > 0.62 ? C.w4 : C.w5;
+      else if (dd > 22) col = vnoise(i * 0.06, j * 0.09, 3) > 0.6 ? C.w3 : C.w4;
+      else if (dd > 10) col = hash(i, j, 6) < 0.07 ? C.sh1 : (vnoise(i * 0.1, j * 0.1, 4) > 0.55 ? C.sh2 : C.w3);
+      else col = hash(i, j, 7) < 0.12 ? C.sh0 : C.sh1;   // l'eau claire laisse voir le fond
+    } else if (dd > -6) col = hash(i, j, 8) < 0.07 ? C.sd3 : C.sd2;   // sable mouillé
+    else if (dd > -20) { const h = hash(i, j, 9); col = h < 0.05 ? C.sd1 : h > 0.988 ? C.c0 : C.sd0; }
+    else {
+      const p = (-dd - 20) / 8;
+      if (p < 1 && hash(i, j, 10) > p) col = C.sd0;
+      else if (inPlaza(i, j) || onPath(i, j)) { const h = hash(i, j, 15), n = vnoise(i * 0.08, j * 0.08, 16); col = h < 0.04 ? C.e3 : h > 0.97 ? C.e1 : n > 0.62 ? C.e1 : C.e2; }
+      else { const n = vnoise(i * 0.05, j * 0.05, 11), h = hash(i, j, 12); col = n > 0.66 ? C.m1 : n < 0.3 ? C.m3 : C.m2; if (h > 0.975) col = C.m3; else if (h < 0.02) col = C.m1; }
+    }
+    put(i, j, col);
+  }
+  x.putImageData(img, 0, 0);
+  const P = pen(x), r = rng(3);
+  for (let k = 0; k < 36; k++) { const j = Math.floor(r() * H), i = Math.round(SHORE[j] - 8 - r() * 10); P.r(i, j, 2, 1, C.sh0); }   // galets sous l'eau claire
+  for (let k = 0; k < 34; k++) { const j = Math.floor(r() * H), i = Math.round(SHORE[j] + 8 + r() * 10); P.r(i, j, 2, 1, r() < 0.5 ? C.c2 : C.sd1); P.p(i, j, C.c1); }
+  for (let j = 98, n = 0; j < 178; j += 5, n++) { const i = Math.round(SHORE[j] + 12 + Math.sin(j / 11) * 2) + (n % 2 ? 2 : 0); P.r(i, j, 2, 1, C.sd2); P.p(i, j + 1, C.sd2); }   // des pas
+  return c;
+}
+const GROUND = paintGround();
+const blocked = (x, y) => SHORE[y] - x > -24 || inPlaza(x, y) || onPath(x, y);
+const TUFTS = [], FLOWERS = [];
+{
+  const r = rng(21);
+  for (let k = 0; k < 900 && TUFTS.length < 120; k++) { const x = Math.floor(r() * W), y = 6 + Math.floor(r() * (H - 6)); if (!blocked(x, y)) TUFTS.push([x, y, r() * 6.28]); }
+  const FC = [C.pink, C.c0, C.o1, C.blue];
+  for (let k = 0; k < 14; k++) { const cx = Math.floor(r() * W), cy = 8 + Math.floor(r() * (H - 10)); if (blocked(cx, cy)) continue; const col = FC[k % 4]; for (let n = 0; n < 5; n++) { const x = cx + Math.round((r() - 0.5) * 12), y = cy + Math.round((r() - 0.5) * 8); if (!blocked(x, y)) FLOWERS.push([x, y, col, r() * 6.28]); } }
+}
+const TREES = [
+  { x: 132, y: 88, R: 15, img: canopyImg(15, 3, 'broad'), chop: true, shake: 0 },
+  { x: 182, y: 36, R: 11, img: canopyImg(11, 5, 'broad'), shake: 0 },
+  { x: 116, y: 168, R: 13, img: canopyImg(13, 8, 'flower'), shake: 0 },
+  { x: 232, y: 26, R: 8, img: canopyImg(8, 11, 'broad'), shake: 0 },
+  { x: 102, y: 44, R: 10, img: canopyImg(10, 13, 'palm'), palm: true, shake: 0 },
+];
+const rk = (y, off, w, h, seed) => ({ x: Math.round(SHORE[y] + off), y, img: rockImg(w, h, STONE, seed), shore: true, ph: seed });
+const ROCKS = [
+  rk(46, -4, 7, 5, 1), rk(114, -2, 5, 4, 2), rk(152, -6, 8, 6, 3),
+  { x: 205, y: 38, img: oreRock(6, 4, 4, IRON) }, { x: 220, y: 47, img: oreRock(7, 5, 5, IRON) }, { x: 195, y: 51, img: oreRock(5, 3, 6, IRON) },
+];
+const COPPER = { x: 196, y: 150, img: rockImg(9, 6, STONE, 7), veins: [] };
+{ const r = rng(9); for (let k = 0; k < 14; k++) COPPER.veins.push([Math.round((r() - 0.5) * 12), Math.round((r() - 0.6) * 6), k]); }
+const QUARTZ = { x: 238, y: 162, cr: [[-9, 7, 3], [-5, 12, 3], [-1, 16, 4], [4, 11, 3], [8, 7, 3], [-12, 4, 2], [11, 5, 2]] };
+const CRATE = (() => { const [c, x] = mk(16, 16), P = pen(x); box(P, 0, 4, 16, 6, 6, M.wood, false); P.r(0, 12, 16, 1, C.e3); for (const i of [5, 10]) P.r(i, 4, 1, 12, C.e2); P.r(2, 2, 6, 3, C.e2); P.r(2, 2, 6, 1, C.e1); P.p(2, 3, C.e0); P.r(8, 1, 6, 3, C.e2); P.r(8, 1, 6, 1, C.e1); P.p(8, 2, C.e0); return outline(c, C.ink); })();
+const FIRE = { x: 150, y: 128 };
+const FURN = { x: 222, y: 104 }, TOWER = { x: 266, y: 50 };
+const BELT_A = { x0: 170, y: 66, n: 6, speed: 2 }, BELT_B = { x: 282, y0: 100, n: 5, speed: 0.5 };
+
+// ------------------------------------------------------------ l'état vivant
+let t = 0, hits = 0;
+const parts = [], floats = [];
+function update() {
+  t++;
+  const f = t % 8;
+  if (f === 3) {
+    const tr = TREES[0]; tr.shake = 5; hits++;
+    for (let k = 0; k < 4; k++) parts.push({ k: 'chip', x: 129, y: 82, vx: -0.6 - Math.random(), vy: -1 - Math.random(), life: 0, max: 14 });
+    for (let k = 0; k < 2; k++) parts.push({ k: 'leaf', x: tr.x - 10 + Math.random() * 20, y: tr.y - 26 + Math.random() * 8, vx: (Math.random() - 0.5) * 0.4, vy: 0.25, life: 0, max: 60, ph: Math.random() * 6 });
+    if (hits % 3 === 0) floats.push({ s: '+1 Bois', x: 112, y: 56, life: 0 });
+  }
+  for (const tr of TREES) if (tr.shake > 0) tr.shake--;
+  if (Math.random() < 0.6) parts.push({ k: 'spark', x: FIRE.x + (Math.random() - 0.5) * 6, y: FIRE.y - 6, vx: (Math.random() - 0.5) * 0.4, vy: -0.6 - Math.random() * 0.6, life: 0, max: 14 + Math.random() * 10 });
+  if (Math.random() < 0.35) parts.push({ k: 'smoke', x: FIRE.x + (Math.random() - 0.5) * 3, y: FIRE.y - 10, vx: 0.12, vy: -0.4, life: 0, max: 40, r: 1 });
+  if (Math.random() < 0.3) { const s = sprite('four', 0); parts.push({ k: 'smokeD', x: FURN.x - 1 + s.d.smoke[0] + 1, y: FURN.y - s.up - 1 + s.d.smoke[1] + 1, vx: 0.18, vy: -0.45, life: 0, max: 34, r: 1 }); }
+  const sB = t * BELT_B.speed, prev = (t - 1) * BELT_B.speed;
+  for (let s0 = sB % 30, k = 0; s0 < 80; s0 += 30, k++) { const tilePrev = Math.floor((s0 - (sB - prev)) / 16), tileNow = Math.floor(s0 / 16); if (tilePrev !== tileNow) for (let n = 0; n < 4; n++) parts.push({ k: 'dust', x: BELT_B.x + 8 + (Math.random() - 0.5) * 12, y: 180 - s0 + 4, vx: (Math.random() - 0.5) * 0.6, vy: -0.2, life: 0, max: 10 }); }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life++;
+    if (p.k === 'leaf') { p.x += p.vx + Math.sin(p.life * 0.15 + p.ph) * 0.3; p.y += p.vy; }
+    else if (p.k === 'chip') { p.x += p.vx; p.y += p.vy; p.vy += 0.25; }
+    else { p.x += p.vx; p.y += p.vy; if (p.r) p.r = 1 + p.life / 12; }
+    if (p.life > p.max) parts.splice(i, 1);
+  }
+  for (let i = floats.length - 1; i >= 0; i--) { floats[i].life++; floats[i].y -= 0.3; if (floats[i].life > 24) floats.splice(i, 1); }
+}
+
+// --------------------------------------------------------------- dessin
+function beltTile(P, X, Y, horiz, ph) {
+  for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+    const a = horiz ? j : i, b = horiz ? i : j; let col = null;
+    if (a === 2 || a === 13) col = C.s3; else if (a === 3) col = C.s1; else if (a === 12) col = C.s2;
+    else if (a > 3 && a < 12) col = ((((horiz ? b - ph : b + ph) % 4) + 4) % 4) === 0 ? C.s3 : C.s4;
+    if (col) P.p(X + i, Y + j, col);
+  }
+  if (horiz) P.r(X, Y + 14, 16, 1, C.ink2);
+}
+function drawFire(P, x, y) {
+  const r = rng(t * 7 + 1);
+  for (let k = 0; k < 5; k++) {
+    const fx = x - 5 + k * 2, h = 3 + Math.floor(r() * 5) + (k === 2 ? 4 : k === 1 || k === 3 ? 2 : 0);
+    for (let j = 0; j < h; j++) { const col = j < 2 ? C.o3 : j < h * 0.5 ? C.o2 : j < h - 1 ? C.o1 : C.o0; P.r(fx + (j > h * 0.6 ? Math.round(r() - 0.5) : 0), y - j, 2, 1, col); }
+  }
+}
+function drawQuartz(P, bright) {
+  const { x, y, cr } = QUARTZ, lit = Math.floor(t / 3) % cr.length;
+  for (const [dx, h, w] of cr) { const a = x + dx; P.r(a - 1, y - h - 1, w + 2, h + 2, C.ink); }
+  cr.forEach(([dx, h, w], i) => {
+    const a = x + dx;
+    P.r(a, y - h, 1, h, bright ? C.qz0 : C.qz1); P.r(a + 1, y - h, Math.max(1, w - 2), h, bright ? C.qz1 : C.qz2); P.r(a + w - 1, y - h, 1, h, C.qz3);
+    P.p(a + 1, y - h - 1, C.qz0); P.p(a, y - h, C.qz0);
+    if (i === lit) { P.p(a + 1, y - h - 1, C.white); P.p(a + 1, y - h - 2, C.white); P.p(a, y - h - 1, C.white); P.p(a + 2, y - h - 1, C.white); }
+  });
+}
+function drawCopperVeins(P, bright) {
+  const { x, y, veins } = COPPER;
+  for (const [dx, dy, k] of veins) { const b = (Math.sin(t * 0.06 + k * 0.4) + 1) / 2; P.p(x + dx, y + dy, b > 0.66 ? C.cu0 : b > 0.33 || bright ? C.cu1 : C.cu2); }
+}
+function drawFlowers(P, glowOnly) {
+  for (const [x, y, col, ph] of FLOWERS) {
+    const s = Math.round(Math.sin(t * 0.1 - x * 0.05 + ph * 0.2));
+    if (glowOnly) { if (col === C.blue) { P.p(x + s, y - 2, C.blue); P.p(x + s - 1, y - 2, '#c4dcff'); } continue; }
+    P.p(x, y, C.m3); P.p(x + s, y - 1, C.m3); P.p(x + s, y - 2, col); P.p(x + s - 1, y - 2, col); P.p(x + s + 1, y - 2, col); P.p(x + s, y - 3, col); P.p(x + s, y - 2, col === C.o1 ? C.o2 : C.o1);
+  }
+}
+
+function render(ctx, mode) {
+  const P = pen(ctx), f = t % 8, gold = mode === 'or', nightM = mode === 'nuit';
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.drawImage(GROUND, 0, 0);
+  // l'eau : reflets qui descendent avec le courant, écume qui va et vient, remous autour des rochers
+  for (let k = 0; k < 30; k++) {
+    const y = Math.floor((hash(k, 1, 2) * H + t * 0.35) % H), dd = 12 + hash(k, 2, 3) * 50, x = Math.round(SHORE[y] - dd);
+    if (x > 0) P.r(x, y, 3, 1, dd < 22 ? C.sh0 : C.w3 === C.w3 && dd < 36 ? C.sh2 : C.w3);
+  }
+  for (let j = 0; j < H; j++) {
+    const lap = Math.sin(t * 0.07 + j * 0.045) * 2.2, x0 = SHORE[j] + lap;
+    if ((j + Math.floor(t / 4)) % 5 !== 0) P.r(x0 - 2, j, 2, 1, C.white);
+    P.p(x0 - 3, j, C.w0);
+    if (lap < 0) P.p(x0 + 1, j, C.sh0);   // le sable brille là où l'eau vient de se retirer
+  }
+  for (const rk2 of ROCKS) if (rk2.shore) {
+    const rad = 3 + ((t * 0.12 + rk2.ph * 1.7) % 5);
+    for (let a = 0; a < 6.28; a += 0.35) { const px = Math.round(rk2.x + Math.cos(a) * (rad + 5)), py = Math.round(rk2.y + Math.sin(a) * (rad + 2) * 0.6); if (SHORE[py] - px > 2 && (px + py) % 2 === 0) P.p(px, py, C.w0); }
+  }
+  { const fx = 18 + ((t * 0.5) % 40), fy = 100 + Math.sin(t * 0.04) * 24; P.ell(fx, fy, 3, 1.2, C.w5); P.p(fx - 4, fy, C.w5); }
+  // l'herbe ondule sous le vent ; les fleurs suivent
+  for (const [x, y, ph] of TUFTS) { const s = Math.round(Math.sin(t * 0.12 - x * 0.05 + y * 0.03)); P.p(x, y, C.m3); P.p(x - 1, y - 1, C.m2); P.p(x + 1, y - 1, C.m2); P.p(x + s, y - 2, C.m1); if (ph > 4) P.p(x + s, y - 3, C.m0); }
+  drawFlowers(P, false);
+  // tapis : les copeaux filent, les blocs de béton prennent leur temps
+  for (let i = 0; i < BELT_A.n; i++) beltTile(P, BELT_A.x0 + i * 16, BELT_A.y, true, Math.floor(t * BELT_A.speed / 2) % 4);
+  for (let i = 0; i < BELT_B.n; i++) beltTile(P, BELT_B.x, BELT_B.y0 + i * 16, false, Math.floor(t * BELT_B.speed) % 4);
+  const wood = WOOD();
+  for (let s = (t * BELT_A.speed) % 12; s < BELT_A.n * 16 - 2; s += 12) { const x = BELT_A.x0 + s, bump = (s % 16) < 2 ? -1 : 0; ctx.drawImage(wood, Math.round(x - 4), BELT_A.y + 2 + bump); }
+  // ombres
+  const sk = gold ? 1.15 : 0.55, sa = gold ? 0.4 : 0.32;
+  for (const tr of TREES) { if (gold) P.ell(tr.x + tr.R * 0.9, tr.y + 2, tr.R * 1.5, tr.R * 0.42, 'rgba(40,20,30,0.3)'); else P.ell(tr.x + 4, tr.y + 1, tr.R, tr.R * 0.45, 'rgba(8,14,20,0.28)'); }
+  for (const rk2 of [...ROCKS, COPPER]) P.ell(rk2.x + 2, rk2.y + 2, rk2.img.width * 0.45, 2, 'rgba(8,14,20,0.25)');
+  const sF = sprite('four', f), sT = sprite('tour', f);
+  castShadow(ctx, sF, FURN.x - 1, FURN.y - sF.up - 1, sk, 0.32, sa); castShadow(ctx, sT, TOWER.x - 1, TOWER.y - sT.up - 1, sk, 0.32, sa);
+  for (let s = (t * BELT_B.speed) % 30; s < 80; s += 30) { const y = 180 - s; box(P, BELT_B.x + 2, y - 6, 12, 5, 5, M.conc, false); P.r(BELT_B.x + 1, y - 7, 14, 1, C.ink); P.r(BELT_B.x + 1, y + 4, 14, 1, C.ink); P.r(BELT_B.x + 1, y - 6, 1, 10, C.ink); P.r(BELT_B.x + 14, y - 6, 1, 10, C.ink); }
+  // tout ce qui a de la hauteur, du nord au sud
+  const objs = [];
+  for (const tr of TREES) objs.push([tr.y, () => drawTree(ctx, P, tr)]);
+  for (const rk2 of ROCKS) objs.push([rk2.y + 3, () => ctx.drawImage(rk2.img, Math.round(rk2.x - rk2.img.width / 2), Math.round(rk2.y - rk2.img.height / 2))]);
+  objs.push([COPPER.y + 5, () => { ctx.drawImage(COPPER.img, COPPER.x - COPPER.img.width / 2, COPPER.y - COPPER.img.height / 2); drawCopperVeins(P, false); }]);
+  objs.push([QUARTZ.y, () => drawQuartz(P, false)]);
+  objs.push([80, () => ctx.drawImage(CRATE, 152, 64)]);
+  objs.push([FIRE.y + 3, () => drawCamp(P)]);
+  objs.push([FURN.y + 32, () => ctx.drawImage(sF.img, FURN.x - 1, FURN.y - sF.up - 1)]);
+  objs.push([TOWER.y + 48, () => ctx.drawImage(sT.img, TOWER.x - 1, TOWER.y - sT.up - 1)]);
+  objs.push([84, () => { P.ell(115, 84, 6, 2, 'rgba(8,14,20,0.3)'); ctx.drawImage(CRIT[f].img, 103, 63); }]);
+  objs.sort((a, b) => a[0] - b[0]);
+  for (const [, fn] of objs) fn();
+  // particules
+  for (const p of parts) {
+    if (p.k === 'chip') P.p(p.x, p.y, C.e0);
+    else if (p.k === 'leaf') { P.p(p.x, p.y, C.g2); P.p(p.x + 1, p.y, p.life % 8 < 4 ? C.g1 : C.g3); }
+    else if (p.k === 'spark') { if (p.life < p.max * 0.7 || p.life % 2) P.p(p.x, p.y, p.life < 6 ? C.o0 : C.o1); }
+    else if (p.k === 'dust') P.p(p.x, p.y, C.c1);
+    else { const col = p.k === 'smokeD' ? C.c3 : C.c1, r = Math.round(p.r); if (p.life > p.max * 0.5) { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r && (Math.round(p.x) + i + Math.round(p.y) + j) % 2 === 0) P.p(p.x + i, p.y + j, col); } else P.disc(p.x, p.y, p.r, col); }
+  }
+  // un oiseau passe : seule son ombre traverse la prairie
+  { const ph = t % 170; if (ph < 80) { const bx = 120 + ph * 2.4, by = 10 + ph * 1.6, w = (Math.floor(t / 3) % 2) ? 2 : 3; P.line(bx - w, by - 1, bx, by, 'rgba(10,20,20,0.35)'); P.line(bx, by, bx + w, by - 1, 'rgba(10,20,20,0.35)'); } }
+  if (mode !== 'nuit') for (let k = 0; k < 2; k++) {   // papillons
+    const bx = 170 + Math.sin(t * 0.03 + k * 2) * 40 + Math.sin(t * 0.11 + k) * 6, by = 140 - k * 70 + Math.cos(t * 0.05 + k) * 10, open = (t + k) % 4 < 2;
+    P.p(bx, by, C.ink2); P.p(bx - 1, by - (open ? 1 : 0), k ? C.o1 : C.white); P.p(bx + 1, by - (open ? 1 : 0), k ? C.o1 : C.white); if (open) { P.p(bx - 2, by - 1, k ? C.o1 : C.white); P.p(bx + 2, by - 1, k ? C.o1 : C.white); }
+  }
+  // les lumières de chaque monde
+  if (gold) {
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#ffd9ae'; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 4; k++) { ctx.fillStyle = rgba('#ffcf8a', 0.045); ctx.beginPath(); const x0 = -40 + k * 95; ctx.moveTo(x0, 0); ctx.lineTo(x0 + 34, 0); ctx.lineTo(x0 + 34 + 120, H); ctx.lineTo(x0 + 120, H); ctx.fill(); }
+    ctx.globalCompositeOperation = 'source-over';
+    for (let k = 0; k < 26; k++) { const x = (hash(k, 9, 1) * W + t * 0.25) % W, y = (hash(k, 9, 2) * H + Math.sin(t * 0.04 + k) * 6 + t * 0.12) % H; if ((t + k * 3) % 18 < 14) P.p(x, y, (k % 3) ? '#ffe7a8' : C.white); }
+  } else if (nightM) {
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#414b8a'; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+    const pools = [[FIRE.x, FIRE.y - 4, 62, C.o1], [FURN.x + 16, FURN.y + 20, 34, C.o2], [TOWER.x + 24, TOWER.y - 30, 40, C.o1], [QUARTZ.x, QUARTZ.y - 6, 24, C.qz1], [COPPER.x, COPPER.y, 22, C.cu1], [111, 66, 12, C.o1]];
+    for (const [x, y, r, c] of pools) for (const [k, a] of [[1, 0.05], [0.66, 0.065], [0.36, 0.085]]) P.ell(x, y, r * k, r * k * 0.72, rgba(c, a));
+    ctx.globalCompositeOperation = 'source-over';
+    drawFire(P, FIRE.x, FIRE.y - 3);
+    ctx.drawImage(sF.emis, FURN.x - 1, FURN.y - sF.up - 1); ctx.drawImage(sT.emis, TOWER.x - 1, TOWER.y - sT.up - 1); ctx.drawImage(CRIT[f].emis, 103, 63);
+    drawQuartz(P, true); drawCopperVeins(P, true); drawFlowers(P, true);
+    for (const p of parts) if (p.k === 'spark') P.p(p.x, p.y, C.o1);
+    for (let k = 0; k < 14; k++) {   // lucioles
+      const x = 120 + hash(k, 3, 4) * 170 + Math.sin(t * 0.05 + k) * 8, y = 20 + hash(k, 5, 6) * 150 + Math.cos(t * 0.04 + k * 2) * 6;
+      if (Math.sin(t * 0.13 + k * 1.7) > 0.2) { P.p(x, y, C.fly); P.dith(Math.round(x) - 1, Math.round(y) - 1, 3, 3, rgba(C.fly, 0.35), 1); }
+    }
+    for (let k = 0; k < 18; k++) { const y = Math.floor((hash(k, 7, 7) * H + t * 0.2) % H), x = Math.round(SHORE[y] - 6 - hash(k, 8, 8) * 60); if (x > 0 && (t + k) % 9 < 6) P.p(x, y, '#9fb6ff'); }   // la lune sur l'eau
+  } else if (mode === 'encre') inkify(ctx);
+  drawHUD(ctx, P, mode);
+}
+function drawTree(ctx, P, tr) {
+  const sh = tr.shake > 0 ? (tr.shake % 2 ? 1 : -1) : 0, sway = Math.round(Math.sin(t * 0.04 + tr.x * 0.1) * 0.7);
+  if (tr.palm) { for (let j = 0; j < 16; j++) { const xo = Math.round(Math.sin(j / 7) * 2); P.r(tr.x - 1 + xo, tr.y - j, 3, 1, j % 3 ? C.e2 : C.e3); P.p(tr.x - 1 + xo, tr.y - j, C.e1); } }
+  else { const th = 11; P.r(tr.x - 2, tr.y - th, 4, th, C.e3); P.r(tr.x - 2, tr.y - th, 1, th, C.e2); P.r(tr.x + 1, tr.y - th, 1, th, C.e4); P.p(tr.x - 3, tr.y - 1, C.e3); P.p(tr.x + 2, tr.y - 1, C.e4); if (tr.chop) { P.r(tr.x - 2, tr.y - 5, 2, 2, C.e0); P.p(tr.x - 2, tr.y - 6, C.e1); } }
+  const top = tr.palm ? tr.y - 16 : tr.y - 11;
+  ctx.drawImage(tr.img, Math.round(tr.x - tr.img.width / 2 + sh + sway), Math.round(top - tr.img.height * 0.72));
+}
+function drawCamp(P) {
+  const { x, y } = FIRE;
+  for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283; P.r(x + Math.cos(a) * 7 - 1, y + Math.sin(a) * 3.6 - 1, 3, 2, k % 2 ? C.st1 : C.st2); P.p(x + Math.cos(a) * 7 - 1, y + Math.sin(a) * 3.6 - 1, C.st0); }
+  P.ell(x, y, 5, 2.4, C.c5); P.line(x - 5, y + 1, x + 4, y - 2, C.e3, 2); P.line(x - 4, y - 2, x + 5, y + 1, C.e2, 2);
+  for (const [lx, ly] of [[x - 18, y + 2], [x + 14, y - 4]]) { P.r(lx, ly, 9, 3, C.e2); P.r(lx, ly, 9, 1, C.e1); P.p(lx, ly + 1, C.e0); P.r(lx - 1, ly - 1, 11, 1, C.ink); P.r(lx - 1, ly + 3, 11, 1, C.ink); }
+  drawFire(P, x, y - 3);
+}
+function drawHUD(ctx, P, mode) {
+  // une seule ligne : l'objectif
+  const s = '18/30', w = 6 + 9 + 3 + textW(s) + 6;
+  P.r(5, 4, w - 2, 15, C.ink); P.r(4, 5, w, 13, C.ink); P.r(5, 5, w - 2, 13, C.ui0); P.r(6, 5, w - 4, 1, C.ui1);
+  ctx.drawImage(ORE(), 8, 7); text(ctx, s, 19, 8, C.c0);
+  for (const fl of floats) { const a = fl.life < 18 || fl.life % 2; if (a) { text(ctx, fl.s, fl.x + 1, fl.y + 1, C.ink); text(ctx, fl.s, fl.x, fl.y, mode === 'nuit' ? C.o1 : C.white); } }
+}
+// le monde se colore : à l'encre loin des feux, en couleur autour d'eux
+const SEPIA = [[59, 48, 36], [125, 108, 80], [168, 151, 122], [201, 184, 146], [226, 212, 180], [241, 230, 204]];
+function inkify(ctx) {
+  const img = ctx.getImageData(0, 0, W, H), d = img.data, br = Math.sin(t * 0.05) * 3;
+  const src = [[FIRE.x, FIRE.y - 4, 50 + br], [FURN.x + 16, FURN.y + 10, 40 + br], [TOWER.x + 24, TOWER.y + 10, 58 + br]];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let q = 9; for (const [sx, sy, r] of src) { const v = Math.hypot(x - sx, (y - sy) * 1.25) / r; if (v < q) q = v; }
+    if (q < 1) continue;
+    if (q < 1.14 && (x + y) % 2 === 0 && hash(x, y, 77) < (1.14 - q) / 0.14) continue;
+    const k = (y * W + x) * 4, L = 0.3 * d[k] + 0.59 * d[k + 1] + 0.11 * d[k + 2];
+    let c;
+    if (L < 46) c = SEPIA[0]; else if (L < 92) c = (x + y) % 2 ? SEPIA[1] : SEPIA[2]; else if (L < 130) c = (x % 2 === 0 && y % 2 === 0) ? SEPIA[2] : SEPIA[3]; else if (L < 175) c = SEPIA[4]; else c = SEPIA[5];
+    if (hash(x, y, 78) < 0.03) c = SEPIA[4];
+    d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2];
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// ---------------------------------------------------------- le cabinet
+const SPEC = [
+  ['Quartz', 'Ses cristaux s’allument un par un, comme une rangée de veilleuses.', (c, P) => { const sv = { ...QUARTZ }; QUARTZ.x = 36; QUARTZ.y = 44; drawQuartz(P, false); QUARTZ.x = sv.x; QUARTZ.y = sv.y; }],
+  ['Cuivre', 'Ses veines vertes respirent lentement, cinq secondes par souffle.', (c, P) => { const sx = COPPER.x, sy = COPPER.y; COPPER.x = 36; COPPER.y = 36; c.drawImage(COPPER.img, 36 - COPPER.img.width / 2, 36 - COPPER.img.height / 2); drawCopperVeins(P, false); COPPER.x = sx; COPPER.y = sy; }],
+  ['Minerai de fer', 'Des paillettes de mica s’allument au hasard dans la rouille.', (c, P) => { c.drawImage(IRON_BIG, 36 - IRON_BIG.width / 2, 34 - IRON_BIG.height / 2); for (let k = 0; k < 9; k++) if ((t + k * 7) % 23 < 2) P.p(28 + hash(k, 1, 5) * 16, 30 + hash(k, 2, 5) * 8, C.white); }],
+  ['Charbon', 'Un reflet violet glisse sur le noir, à intervalles irréguliers.', (c, P) => { c.drawImage(COAL_BIG, 36 - COAL_BIG.width / 2, 34 - COAL_BIG.height / 2); const g = (t * 1.2) % 70 - 20; for (let k = 0; k < 7; k++) { const x = 28 + g + k, y = 29 + k; if (((x - 36) / 11) ** 2 + ((y - 34) / 6) ** 2 < 0.85) P.p(x, y, C.vio); } }],
+  ['Feu de bois', 'Haut, vif, il crépite et lance des étincelles ; une bûche bascule parfois.', (c, P) => { const sx = FIRE.x, sy = FIRE.y; FIRE.x = 36; FIRE.y = 42; drawCamp(P); FIRE.x = sx; FIRE.y = sy; for (let k = 0; k < 5; k++) { const ph = (t + k * 5) % 20; P.p(34 + Math.sin(k + ph * 0.3) * 4, 34 - ph * 1.3, ph < 12 ? C.o0 : C.o1); } }],
+  ['Braises de charbon', 'Basses, rouges, elles respirent ; de petites flammes bleues y courent.', (c, P) => { P.ell(36, 38, 14, 5, C.c5); const r = rng(5); for (let k = 0; k < 30; k++) { const x = 24 + r() * 24, y = 35 + r() * 6, ph = Math.sin(t * 0.08 + k); P.r(x, y, 2, 1, ph > 0.5 ? C.o1 : ph > -0.3 ? C.o2 : C.o3); } for (let k = 0; k < 4; k++) if ((t + k * 3) % 7 < 3) { P.p(28 + k * 5, 33, C.blue); P.p(28 + k * 5, 32, '#c4dcff'); } }],
+  ['Arc électrique', 'Blanc et bleu, nerveux : il ne tient jamais la même forme deux fois.', (c, P) => { for (const x of [24, 48]) { P.r(x - 1, 8, 3, 30, C.coal0); P.r(x - 1, 8, 1, 30, C.s2); } if (t % 5 !== 4) { const r = rng(t); let y = 34; for (let x = 25; x < 48; x++) { y = 34 + Math.round((r() - 0.5) * 6); P.p(x, y, x % 3 ? C.blue : C.white); } } P.ell(36, 44, 18, 3, C.s4); }],
+  ['Léger', 'Les copeaux de bois filent sur le tapis, à petits sauts.', (c, P) => { for (let i = 0; i < 4; i++) beltTile(P, 4 + i * 16, 20, true, Math.floor(t) % 4); for (let s = (t * 2) % 12; s < 62; s += 12) c.drawImage(WOOD(), 4 + s - 4, 22 + ((s % 16) < 2 ? -1 : 0)); }],
+  ['Lourd', 'Le bloc de béton avance quatre fois plus lentement et soulève la poussière.', (c, P) => { for (let i = 0; i < 4; i++) beltTile(P, 4 + i * 16, 20, true, Math.floor(t * 0.25) % 4); for (let s = (t * 0.5) % 40; s < 62; s += 40) { const x = 4 + s - 6; box(P, x, 21, 12, 5, 5, M.conc, false); P.r(x - 1, 20, 14, 1, C.ink); P.r(x - 1, 31, 14, 1, C.ink); if (Math.floor(s) % 16 < 1) for (let k = 0; k < 4; k++) P.p(x + k * 4, 33, C.c1); } }],
+];
+const IRON_BIG = oreRock(12, 7, 31, IRON), COAL_BIG = rockImg(12, 7, [C.coal0, C.coal1, C.coal2], 32);
+const cab = document.getElementById('cabinet'), specs = [];
+for (const [name, desc, fn] of SPEC) {
+  const fig = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = 72; cv.height = 56; cv.style.width = '288px';
+  cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', name);
+  const cap = document.createElement('figcaption'); cap.innerHTML = `<b>${name}</b><span>${desc}</span>`;
+  fig.append(cv, cap); cab.append(fig);
+  specs.push({ cv, fn, ctx: cv.getContext('2d') });
+}
+function drawSpecs() {
+  for (const s of specs) {
+    if (!s.visible) continue;
+    const c = s.ctx, P = pen(c); c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0);
+    c.fillStyle = '#171a25'; c.fillRect(0, 0, 72, 56); P.ell(36, 46, 24, 5, '#20243200'); P.ell(36, 48, 26, 4, '#1f2332');
+    s.fn(c, P);
+  }
+}
+
+// ------------------------------------------------------------- mise en route
+const views = [...document.querySelectorAll('canvas[data-mode]')].map((cv) => ({ cv, mode: cv.dataset.mode, ctx: cv.getContext('2d'), visible: true }));
+for (const v of views) v.ctx.imageSmoothingEnabled = false;
+function fit() {
+  for (const v of views) { const avail = v.cv.parentElement.clientWidth, k = Math.floor(avail / W); v.cv.style.width = (k >= 1 ? Math.min(4, k) * W : avail) + 'px'; }
+}
+addEventListener('resize', fit); fit();
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((es) => { for (const e of es) { const o = views.find((v) => v.cv === e.target) || specs.find((s) => s.cv === e.target); if (o) o.visible = e.isIntersecting; } });
+  for (const v of views) io.observe(v.cv); for (const s of specs) { s.visible = true; io.observe(s.cv); }
+} else for (const s of specs) s.visible = true;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function frame() { for (const v of views) if (v.visible) render(v.ctx, v.mode); drawSpecs(); }
+for (let k = 0; k < 40; k++) update();
+for (const s of specs) s.visible = true;
+frame();
+let last = 0;
+function loop(ts) { if (!reduce && ts - last > 83) { last = ts; update(); frame(); } requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+})();
+</script>

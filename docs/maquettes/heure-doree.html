@@ -1,0 +1,1375 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brutalusine, l'heure dorée</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Rubik:wght@400;500;600;700&display=swap">
+<style>
+/* La scène d'abord, à ×2 quand l'écran le permet ; puis la loupe ; le texte en 56 caractères, avec beaucoup d'air. */
+:root {
+  --ground: #120f12; --fg: #f4ead8; --fg-2: #d6cab4; --mute: #9b8f80; --gold: #f2b65a; --gold-2: #ffd890;
+  --display: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--fg); font: 18px/1.7 var(--text); }
+.wrap { max-width: 1324px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); padding-block: 64px 160px; display: grid; gap: 136px; }
+.col { max-width: 1040px; width: 100%; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(40px, 6vw, 72px); line-height: 1.02; color: var(--gold); }
+h2 { font-size: clamp(28px, 3.8vw, 42px); line-height: 1.1; }
+p { margin: 0; }
+.eyebrow { font-family: var(--display); font-size: 14px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mute); }
+.lead { font-size: 21px; line-height: 1.6; color: var(--fg-2); max-width: 56ch; }
+.hero { display: grid; gap: 28px; }
+.view { max-width: 100%; }
+.stage { position: relative; margin: 0 auto; max-width: 100%; container-type: inline-size; }
+.stage canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+/* le texte de l'interface : du vrai texte posé sur la scène, qui suit sa taille */
+.hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--display); font-weight: 500; line-height: 1; }
+.hud span { position: absolute; white-space: nowrap; transform: translateY(-50%); }
+.hud .r { transform: translate(-100%, -50%); }
+.hud .c { transform: translate(-50%, -50%); }
+.hud .cap { font-weight: 600; letter-spacing: 0.06em; }
+.hud .num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud .thin { font-weight: 400; }
+.hud b { font-weight: 600; color: var(--fg); }
+.hud .float { font-weight: 700; text-shadow: 0 0.12cqw 0 #1a1018, 0.12cqw 0 0 #1a1018, -0.12cqw 0 0 #1a1018, 0 -0.12cqw 0 #1a1018; }
+.ctl { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+button.px { font: 600 15px/1 var(--display); color: var(--fg); background: #2a2226; border: 2px solid #0a0809; box-shadow: inset 2px 2px 0 #4a3d42, inset -2px -2px 0 #160f12; padding: 9px 14px 10px; cursor: pointer; }
+button.px[aria-pressed="true"] { background: var(--gold); color: #2a1604; box-shadow: inset 2px 2px 0 var(--gold-2), inset -2px -2px 0 #a8701e; }
+button.px:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+.loupes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 64px 40px; }
+.loupes figure { margin: 0; display: grid; gap: 16px; align-content: start; }
+.loupes canvas { image-rendering: pixelated; display: block; width: 100%; height: auto; outline: 2px solid #0a0809; box-shadow: 0 0 0 4px #2a2226; }
+.loupes figcaption { display: grid; gap: 6px; }
+.loupes b { font-family: var(--display); font-weight: 600; font-size: 20px; color: var(--gold-2); }
+.loupes span { color: var(--fg-2); font-size: 16.5px; line-height: 1.6; }
+.calm { display: grid; gap: 26px; margin: 0; padding: 0; list-style: none; max-width: 62ch; }
+.calm li { display: grid; gap: 4px; }
+.calm b { font-family: var(--display); font-weight: 600; font-size: 19px; }
+.calm span { color: var(--fg-2); font-size: 17px; }
+.calm em { font-style: normal; color: var(--gold-2); }
+.eras { display: grid; gap: 72px; margin-top: 24px; }
+.era-row { display: grid; gap: 14px; }
+.era-row h3 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; }
+.era-row > p { color: var(--fg-2); font-size: 17px; max-width: 62ch; }
+.era-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 24px; align-items: start; margin-top: 12px; }
+.era-cells figure { margin: 0; display: grid; gap: 12px; align-content: start; justify-items: start; }
+.era-cells canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; outline: 2px solid #0a0809; box-shadow: 0 0 0 4px #2a2226; }
+.era-cells figcaption { display: grid; gap: 4px; }
+.era-cells i { font-style: normal; font-family: var(--display); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
+.era-cells b { font-family: var(--display); font-weight: 600; font-size: 19px; color: var(--gold-2); }
+.era-cells span { color: var(--fg-2); font-size: 15.5px; line-height: 1.55; }
+@media (max-width: 760px) { .era-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 16px; } }
+</style>
+
+<div class="wrap">
+  <section class="col" aria-labelledby="t">
+    <div class="eyebrow">Brutalusine · monde 1, quatrième passe</div>
+    <h1 id="t">L'heure dorée</h1>
+    <p class="lead">Une fin d'après-midi au bord de l'eau. Le bâtisseur abat un arbre, le bois part à la charbonnière, le charbon et le minerai rejoignent la Tour. Rien ne presse : chaque chose bouge à son rythme, et le plus lourd prend son temps.</p>
+  </section>
+
+  <section class="hero" aria-label="La scène">
+    <div class="view"><div class="stage" id="stage"><canvas id="scene" width="640" height="360" role="img" aria-label="Une clairière au soleil couchant : une rivière à gauche, le bâtisseur qui abat un arbre près d'une caisse de bois, une charbonnière, un Puits sur un affleurement de fer, la Tour sur sa dalle de béton, un feu de camp, du quartz et du cuivre, et l'interface du jeu sur les bords."></canvas><div class="hud" id="hud"></div></div></div>
+    <div class="ctl" role="group" aria-label="Animation">
+      <button class="px" id="b-play" aria-pressed="true">Animation</button>
+    </div>
+  </section>
+
+  <section class="col" aria-labelledby="s-loupe">
+    <div class="eyebrow">De près</div>
+    <h2 id="s-loupe">Chaque chose à son rythme</h2>
+    <p class="lead">Chaque vignette est la scène elle-même, agrandie quatre fois, en direct.</p>
+    <div class="loupes" id="loupes"></div>
+  </section>
+
+  <section class="col" aria-labelledby="s-world">
+    <div class="eyebrow">Le monde des bâtisseurs</div>
+    <h2 id="s-world">Tout ce qu'on prend sert à bâtir</h2>
+    <p class="lead">Les bâtisseurs sont des robots de colonisation. Ils n'ont pas de cœur, seulement un but. La planète est harmonieuse à leur arrivée ; ils posent la Tour, puis prélèvent, transforment, améliorent. Chaque ressource a une raison d'être dans la chaîne.</p>
+    <ul class="calm">
+      <li><b>Le bois</b><span>Cuit en charbon, il chauffe les fours. Scié en planches, il fait les premières caisses et les premiers bâtiments.</span></li>
+      <li><b>La pierre</b><span>Taillée en blocs, elle fait les fondations de la Tour. Broyée en gravier, elle entre dans le béton.</span></li>
+      <li><b>L'eau</b><span>Chauffée, elle devient vapeur pour les turbines. Versée sur les fours, elle les refroidit et les rend plus rapides. Mêlée au gravier, elle gâche le béton.</span></li>
+      <li><b>Les champignons</b><span>Leur mycélium donne une résine souple : le caoutchouc des tapis de deuxième génération et l'isolant des câbles.</span></li>
+      <li><b>Les animaux</b><span>La peau fait les premières bandes de convoyeur ; la graisse lubrifie les machines, qui tournent plus vite ; les os, calcinés, donnent la chaux du béton. Les bâtisseurs les chassent froidement, comme ils prennent tout le reste.</span></li>
+    </ul>
+    <ul class="calm" style="margin-top:16px">
+      <li><b>Pour que le monde ne soit jamais vide</b><span>Des lieux à découvrir, qui donnent chacun une raison d'aller plus loin : une source chaude, un cercle de champignons géants, un troupeau qui migre, un arbre ancien, une géode de quartz, l'épave d'une capsule de bâtisseur arrivée avant nous.</span></li>
+    </ul>
+  </section>
+
+  <section class="col" aria-labelledby="s-logic">
+    <div class="eyebrow">La logique du jeu · proposition</div>
+    <h2 id="s-logic">Une ère se gagne, un bâtiment s'améliore</h2>
+    <p class="lead">La règle ne change jamais : on prend, on transforme, on livre à la Tour. Ce qu'on livre ouvre une ère ; l'ère apporte une matière ; cette matière refait chaque bâtiment, un par un, de la main du bâtisseur.</p>
+    <ol class="calm steps">
+      <li><b>Ère 1 · Bois</b><span>On arrive avec la capsule et une hache. On abat, on casse la roche à la main, on empile des caisses ; la meule fait le premier charbon, les rondins le premier tapis. <em>Pour passer à la pierre : livrer 40 bois et 30 pierres.</em></span></li>
+      <li><b>Ère 2 · Pierre</b><span>La pierre taillée fait les socles, le four, l'anneau du puits. On chasse : la peau devient les tapis de cuir. <em>Pour passer au béton : livrer 30 chaux (des os calcinés) et 40 graviers.</em></span></li>
+      <li><b>Ère 3 · Béton</b><span>Chaux, gravier et eau font le béton. Le mycélium donne le caoutchouc des tapis. On creuse le fer, le charbon le fondra. <em>Pour passer à l'acier : livrer 30 minerais de fer et 30 charbons, l'objectif affiché dans la scène.</em></span></li>
+      <li><b>Ère 4 · Acier</b><span>Le fer et le charbon font l'acier, le quartz fondu fait le verre. Les machines vont quatre fois plus vite que les premières ; le fanal de la Tour se voit de partout.</span></li>
+    </ol>
+    <ul class="calm">
+      <li><b>On améliore en apportant la matière</b><span>Le bâtisseur porte les blocs, les sacs, les poutres ; un échafaudage monte, puis le bâtiment change de forme. Il garde sa place, ses tapis, son réglage.</span></li>
+      <li><b>Rien ne presse</b><span>Un four de pierre tourne à côté d'un silo de béton : l'usine raconte son histoire. Dans la scène, la Tour, le Puits et la Charbonnière sont déjà en béton ; le stock, lui, est encore en caisses.</span></li>
+      <li><b>Chaque ère va plus vite</b><span>Les machines tournent une fois, une fois et demie, deux fois et demie, puis quatre fois plus vite. Le tapis d'acier va plus de cinq fois plus vite que les rondins.</span></li>
+      <li><b>Des améliorations plus petites, dans chaque ère</b><span>La graisse des animaux huile les engrenages ; l'eau refroidit les fours ; une lampe à résine laisse travailler la nuit. Chacune se verrait sur le bâtiment : une burette, un tuyau qui fume, une lueur. Pas encore dessinées.</span></li>
+    </ul>
+    <div class="eras" id="eras"></div>
+  </section>
+
+  <section class="col" aria-labelledby="s-done">
+    <div class="eyebrow">Tes retours, un par un</div>
+    <h2 id="s-done">Ce qui a changé</h2>
+    <ul class="calm">
+      <li><b>Le bâtisseur boxe</b><span>Plus de hache : il abat l'arbre à coups de poing. Des bras d'acier épais, articulés à l'épaule et au coude ; des jambes qui plient ; une coque qui se tourne vers l'arbre et se tasse. Direct, croisé (le talon arrière pivote), crochet coude levé, esquive, uppercut chargé en se baissant ; chaque coup dépasse un peu puis revient, laisse une traînée claire, fait trembler l'arbre.</span></li>
+      <li><b>Des roches qu'on mine</b><span>Le fer, le cuivre et le quartz sont des tas de blocs de pierre aux teintes de roche. Le minerai ne se montre que dans les fissures, dans la cassure fraîche laissée par la pioche, et dans les cailloux tombés au pied.</span></li>
+      <li><b>Une Tour qui a de l'allure</b><span>Plus de gradins empilés : un hall trapu à pilastres, un fût haut et étroit, un balcon, un fanal. La capsule d'arrivée en est le cœur ; son œil orange brille au milieu du béton.</span></li>
+      <li><b>Quatre ères, cinq bâtiments</b><span>La Tour, le Puits, la Charbonnière, le Stockage et le Convoyeur changent de matière à chaque ère : bois, pierre, béton, acier. Vingt dessins, chacun avec ses lumières qui vivent.</span></li>
+      <li><b>Une logique d'ensemble</b><span>La scène est à l'ère 3 : l'objectif affiché (fer et charbon) est celui qui ouvre l'acier. Ce qu'on livre ouvre une ère, l'ère refait les bâtiments un par un.</span></li>
+      <li><b>Un rythme vif, mais lisible</b><span>Tout est réglé en secondes : la benne monte en deux secondes, le fanal bat toutes les deux secondes, les braises respirent en trois, un cristal s'allume à peu près chaque seconde, le bâtisseur frappe un coup toutes les 1,2 seconde.</span></li>
+      <li><b>On voit plus loin, en plus fin</b><span>Deux fois plus de pixels : chaque objet est dessiné plus finement, et la clairière entière tient à l'écran, sans rien de coupé au bord.</span></li>
+      <li><b>Rien ne se chevauche</b><span>Chaque chose a sa place et de l'air autour ; l'interface ne recouvre ni bâtiment, ni arbre, ni tapis.</span></li>
+      <li><b>Un sol logique</b><span>Plus de rond de terre : l'usine repose sur une dalle de béton à joints ; des sentiers battus relient le camp, le bosquet et l'usine.</span></li>
+      <li><b>Une usine qui a du sens</b><span>Bois → caisse → charbonnière → charbon → Tour ; minerai → Puits → Tour. Le charbon, léger, file ; le bois avance ; le minerai, lourd, se traîne.</span></li>
+      <li><b>Les objets glissent sur les tapis</b><span>Plus de petits sauts : ils sont posés sur la bande et avancent avec elle, sans à-coups.</span></li>
+      <li><b>Une interface plus complète</b><span>L'objectif et sa progression, un cadran du soleil, le stock, la barre de construction avec ses icônes ; tout dans les coins.</span></li>
+      <li><b>Le bâtisseur, un robot</b><span>Une coque claire à joints et à rivets, une trappe sur le crâne, une visière sombre et une seule lentille orange, deux antennes à diodes, des jambes d'acier. Assez grand pour qu'on le suive, pas plus.</span></li>
+      <li><b>Une petite histoire en haut de la clairière</b><span>Un vieux tronc tombé, couvert de mousse et de champignons ; un buisson de baies, et un lapin qui remue l'oreille puis traverse en trois bonds.</span></li>
+      <li><b>Du vrai charbon sur le tapis</b><span>Des morceaux anguleux, une facette claire, un éclat violet, une arête de cendre.</span></li>
+      <li><b>Un filtre chaud, très léger</b><span>Une lumière de fin de journée qui dore l'ensemble sans le délaver.</span></li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const W = 640, H = 360, T = 24, FPS = 12;
+const PACE = 2;     // le monde vit deux fois plus vite que l'horloge : vif, mais lisible
+const C = {
+  ink: '#1a1018', ink2: '#2b1d26',
+  c0: '#fff3dc', c1: '#ead7b8', c2: '#cdb592', c3: '#a68c6d', c4: '#7c6550', c5: '#56443a',
+  s0: '#ddd6d0', s1: '#aaa2a2', s2: '#7c737b', s3: '#564d57', s4: '#3a323c',
+  o0: '#fff3b8', o1: '#ffcc5c', o2: '#f78f22', o3: '#cc5a14', o4: '#7e2f0c',
+  g0: '#e6ef94', g1: '#b6d466', g2: '#7fb04e', g3: '#56893f', g4: '#3d6a3a', g5: '#2a4f35', g6: '#1c3329',
+  m0: '#eef09a', m1: '#c2d66a', m2: '#9cbf57', m3: '#76a24b', m4: '#557f42', m5: '#3e6140',
+  e0: '#ecc78f', e1: '#cf9f69', e2: '#a87a52', e3: '#80593c', e4: '#5a3d2b',
+  sd0: '#f8e0ae', sd1: '#ebc994', sd2: '#d0a674', sd3: '#b08660',
+  q0: '#fff6e0', q1: '#bfeee0', q2: '#86d2c2', q3: '#58b3ac', q4: '#3a9199', q5: '#2b737f', q6: '#215967', q7: '#1b4756',
+  st0: '#ece0cc', st1: '#c2b29c', st2: '#958170', st3: '#6c5b50', st4: '#4a3e38',
+  // les minerais : des teintes de roche, pas des bonbons
+  ir0: '#c9a08c', ir1: '#9c6450', ir2: '#764a3c', ir3: '#53352e', irm: '#dcd8d0', irk: '#4f4040',
+  ma0: '#c3d9c4', ma1: '#93b8a0', ma2: '#6a927c', ma3: '#4b6e5c', az: '#6f86ad', az2: '#9eb0cc',
+  qz0: '#fbf8f0', qz1: '#e9e6de', qz2: '#cfd2cd', qz3: '#a7aeac', qz4: '#7f8789',
+  ch0: '#6a6270', ch1: '#433c49', ch2: '#2a242f', chs: '#b2a6e6',
+  pink: '#ff9fbf', pink2: '#e46a93', white: '#fffbf0', blue: '#9cc4ff', red: '#ff6a4a', reed: '#b0a65c', reed2: '#857d42',
+  ui0: '#241b21', ui1: '#4b3d45', ui2: '#150f13', ui3: '#3a2e35', good: '#9be07a',
+  shade: 'rgba(72,44,104,0.32)', shadeL: 'rgba(72,44,104,0.2)',
+};
+
+// ------------------------------------------------------------------ outils
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hash(x, y, s) { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 982451653)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, sm = (t) => t * t * (3 - 2 * t); const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s), u = sm(xf), v = sm(yf); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const rgba = (h, a) => { const [r, g, b] = rgb(h); return `rgba(${r},${g},${b},${a})`; };
+const bump = (x) => Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, x))));
+function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingEnabled = false; return [c, x]; }
+function pen(x) {
+  const r = (a, b, w, h, col) => { a = Math.round(a); b = Math.round(b); w = Math.round(w); h = Math.round(h); if (w <= 0 || h <= 0) return; x.fillStyle = col; x.fillRect(a, b, w, h); };
+  const p = (a, b, col) => r(a, b, 1, 1, col);
+  const line = (x0, y0, x1, y1, col, th = 1) => {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+    for (let g = 0; g < 800; g++) { r(x0, y0, th, th, col); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+  };
+  const ell = (cx, cy, rx, ry, col) => {
+    for (let yy = Math.floor(cy - ry); yy < Math.ceil(cy + ry); yy++) {
+      const dy = (yy + 0.5 - cy) / ry; if (Math.abs(dy) > 1) continue;
+      const hw = rx * Math.sqrt(1 - dy * dy), a = Math.round(cx - hw), b = Math.round(cx + hw);
+      if (b > a) { x.fillStyle = col; x.fillRect(a, yy, b - a, 1); }
+    }
+  };
+  const disc = (cx, cy, rad, col) => ell(cx, cy, rad, rad, col);
+  return { r, p, line, ell, disc };
+}
+function outline(src, col) {
+  const w = src.width + 2, h = src.height + 2, [c, x] = mk(w, h);
+  x.drawImage(src, 1, 1);
+  const d = x.getImageData(0, 0, w, h), a = d.data, [R, G, B] = rgb(col), mark = [];
+  const on = (i, j) => i >= 0 && j >= 0 && i < w && j < h && a[(j * w + i) * 4 + 3] > 0;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) mark.push((j * w + i) * 4);
+  for (const k of mark) { a[k] = R; a[k + 1] = G; a[k + 2] = B; a[k + 3] = 255; }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+function rim(src, col) {
+  const w = src.width, h = src.height, [c, x] = mk(w, h); x.drawImage(src, 0, 0);
+  const d = x.getImageData(0, 0, w, h), a = d.data, [R, G, B] = rgb(col), out = [];
+  const solid = (i, j) => i >= 0 && j >= 0 && i < w && j < h && a[(j * w + i) * 4 + 3] > 0;
+  const dark = (k) => a[k] + a[k + 1] + a[k + 2] < 120;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const k = (j * w + i) * 4; if (!solid(i, j) || dark(k)) continue;
+    const kl = (j * w + i - 1) * 4, ku = ((j - 1) * w + i) * 4;
+    if ((solid(i - 1, j) && dark(kl) && !solid(i - 2, j)) || (solid(i, j - 1) && dark(ku) && !solid(i, j - 2))) out.push(k);
+  }
+  for (const k of out) { a[k] = Math.round((a[k] + R) / 2); a[k + 1] = Math.round((a[k + 1] + G) / 2); a[k + 2] = Math.round((a[k + 2] + B) / 2); }
+  x.putImageData(d, 0, 0); return c;
+}
+const finish = (c) => rim(outline(c, C.ink), C.o1);
+
+// ---------------------------------------------------------- volumes
+const M = {
+  conc: { t: C.c1, hi: C.c0, sh: C.c2, f: C.c3, fl: C.c4, seam: C.c4 },
+  concD: { t: C.c2, hi: C.c1, sh: C.c3, f: C.c4, fl: C.c5, seam: C.c5 },
+  dark: { t: C.s3, hi: C.s2, sh: C.s4, f: C.s4, fl: C.ink2, seam: C.ink2 },
+  steel: { t: C.s1, hi: C.s0, sh: C.s2, f: C.s2, fl: C.s3, seam: C.s3 },
+  wood: { t: C.e1, hi: C.e0, sh: C.e2, f: C.e2, fl: C.e3, seam: C.e3 },
+};
+function box(P, x, y, w, d, h, m, tex = true) {
+  P.r(x, y, w, d, m.t); P.r(x, y, w, 1, m.hi); P.r(x, y, 1, d, m.hi); P.r(x + w - 1, y + 1, 1, d - 1, m.sh);
+  if (tex && w >= 16 && d >= 10) {
+    for (let j = y + 8; j < y + d - 1; j += 8) P.r(x + 1, j, w - 2, 1, m.sh);
+    for (let j = y + 1, row = 0; j < y + d - 1; j += 8, row++) for (let i = x + 8 + (row % 2) * 8; i < x + w - 2; i += 16) P.r(i, j, 1, Math.min(7, y + d - 1 - j), m.sh);
+    const r = rng(x * 31 + y * 7 + w); for (let k = 0; k < w * d / 60; k++) P.p(x + 2 + Math.floor(r() * (w - 4)), y + 2 + Math.floor(r() * (d - 4)), r() < 0.6 ? m.sh : m.hi);
+  }
+  if (h <= 0) return;
+  P.r(x, y + d, w, h, m.f); P.r(x, y + d, w, 1, m.sh); P.r(x + w - 1, y + d, 1, h, m.fl); P.r(x, y + d + h - 1, w, 1, m.fl);
+  if (tex && h >= 6) for (let i = x + 12; i < x + w - 4; i += 12) P.r(i, y + d + 2, 1, h - 3, m.seam);
+  if (tex && h >= 9) for (let i = x + 6; i < x + w - 4; i += 12) { P.p(i, y + d + 3, m.seam); P.p(i, y + d + h - 4, m.seam); }
+  if (tex && h >= 8) { const r = rng(x + y * 3); for (let i = x + 3; i < x + w - 3; i += 5 + Math.floor(r() * 7)) P.r(i, y + d + 1, 1, 2 + Math.floor(r() * Math.min(5, h - 3)), m.seam); }   // coulures de pluie
+}
+function cyl(P, cx, top, rad, h, m) {
+  const ry = Math.max(1, Math.round(rad * 0.45)), lw = Math.max(1, Math.round(rad * 0.45)), rw = Math.max(1, Math.round(rad * 0.5));
+  P.ell(cx, top + h, rad, ry, m.fl); P.r(cx - rad, top, rad * 2, h, m.f); P.r(cx - rad, top, lw, h, m.t); P.r(cx - rad + 1, top, 1, h, m.hi);
+  P.r(cx + rad - rw, top, rw, h, m.fl); P.ell(cx, top, rad, ry, m.sh); P.ell(cx, top - 0.5, Math.max(1, rad - 1), Math.max(1, ry - 1), m.t);
+}
+function chev(P, cx, cy, dir, col) { for (const [a, b] of [[-1, -2], [0, -1], [1, 0], [0, 1], [-1, 2], [-2, -2], [-1, -1], [0, 0], [-1, 1], [-2, 2]]) { let x = a, y = b; for (let k = 0; k < dir; k++) [x, y] = [-y, x]; P.p(cx + x, cy + y, col); } }
+function moss(P, x, y, w, h, seed, n) { const r = rng(seed); for (let k = 0; k < n; k++) { const a = x + Math.floor(r() * w), b = y + Math.floor(r() * h); P.p(a, b, C.m4); if (r() < 0.6) P.p(a + 1, b, r() < 0.5 ? C.m3 : C.m4); if (r() < 0.3) P.p(a, b - 1, C.m2); } }
+
+// --------------------------------------------- bâtiments : la partie fixe, dessinée une fois
+function build(w, h, up, fn) { const [c, x] = mk(w, h + up), L = []; fn(pen(x), up, L); const img = finish(c); const [s, sx] = mk(img.width, img.height); sx.drawImage(img, 0, 0); sx.globalCompositeOperation = 'source-in'; sx.fillStyle = '#48286a'; sx.fillRect(0, 0, s.width, s.height); return { img, shadow: s, up, lights: L }; }
+// les lumières d'un bâtiment : posées avec son dessin, animées à chaque image
+function drawLights(P, L, X, Y) {
+  for (const l of L) {
+    const x = X + l.x, y = Y + l.y, t = now + (l.ph || 0);
+    if (l.k === 'beat') {   // le fanal : deux battements, puis le repos
+      const c = t % 4, g = Math.max(bump(c / 0.35), 0.8 * bump((c - 0.45) / 0.35)), r = l.r || 3;
+      const col = g > 0.75 ? C.o0 : g > 0.4 ? C.o1 : g > 0.1 ? C.o2 : C.o3;
+      P.ell(x, y, r, Math.max(1.5, r * 0.55), col); if (g > 0.4) P.p(x - 1, y - 1, C.white);
+      if (g > 0.3) { P.p(x - r - 3, y, C.o1); P.p(x + r + 3, y, C.o1); }
+    } else if (l.k === 'lens') {   // l'œil de la capsule respire, lentement
+      const b = (Math.sin(t * Math.PI * 2 / 5) + 1) / 2, r = l.r || 2.5;
+      P.disc(x, y, r, b > 0.66 ? C.o1 : b > 0.33 ? C.o2 : C.o3); P.p(x - 1, y - 1, b > 0.5 ? C.o0 : C.o1);
+    } else if (l.k === 'win') {   // une fenêtre éclairée de l'intérieur, qui vacille à peine
+      const b = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 / (l.per || 7));
+      P.r(x, y, l.w, l.h, b > 0.8 ? C.o1 : C.o2); if (l.h > 3) P.r(x, y + l.h - 1, l.w, 1, C.o3);
+    } else if (l.k === 'blink') {   // un feu de signalisation
+      const on = t % (l.per || 2.5) < 0.35; P.p(x, y, on ? (l.c || C.o1) : (l.off || C.o4)); if (on) P.p(x, y - 1, C.white);
+    } else if (l.k === 'fire') {   // des flammes basses, dans un brasero
+      for (let i = 0; i < (l.w || 5); i++) { const v = vnoise(i * 1.3 + x, t * 1.4, 7), hh = 1 + Math.round(v * 3); P.r(x + i, y - hh, 1, hh, v > 0.55 ? C.o1 : C.o2); P.p(x + i, y - hh, v > 0.7 ? C.o0 : C.o1); }
+    } else if (l.k === 'ember') {   // des braises : ça rougeoie, ça ne flambe pas
+      const v = vnoise(x * 0.7 + y, t * 0.45, 4); P.r(x, y, l.w || 2, l.h || 1, v > 0.62 ? C.o1 : v > 0.36 ? C.o2 : C.o3);
+    }
+  }
+}
+// des pierres taillées, en assises décalées, sur une face
+function courses(P, x, y, w, h, seed, pal = [C.st0, C.st1, C.st2, '#a8977f', C.st3]) {
+  const r = rng(seed), [hi, a1, a2, a3, jt] = pal;
+  for (let j = 0; j < h; j += 4) {
+    const hh = Math.min(4, h - j); let i = -Math.floor(r() * 6);
+    while (i < w) {
+      const bw = 5 + Math.floor(r() * 6), a = Math.max(0, i), b = Math.min(w, i + bw);
+      if (b > a) { const tn = r(); P.r(x + a, y + j, b - a, hh, tn < 0.3 ? a1 : tn < 0.8 ? a2 : a3); P.r(x + a, y + j, b - a, 1, tn < 0.3 ? hi : a1); P.r(x + b - 1, y + j, 1, hh, jt); if (hh === 4) P.r(x + a, y + j + 3, b - a, 1, jt); }
+      i += bw;
+    }
+  }
+}
+const STONE = { t: C.st1, hi: C.st0, sh: C.st2, f: C.st2, fl: C.st3, seam: C.st3 };
+const STONE_F = [C.st1, C.st2, C.st3, '#7d6b5e', C.st4];   // les pierres d'une face à l'ombre
+const GLASS = { t: C.qz2, hi: C.qz1, sh: C.qz3, f: C.qz3, fl: C.qz4, seam: C.qz4 };
+const PANEL = '#4b5466', PANEL2 = '#6b7588';   // un panneau solaire, terne
+// la capsule d'arrivée : le seul objet venu d'ailleurs ; elle reste le cœur de la Tour à toutes les ères
+function capsuleNose(P, cx, top, rad) { for (let k = 1; k <= 4; k++) P.ell(cx - k * 0.5, top - k * rad * 0.2, rad * (1 - k * 0.2), Math.max(1, rad * 0.45 * (1 - k * 0.12)), k < 3 ? C.s1 : C.s0); }
+function capsule(P, cx, top, rad, h, lensY, L) {
+  cyl(P, cx, top, rad, h, M.steel); capsuleNose(P, cx, top, rad);
+  P.r(cx - rad, top + 4, rad * 2, 1, C.s3); for (let i = cx - rad + 2; i < cx + rad - 1; i += 4) P.p(i, top + 5, C.s0);
+  for (let j = 0; j < 6; j++) for (let i = -rad + 1; i < rad - 1; i++) if ((i + j) % 2 === 0 && hash(i, j, cx) < 0.75 - j * 0.12) P.p(cx + i, top + h - 1 - j, j < 2 ? C.s3 : C.s2);   // brûlée par l'entrée dans l'air
+  P.disc(cx, lensY, 4, C.s3); P.disc(cx, lensY, 3, C.ink2); P.disc(cx, lensY, 2, C.o3);
+  L.push({ k: 'lens', x: cx, y: lensY, r: 2 });
+}
+function crate(P, x, y, w, d, h) {
+  box(P, x, y, w, d, h, M.wood, false);
+  for (let i = x + 4; i < x + w - 2; i += 5) P.r(i, y + 1, 1, d - 1, C.e2);
+  P.r(x, y + d + Math.floor(h / 2), w, 1, C.e3); P.line(x + 1, y + d + h - 2, x + w - 2, y + d + 1, C.e3);
+  for (const [a, b] of [[x, y + d], [x + w - 2, y + d], [x, y + d + h - 2], [x + w - 2, y + d + h - 2]]) { P.r(a, b, 2, 2, C.s3); P.p(a, b, C.s1); }
+}
+function logEnds(P, pts) { for (const [x, y] of pts) { P.disc(x, y, 3, C.e3); P.disc(x, y, 2.2, C.e1); P.p(x, y, C.e3); P.p(x - 1, y - 1, C.e0); } }
+
+// ------------------------------------------------------- la Tour, en quatre ères
+// Ère 1 · Bois : la capsule posée sur un plancher de rondins, un mât, un fanion, deux caisses
+function towerE1(P, U, L) {
+  box(P, 6, U + 28, 60, 36, 4, M.wood, false);
+  for (let j = U + 33; j < U + 64; j += 5) { P.r(7, j, 58, 1, C.e2); P.p(8, j - 2, C.e3); P.p(63, j - 2, C.e3); }
+  for (const x of [8, 34, 61]) P.r(x, U + 68, 3, 4, C.e4);
+  P.r(0, U + 40, 9, 12, C.e3); P.r(1, U + 42, 7, 8, C.ink2); P.r(0, U + 40, 9, 1, C.e1);   // la goulotte de planches, à l'ouest
+  P.line(30, U + 22, 26, U + 34, C.s3, 2);                                                 // le pied arrière
+  capsule(P, 36, U + 2, 12, 26, U + 13, L);
+  P.line(27, U + 24, 20, U + 40, C.s2, 2); P.line(45, U + 24, 52, U + 40, C.s2, 2);       // les pieds d'atterrissage
+  P.r(17, U + 40, 6, 2, C.s1); P.r(50, U + 40, 6, 2, C.s1);
+  P.r(36, U - 12, 1, 12, C.s2); P.p(36, U - 13, C.s1); L.push({ k: 'blink', x: 36, y: U - 14, per: 3 });
+  crate(P, 9, U + 42, 14, 8, 9); crate(P, 11, U + 34, 10, 6, 8);
+  P.r(46, U + 48, 14, 7, C.s3); P.r(47, U + 49, 12, 5, PANEL); for (const i of [50, 53, 56]) P.r(i, U + 49, 1, 5, PANEL2); P.r(47, U + 51, 12, 1, PANEL2); P.r(52, U + 55, 2, 4, C.s3);   // un panneau solaire
+  P.line(58, U - 10, 44, U + 30, C.c4); P.line(58, U - 10, 66, U + 40, C.c4);                 // les haubans
+  P.r(57, U - 12, 2, 66, C.e2); P.r(57, U - 12, 1, 66, C.e1);                                  // le mât
+  for (let j = 0; j < 6; j++) P.r(59, U - 11 + j, 12 - j * 2, 1, j === 2 ? C.o3 : j < 2 ? C.c0 : C.c1);   // le fanion
+}
+// Ère 2 · Pierre : un socle de pierres taillées ; la capsule s'enfonce dans un tambour ; un brasero sur un pilier
+function towerE2(P, U, L) {
+  box(P, 2, U + 14, 68, 50, 8, STONE, false); courses(P, 2, U + 64, 68, 8, 3, STONE_F);
+  { const r = rng(4); for (let k = 0; k < 26; k++) { const x = 4 + Math.floor(r() * 62), y = U + 16 + Math.floor(r() * 46); P.r(x, y, 4 + Math.floor(r() * 4), 1, C.st2); } }   // les dalles du dessus
+  P.r(26, U + 64, 16, 4, C.st0); P.r(26, U + 65, 16, 3, C.st1); P.r(24, U + 68, 20, 4, C.st1); P.r(24, U + 68, 20, 1, C.st0);   // deux marches
+  P.r(2, U + 34, 6, 14, C.st0); P.r(3, U + 36, 4, 11, C.ink2);                                  // la bouche ouest
+  P.r(7, U + 64, 14, 8, C.ink2); P.r(6, U + 63, 16, 2, C.e2); P.r(6, U + 63, 16, 1, C.e1);       // la bouche sud, sous un linteau de bois
+  cyl(P, 36, U - 8, 18, 36, STONE); P.ell(36, U - 8, 13, 6, C.ink2); capsuleNose(P, 36, U - 8, 12);   // la capsule dépasse du tambour
+  for (let row = 0, y = U - 4; y < U + 28; y += 5, row++) for (let i = -17; i <= 17; i++) { const yy = y + Math.round(Math.sqrt(Math.max(0, 1 - (i / 18) ** 2)) * 7); P.p(36 + i, yy, C.st3); if ((i + row * 3) % 7 === 0) P.r(36 + i, yy - 4, 1, 4, C.st3); }
+  P.disc(36, U + 2, 6, C.st0); P.disc(36, U + 2, 5, C.st1); P.disc(36, U + 2, 4, C.ink2); L.push({ k: 'lens', x: 36, y: U + 2, r: 2.5 });   // la lentille, vue par un oculus
+  P.r(31, U + 15, 10, 14, C.e3); P.r(32, U + 14, 8, 1, C.e3); for (const i of [33, 36, 39]) P.r(i, U + 15, 1, 14, C.e4); P.r(31, U + 18, 10, 1, C.s3); P.r(31, U + 25, 10, 1, C.s3); P.r(30, U + 13, 12, 2, C.st0);   // la porte
+  for (const [x, y] of [[12, U + 46], [21, U + 48], [15, U + 41]]) { box(P, x, y, 9, 5, 5, STONE, false); P.r(x, y + 5, 9, 1, C.st3); }   // des blocs taillés, prêts à monter
+  P.r(52, U + 50, 12, 6, C.e3); P.r(52, U + 50, 12, 1, C.e1); P.r(53, U + 51, 10, 1, C.st1); logEnds(P, [[54, U + 57], [62, U + 57]]);   // une brouette
+  box(P, 57, U - 18, 9, 7, 34, STONE, false); courses(P, 57, U - 11, 9, 34, 5, STONE_F);      // le pilier
+  P.r(55, U - 24, 13, 5, C.s3); for (const i of [56, 59, 62, 65]) P.r(i, U - 24, 1, 6, C.s4); P.r(55, U - 24, 13, 1, C.s2);
+  L.push({ k: 'fire', x: 57, y: U - 24, w: 9 });
+  moss(P, 2, U + 58, 68, 12, 12, 30); moss(P, 18, U + 22, 36, 6, 13, 10);
+}
+// le cœur commun aux ères 3 et 4 : une dalle, un hall trapu, deux ailes, un fût coffré qui porte la capsule
+function towerBody(P, U, L, steel) {
+  box(P, 0, U + 4, 72, 64, 4, M.concD);
+  box(P, 4, U - 8, 64, 50, 20, M.conc);
+  for (const x of [3, 22, 46, 65]) { P.r(x, U + 40, 4, 22, C.c2); P.r(x, U + 40, 1, 22, C.c1); P.r(x + 3, U + 41, 1, 21, C.c4); P.r(x, U + 40, 4, 1, C.c0); }   // les pilastres
+  P.r(7, U + 45, 15, 17, C.s3); P.r(9, U + 47, 11, 15, C.ink2); P.r(7, U + 45, 15, 1, C.s1); chev(P, 14, U + 54, 3, C.o2);   // la bouche du minerai
+  P.r(28, U + 46, 16, 16, C.s3); P.r(30, U + 48, 12, 14, C.s2); P.r(36, U + 48, 1, 14, C.s4); P.r(30, U + 48, 12, 1, C.s1); P.r(28, U + 46, 16, 1, C.s1);   // la porte d'acier
+  L.push({ k: 'win', x: 30, y: U + 44, w: 12, h: 1, per: 9 });
+  if (steel) { P.r(50, U + 46, 14, 9, C.s3); P.r(51, U + 47, 12, 7, C.ink2); L.push({ k: 'win', x: 51, y: U + 48, w: 12, h: 5, per: 11 }); for (const i of [54, 58]) P.r(i, U + 47, 1, 7, C.s3); }
+  else for (const i of [52, 59]) { P.r(i, U + 45, 3, 12, C.ink2); L.push({ k: 'win', x: i + 1, y: U + 46, w: 1, h: 10, per: 8, ph: i }); }
+  box(P, 0, U + 28, 10, 12, 8, M.steel, false); P.r(2, U + 30, 6, 8, C.ink2); P.r(0, U + 40, 10, 1, C.o3);   // la trémie ouest
+  box(P, 8, U - 4, 12, 16, 10, M.concD); box(P, 52, U + 2, 13, 14, 8, M.concD);                    // deux ailes
+  box(P, 22, U - 50, 28, 18, 52, M.conc);                                                          // le fût, haut et étroit
+  P.r(22, U - 32, 2, 52, C.c2); P.r(22, U - 32, 1, 52, C.c1); P.r(47, U - 32, 3, 52, C.c4);        // ses deux arêtes
+  P.r(34, U - 27, 4, 26, C.c4); P.r(35, U - 26, 2, 24, C.ink2); L.push({ k: 'win', x: 35, y: U - 25, w: 2, h: 22, per: 10 });
+  P.disc(36, U + 9, 6, C.s3); P.disc(36, U + 9, 5, C.s1); P.disc(36, U + 9, 4, C.ink2); P.disc(36, U + 9, 2.5, C.o3);
+  L.push({ k: 'lens', x: 36, y: U + 9, r: 2.5 });
+  if (steel) for (const y of [U - 12, U + 16]) { P.r(22, y, 28, 2, C.s2); P.r(22, y, 28, 1, C.s1); }
+  box(P, 19, U - 34, 34, 4, 2, M.dark, false); P.r(19, U - 38, 34, 1, C.s2); for (let i = 19; i < 53; i += 4) P.r(i, U - 37, 1, 3, C.s3);   // le balcon
+  P.ell(58, U - 2, 5, 6, C.s2); P.ell(57, U - 2, 4, 5, C.s0); P.ell(57, U - 2, 2, 2, C.s1); P.line(57, U - 2, 61, U - 6, C.s3); P.r(58, U + 3, 1, 6, C.s3);   // l'antenne parabolique
+  moss(P, 4, U + 56, 64, 8, 5, 30); moss(P, 0, U + 66, 72, 5, 6, 22); moss(P, 8, U + 6, 12, 5, 7, 8); moss(P, 52, U + 12, 12, 4, 8, 6);
+}
+// Ère 3 · Béton : un fanal sur le fût
+function towerE3(P, U, L) {
+  towerBody(P, U, L, false);
+  cyl(P, 36, U - 45, 7, 4, M.dark);
+  cyl(P, 36, U - 53, 5, 8, GLASS); for (const i of [33, 36, 39]) P.r(i, U - 53, 1, 8, C.s3);
+  P.ell(36, U - 54, 6, 3, C.s3); P.ell(36, U - 55, 4, 2, C.s2);
+  L.push({ k: 'beat', x: 36, y: U - 50, r: 3 });
+  P.r(36, U - 60, 1, 5, C.s3); P.p(36, U - 61, C.s1);                                              // un paratonnerre court, sans traverse
+}
+// Ère 4 · Acier : un treillis sur le fût, une lanterne de verre, un feu rouge tout en haut
+function towerE4(P, U, L) {
+  towerBody(P, U, L, true);
+  const y0 = U - 44, xl = (y) => 25 + (y0 - y) / 42 * 6, xr = (y) => 47 - (y0 - y) / 42 * 6;
+  for (let y = y0; y > y0 - 40; y -= 10) { P.line(xl(y), y, xr(y - 10), y - 10, C.s3); P.line(xr(y), y, xl(y - 10), y - 10, C.s3); P.line(xl(y), y, xr(y), y, C.s2); }
+  P.line(25, y0, 31, y0 - 42, C.s2, 2); P.line(47, y0, 41, y0 - 42, C.s2, 2); P.line(25, y0, 31, y0 - 42, C.s0);
+  box(P, 26, U - 90, 20, 6, 2, M.dark, false); P.r(26, U - 94, 20, 1, C.s2); for (let i = 26; i < 46; i += 4) P.r(i, U - 93, 1, 3, C.s3);
+  box(P, 29, U - 104, 14, 6, 12, GLASS, false); for (const i of [29, 33, 37, 41]) P.r(i, U - 98, 1, 12, C.s3);
+  P.ell(36, U - 105, 9, 3, C.s3); P.ell(36, U - 106, 6, 2, C.s2);
+  L.push({ k: 'beat', x: 36, y: U - 93, r: 4 });
+  P.r(36, U - 120, 1, 14, C.s2); L.push({ k: 'blink', x: 36, y: U - 121, per: 2, c: C.red, off: '#5a2620' });
+  for (const [x, y] of [[10, U - 2], [10, U + 3]]) { P.r(x, y, 9, 4, PANEL); P.r(x + 3, y, 1, 4, PANEL2); P.r(x + 6, y, 1, 4, PANEL2); }   // des panneaux sur l'aile
+}
+
+// ------------------------------------------------------- le Puits, en quatre ères
+// Ère 1 · un trou creusé à la main, un trépied de perches, un seau, une échelle
+function puitsE1(P, U, L) {
+  const r = rng(61);
+  P.ell(36, U + 46, 27, 18, C.e3); P.ell(36, U + 45, 25, 16, C.e2);
+  for (let k = 0; k < 26; k++) { const a = r() * 6.283; P.r(36 + Math.cos(a) * 22, U + 45 + Math.sin(a) * 14, 2, 1, k % 3 ? C.e1 : C.ir1); }
+  P.ell(36, U + 47, 17, 11, C.e4); P.ell(36, U + 48, 13, 8, C.ink2);
+  P.ell(12, U + 64, 11, 5, C.e4); P.ell(12, U + 62, 9, 5, C.e3); P.ell(11, U + 60, 6, 3, C.e2); for (const [a, b] of [[8, U + 61], [13, U + 59], [16, U + 63]]) { P.r(a, b, 3, 2, '#866c60'); P.p(a, b, C.ir1); }   // les déblais, avec du minerai
+  box(P, 52, U + 38, 20, 8, 3, M.wood, false); P.r(54, U + 39, 16, 5, C.e3);                       // la goulotte vers l'est
+  P.line(36, U - 6, 39, U + 34, C.e3, 2);
+  P.r(36, U - 3, 1, 34, C.c3); P.r(32, U + 30, 8, 6, C.e2); P.r(32, U + 30, 8, 1, C.e1); P.r(32, U + 33, 8, 1, C.s3); P.r(33, U + 29, 6, 1, C.ir1);   // la corde, le seau
+  P.line(46, U + 52, 50, U + 30, C.e2); P.line(51, U + 52, 55, U + 30, C.e2); for (let k = 0; k < 6; k++) P.line(47 + k * 0.8, U + 48 - k * 4, 52 + k * 0.8, U + 48 - k * 4, C.e1);   // l'échelle
+  P.line(36, U - 6, 15, U + 58, C.e2, 2); P.line(35, U - 6, 14, U + 58, C.e1); P.line(36, U - 6, 59, U + 56, C.e2, 2);
+  P.r(34, U - 7, 4, 3, C.c3); P.p(35, U - 6, C.c1);
+  P.line(22, U + 42, 27, U + 26, C.e2); P.r(23, U + 25, 8, 2, C.s2); P.p(23, U + 25, C.s0);        // une pioche appuyée
+  P.r(23, U + 18, 4, 5, C.s3); P.r(24, U + 16, 2, 2, C.s3); L.push({ k: 'ember', x: 24, y: U + 19, w: 2, h: 2 });   // une lanterne pendue
+}
+// Ère 2 · un anneau de pierres sèches, un chevalement de bois, une grande roue
+function puitsE2(P, U, L) {
+  P.ell(36, U + 44, 30, 20, C.st4); P.ell(36, U + 44, 22, 13, C.e4); P.ell(36, U + 45, 18, 10, C.ink2);
+  const stones = []; for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283; stones.push([36 + Math.cos(a) * 26, U + 44 + Math.sin(a) * 16, k]); }
+  stones.sort((a, b) => a[1] - b[1]).forEach(([x, y, k]) => { P.r(x - 3, y - 2, 7, 5, C.ink2); P.r(x - 2, y - 2, 5, 4, k % 3 ? C.st1 : C.st2); P.r(x - 2, y - 2, 3, 1, C.st0); P.r(x - 2, y + 1, 5, 1, C.st3); });
+  box(P, 52, U + 34, 20, 8, 3, M.wood, false); P.r(54, U + 35, 16, 5, C.e3);
+  P.line(20, U + 30, 31, U - 20, C.e3, 2); P.line(52, U + 30, 41, U - 20, C.e3, 2);
+  P.line(20, U + 28, 52, U + 28, C.e3, 2); P.line(24, U + 8, 48, U + 8, C.e3, 2);
+  P.r(46, U - 26, 1, 52, C.c3); P.r(42, U + 24, 9, 7, C.e2); P.r(42, U + 24, 9, 1, C.e1); P.r(42, U + 27, 9, 1, C.s3); P.r(43, U + 23, 7, 1, C.ir1);
+  P.line(14, U + 56, 30, U - 20, C.e2, 2); P.line(13, U + 56, 29, U - 20, C.e1); P.line(58, U + 56, 42, U - 20, C.e2, 2);
+  P.r(25, U - 22, 22, 3, C.e2); P.r(25, U - 22, 22, 1, C.e1);
+  for (let a = 0; a < 6.283; a += 0.04) for (const rr of [10, 11]) P.p(36 + Math.cos(a) * rr, U - 28 + Math.sin(a) * rr, rr === 11 ? C.e3 : C.e1);   // la roue
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + 0.2; P.line(36, U - 28, 36 + Math.cos(a) * 10, U - 28 + Math.sin(a) * 10, C.e2); }
+  P.disc(36, U - 28, 2.5, C.s3); P.p(35, U - 29, C.s1);
+  P.r(8, U + 24, 2, 32, C.e3); P.r(6, U + 20, 5, 5, C.s3); L.push({ k: 'ember', x: 7, y: U + 22, w: 3, h: 2 });
+}
+// Ère 3 · le chevalement de fer, sur un anneau de béton (celui de la scène)
+function puitsE3(P, U, L, scene) {
+  const r = rng(7);
+  P.ell(36, U + 38, 33, 26, C.st3); P.ell(36, U + 37, 31, 24, C.c3);
+  P.ell(36, U + 39, 28, 21, C.e3); P.ell(36, U + 40, 23, 17, C.e4); P.ell(36, U + 42, 17, 12, C.ir2); P.ell(36, U + 43, 11, 8, C.ir3);
+  for (let i = 0; i < 44; i++) { const a = r() * 6.283, d = r(); P.r(36 + Math.cos(a) * d * 17, U + 42 + Math.sin(a) * d * 11, 2, 1, i % 3 ? C.ir1 : C.ir0); if (i % 7 === 0) P.p(36 + Math.cos(a) * d * 17, U + 41 + Math.sin(a) * d * 11, C.irm); }
+  for (let k = 0; k < 3; k++) P.ell(36, U + 38 + k, 28 - k * 5, 21 - k * 4.5, k % 2 ? C.e3 : C.e4);
+  P.ell(36, U + 42, 17, 12, C.ir2); P.ell(36, U + 43, 11, 8, C.ir3);
+  for (let i = 0; i < 30; i++) { const a = r() * 6.283, d = r(); P.r(36 + Math.cos(a) * d * 15, U + 42 + Math.sin(a) * d * 10, 2, 1, i % 3 ? C.ir1 : C.ir0); }
+  box(P, 56, U + 26, 16, 12, 10, M.steel, false); P.r(58, U + 28, 12, 6, C.ink2); P.r(56, U + 36, 16, 1, C.o3);
+  P.line(18, U + 52, 34, U - 46, C.s3, 2); P.line(54, U + 52, 38, U - 46, C.s3, 2);
+  P.line(10, U + 60, 33, U - 46, C.s2, 2); P.line(62, U + 60, 39, U - 46, C.s2, 2); P.line(11, U + 60, 33, U - 45, C.s1);
+  for (const [yy, x0, x1] of [[U + 30, 15, 57], [U + 6, 20, 52], [U - 18, 26, 46]]) { P.line(x0, yy, x1, yy, C.s3); P.p(x0, yy, C.s1); P.p(x1, yy, C.s1); }
+  P.line(15, U + 30, 52, U + 6, C.s3); P.line(57, U + 30, 20, U + 6, C.s3); P.line(20, U + 6, 46, U - 18, C.s3); P.line(52, U + 6, 26, U - 18, C.s3);
+  box(P, 27, U - 54, 18, 6, 4, M.dark, false); P.r(27, U - 54, 18, 1, C.s1);
+  P.r(8, U + 59, 6, 3, C.s3); P.r(58, U + 59, 6, 3, C.s3);
+  if (!scene) { P.disc(36, U - 49, 7, C.ink); P.disc(36, U - 49, 6, C.s1); P.disc(36, U - 49, 4, C.s2); P.disc(36, U - 49, 1.6, C.ink2); P.r(42, U - 49, 1, 40, C.s3); P.r(39, U - 10, 10, 7, C.s2); P.r(39, U - 10, 10, 1, C.s0); P.r(40, U - 12, 8, 2, C.ir1); }
+}
+// Ère 4 · une foreuse : un treillis d'acier, un train de tiges, une cabine éclairée, un moteur
+function puitsE4(P, U, L) {
+  box(P, 0, U + 8, 72, 58, 6, M.concD);
+  box(P, 46, U - 4, 22, 14, 14, M.steel); for (let i = 49; i < 66; i += 3) P.r(i, U + 12, 1, 8, C.s3);   // le moteur
+  cyl(P, 64, U - 22, 2, 18, M.dark); P.r(61, U - 23, 7, 1, C.s3);
+  P.ell(36, U + 44, 12, 6, C.s3); P.ell(36, U + 44, 9, 4, C.ink2); P.ell(36, U + 43, 6, 3, C.s2);
+  const xl = (y) => 22 + (U + 44 - y) / 128 * 10, xr = (y) => 50 - (U + 44 - y) / 128 * 10;
+  for (let y = U + 40; y > U - 76; y -= 13) { P.line(xl(y), y, xr(y - 13), y - 13, C.s3); P.line(xr(y), y, xl(y - 13), y - 13, C.s3); P.line(xl(y), y, xr(y), y, C.s3); }
+  P.line(22, U + 44, 32, U - 84, C.s2, 2); P.line(50, U + 44, 40, U - 84, C.s2, 2); P.line(22, U + 44, 32, U - 84, C.s0);
+  P.r(36, U - 84, 1, 126, C.s1); P.r(37, U - 84, 1, 126, C.s3);                                      // le train de tiges
+  P.r(32, U - 34, 9, 9, C.o3); P.r(32, U - 34, 9, 1, C.o2); P.r(32, U - 26, 9, 1, C.o4); P.p(33, U - 33, C.o1);   // le moufle, peint
+  box(P, 28, U - 92, 16, 6, 4, M.dark, false); P.r(28, U - 92, 16, 1, C.s1);
+  L.push({ k: 'blink', x: 36, y: U - 94, per: 2, c: C.red, off: '#5a2620' });
+  box(P, 2, U + 6, 18, 14, 18, M.steel); P.r(5, U + 23, 12, 6, C.ink2); L.push({ k: 'win', x: 6, y: U + 24, w: 10, h: 4, per: 9 });   // la cabine
+  box(P, 56, U + 30, 16, 10, 8, M.steel, false); P.r(58, U + 32, 12, 5, C.ink2); P.r(56, U + 38, 16, 1, C.o3);
+}
+
+// ------------------------------------------------------- la Charbonnière, en quatre ères
+// Ère 1 · la meule : du bois en dôme sous la terre et les mottes ; elle cuit sans flamme
+function kilnE1(P, U, L) {
+  P.ell(24, U + 38, 22, 9, C.e4); P.ell(24, U + 32, 21, 13, C.e3); P.ell(22, U + 28, 17, 10, C.e2); P.ell(19, U + 25, 9, 5, C.e1);
+  const r = rng(71); for (let k = 0; k < 16; k++) { const a = r() * 6.283, d = r() * 0.85; const x = 24 + Math.cos(a) * 18 * d, y = U + 30 + Math.sin(a) * 10 * d; P.r(x, y, 3, 2, C.m4); P.p(x, y, C.m3); }
+  for (const [x, y] of [[13, U + 30], [29, U + 25], [24, U + 37], [35, U + 33]]) { P.r(x, y, 3, 2, C.ink2); L.push({ k: 'ember', x: x + 1, y: y + 1, w: 1, h: 1 }); }
+  logEnds(P, [[39, U + 44], [44, U + 44], [41.5, U + 40]]);
+  P.line(4, U + 44, 9, U + 22, C.e2); P.line(8, U + 44, 13, U + 22, C.e2); for (let k = 0; k < 5; k++) P.line(5 + k, U + 40 - k * 4, 9 + k, U + 40 - k * 4, C.e1);
+}
+// Ère 2 · le four de pierre : une ruche de pierres sèches, une bouche voûtée, un trou de fumée
+function kilnE2(P, U, L) {
+  for (let k = 0; k < 8; k++) {
+    const cy = U + 36 - k * 4.6, rx = 21 - k * 2.3, ry = 9 - k * 0.7;
+    P.ell(24, cy + 1, rx, ry, C.st3); P.ell(24, cy, rx, ry, k % 2 ? C.st1 : C.st2); P.p(24 - rx + 1, cy, C.st0);
+    for (let a = 0.35; a < 2.9; a += 0.55) P.p(24 + Math.cos(a) * rx, cy + Math.sin(a) * ry, C.st3);
+  }
+  P.ell(24, U + 3, 4, 2, C.ink2); L.push({ k: 'ember', x: 23, y: U + 3, w: 3, h: 1 });
+  P.r(18, U + 34, 12, 9, C.st0); P.r(19, U + 33, 10, 1, C.st0); P.r(20, U + 35, 8, 8, C.ink2); P.r(21, U + 34, 6, 1, C.ink2);
+  L.push({ k: 'ember', x: 21, y: U + 39, w: 6, h: 3 });
+  logEnds(P, [[4, U + 42], [9, U + 42], [6.5, U + 38]]);
+}
+// Ère 3 · le four de béton, sa cheminée d'acier (celui de la scène)
+function kilnE3(P, U, L) {
+  box(P, 0, U + 2, 48, 42, 4, M.concD);
+  cyl(P, 36, U - 42, 5, 38, M.dark); P.r(31, U - 32, 10, 1, C.s4); P.r(31, U - 20, 10, 1, C.s4);
+  box(P, 3, U - 6, 42, 30, 20, M.conc);
+  P.r(4, U - 5, 40, 3, C.c2);
+  moss(P, 3, U + 36, 42, 6, 9, 22);
+  for (let j = 0; j < 6; j++) for (let i = 0; i < 20 - j * 2; i++) if ((i + j) % 2 === 0) P.p(14 + j + i, U + 22 + j, j < 3 ? C.c4 : C.c5);   // suie
+  P.r(13, U + 28, 22, 15, C.s3); P.r(15, U + 30, 18, 13, C.ink2); P.r(13, U + 28, 22, 1, C.s1); for (const x of [13, 34]) { P.p(x, U + 31, C.s1); P.p(x, U + 39, C.s1); }
+  L.push({ k: 'ember', x: 17, y: U + 37, w: 14, h: 4 });   // dans la grille ; la scène a son propre souffle
+  P.r(0, U + 12, 4, 14, C.s3); P.r(0, U + 14, 3, 10, C.ink2);   // entrée du bois, à l'ouest
+  P.r(44, U + 12, 4, 14, C.s3); P.r(45, U + 14, 3, 10, C.ink2); chev(P, 46, U + 19, 0, C.o2);   // sortie du charbon, à l'est
+}
+// Ère 4 · la cornue : un cylindre d'acier couché sur deux berceaux ; le gaz du bois part dans une sphère
+function kilnE4(P, U, L) {
+  box(P, 0, U + 4, 48, 40, 4, M.concD);
+  cyl(P, 8, U - 50, 3, 64, M.dark); for (const y of [U - 36, U - 18, U]) P.r(5, y, 7, 1, C.s1); L.push({ k: 'blink', x: 8, y: U - 54, per: 3, c: C.red, off: '#5a2620' });
+  P.disc(40, U + 2, 7, C.s3); P.disc(39, U + 1, 6, C.s2); P.disc(38, U, 4, C.s1); P.p(36, U - 2, C.s0); P.r(35, U + 8, 1, 6, C.s3); P.r(44, U + 8, 1, 6, C.s3);   // la sphère de gaz
+  P.r(28, U + 4, 2, 8, C.s3); P.r(28, U + 4, 8, 2, C.s3);
+  box(P, 11, U + 24, 6, 6, 8, M.conc, false); box(P, 31, U + 24, 6, 6, 8, M.conc, false);
+  P.r(17, U + 30, 14, 8, C.s4); P.r(18, U + 32, 12, 5, C.ink2); L.push({ k: 'ember', x: 18, y: U + 33, w: 12, h: 3 });
+  const y0 = U + 10, x0 = 7, len = 34, rad = 8;
+  for (let j = -rad; j <= rad; j++) { const t = j / rad; P.r(x0, y0 + rad + j, len, 1, t < -0.6 ? C.s0 : t < -0.1 ? C.s1 : t < 0.5 ? C.s2 : C.s3); }
+  P.ell(x0, y0 + rad, 3, rad, C.s1); P.ell(x0 + len, y0 + rad, 3, rad, C.s3); P.ell(x0 + len, y0 + rad, 1.5, rad - 2, C.s2);
+  for (let i = x0 + 6; i < x0 + len - 2; i += 9) { P.r(i, y0, 1, rad * 2 + 1, C.s3); P.p(i + 1, y0 + 2, C.s0); }
+  P.r(44, U + 18, 4, 10, C.s3); P.r(45, U + 20, 3, 6, C.ink2); chev(P, 46, U + 23, 0, C.o2);
+}
+
+// ------------------------------------------------------- le Stockage, en quatre ères
+function storeE1(P, U, L) {   // Ère 1 · des caisses, un tonneau, une corde
+  crate(P, 3, U + 24, 18, 12, 12); crate(P, 23, U + 28, 18, 12, 12); crate(P, 8, U + 12, 14, 9, 11);
+  cyl(P, 40, U + 14, 5, 12, M.wood); P.r(35, U + 17, 10, 1, C.s3); P.r(35, U + 23, 10, 1, C.s3);
+  P.ell(9, U + 50, 4, 2, C.c3); P.ell(9, U + 50, 2, 1, C.c4);
+}
+function storeE2(P, U, L) {   // Ère 2 · une réserve de pierre, un toit de planches
+  box(P, 3, U - 12, 42, 40, 18, STONE, false); courses(P, 3, U + 28, 42, 18, 9, STONE_F);
+  P.r(0, U - 18, 48, 8, C.e3); for (let i = 2; i < 48; i += 4) P.r(i, U - 18, 1, 8, C.e4);
+  P.r(0, U - 10, 48, 2, C.e0);
+  P.r(0, U - 8, 48, 34, C.e2); for (let i = 3; i < 48; i += 4) P.r(i, U - 8, 1, 34, C.e3); P.r(0, U - 8, 1, 34, C.e1); P.r(0, U + 24, 48, 2, C.e4);
+  moss(P, 2, U - 6, 44, 8, 14, 12);
+  P.r(19, U + 31, 10, 15, C.e3); for (const i of [21, 24, 27]) P.r(i, U + 31, 1, 15, C.e4); P.r(19, U + 34, 10, 1, C.s3); P.r(19, U + 41, 10, 1, C.s3); P.r(18, U + 29, 12, 2, C.st0);
+  P.r(35, U + 33, 6, 5, C.ink2); L.push({ k: 'win', x: 36, y: U + 34, w: 4, h: 3, per: 8 });
+}
+function storeE3(P, U, L) {   // Ère 3 · un silo de béton coffré, un chapeau, une échelle
+  box(P, 0, U + 4, 48, 40, 4, M.concD);
+  cyl(P, 24, U - 40, 17, 62, M.conc);
+  for (let y = U - 31; y < U + 20; y += 9) for (let i = -16; i <= 16; i++) P.p(24 + i, y + Math.round(Math.sqrt(1 - (i / 17) ** 2) * 7), C.c3);
+  for (let k = 0; k < 8; k++) P.ell(24 - k * 0.3, U - 40 - k * 2.2, 17 - k * 2.1, 7.5 - k * 0.9, k % 2 ? C.c1 : C.c2);
+  P.r(23, U - 60, 3, 4, C.s3); L.push({ k: 'blink', x: 24, y: U - 61, per: 3 });
+  P.r(33, U - 36, 1, 56, C.s3); P.r(37, U - 36, 1, 56, C.s3); for (let y = U - 34; y < U + 20; y += 3) P.r(33, y, 5, 1, C.s2);
+  box(P, 6, U + 20, 10, 6, 6, M.steel, false); P.r(8, U + 22, 6, 3, C.ink2);
+}
+function storeE4(P, U, L) {   // Ère 4 · un hangar d'acier ondulé, un pont roulant
+  box(P, 0, U + 4, 48, 40, 4, M.concD);
+  for (let j = 0; j < 38; j++) { const t = j / 38; P.r(2, U - 20 + j, 44, 1, t < 0.12 ? C.s2 : t < 0.42 ? C.s0 : t < 0.75 ? C.s1 : C.s2); }
+  for (let i = 4; i < 46; i += 6) P.r(i, U - 20, 1, 38, C.s2);
+  for (const x of [8, 20, 32]) { P.r(x, U - 12, 8, 3, C.qz3); P.r(x, U - 12, 8, 1, C.qz1); }
+  for (let i = 2; i < 46; i++) P.r(i, U + 18, 1, 26, i % 3 === 0 ? C.s3 : i % 3 === 1 ? C.s1 : C.s2);
+  P.r(14, U + 24, 20, 20, C.s3); P.r(15, U + 25, 18, 19, C.s4); P.r(24, U + 25, 1, 19, C.ink2); L.push({ k: 'win', x: 23, y: U + 26, w: 1, h: 17, per: 9 });
+  P.r(2, U + 14, 44, 3, C.o3); P.r(2, U + 14, 44, 1, C.o2); P.r(30, U + 17, 1, 5, C.s3); P.r(28, U + 22, 5, 2, C.s2);   // le pont roulant, peint
+  L.push({ k: 'blink', x: 44, y: U - 21, per: 2.5 });
+}
+
+// la scène est à l'ère 3 : Tour, Charbonnière et Puits de béton ; le stock, lui, est encore en caisses
+const TOWER = { x: 21 * T, y: 6 * T };
+const TOWER_S = build(72, 72, 72, towerE3);
+const KILN = { x: 14 * T, y: 7 * T };
+const KILN_S = build(48, 48, 48, kilnE3);
+const PUITS = { x: 18 * T, y: 11 * T };
+const PUITS_S = build(72, 72, 56, (P, U, L) => puitsE3(P, U, L, true));
+function castShadow(ctx, s, X, Y) {
+  const gy = Y + s.img.height - 2, K = 1.1, tt = 0.16;
+  ctx.save(); ctx.globalAlpha = 0.28; ctx.setTransform(1, 0, -K, -tt, K * gy, gy * (1 + tt)); ctx.drawImage(s.shadow, X, Y); ctx.restore();
+}
+
+// ------------------------------------------------------------- objets
+function fromRows(rows, pal) { const [c, x] = mk(rows[0].length, rows.length), P = pen(x); rows.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') P.p(i, j, pal[ch]); })); return outline(c, C.ink); }
+const LOG = fromRows(['..........', '.a11111112', 'abc2222223', 'ab22222223', 'abc2223333', '.a33333333'], { a: C.e0, b: C.e1, c: C.e2, 1: C.e1, 2: C.e2, 3: C.e3 });
+// un morceau de charbon de bois : anguleux, des facettes claires, un éclat violet, une arête de cendre
+const CHAR = fromRows(['..aa1....', '.a1112...', '.1s12233.', '122223333', '.2223334.', '..33344..'], { a: C.st1, 1: C.ch0, 2: C.ch1, 3: C.ch2, 4: '#141117', s: C.chs });
+// un morceau de minerai de fer : une pierre grise-brune, lourde, une tache de rouille, une paillette
+const OREI = fromRows(['...0011...', '..011122..', '.01k2m223.', '0112k23333', '.12222333.', '..22333...'], { 0: '#dcc6b6', 1: '#ae9282', 2: '#866c60', 3: '#5f4b45', m: C.irm, k: C.ir1 });
+/**
+ * Le bâtisseur : un petit robot de colonisation qui abat les arbres à coups de poing.
+ * Dessiné en pièces : une coque d'os clair qui se tourne et se tasse, deux jambes qui plient, deux bras d'acier
+ * épais (épaulière, avant-bras, poing à jointures), deux antennes qui suivent la coque avec un temps de retard.
+ */
+const BS = 1.12, bq = (v) => v * BS;
+// la coque, déjà dessinée sous 4 rotations × 3 tassements : tw > 0, elle se tourne vers l'arbre ; sq > 0, elle se tasse
+function torsoArt(tw, sq) {
+  const [c, x] = mk(40, 40), P = pen(x), cx = bq(14), cy = bq(20) + sq, rx = bq(9) + sq * 0.6, ry = bq(9.5) - sq;
+  P.ell(cx, cy, rx, ry, C.c4); P.ell(cx - 0.4, cy - 0.4, rx - 0.8, ry - 0.8, C.c1);
+  P.ell(bq(12) - tw * 0.6, cy - bq(2.5), bq(4.5), bq(4.4), C.c0); P.p(bq(10.5) - tw * 0.6, cy - bq(4.5), C.white);
+  P.r(cx - rx + 3 + tw, cy + bq(4) - sq * 0.4, rx * 1.5, 1, C.c3);                                   // joint de la coque
+  for (const k of [0, 1, 2, 3]) P.p(bq(8 + k * 4) + tw, cy + bq(5.5) - sq * 0.4, C.s2);               // rivets
+  P.r(bq(10) + tw * 0.5, cy - bq(8.4) + sq * 0.3, bq(8), 2, C.c3); P.r(bq(11) + tw * 0.5, cy - bq(9) + sq * 0.3, bq(6), 1, C.s2);   // trappe
+  const vl = bq(13) + tw, vr = bq(22) + Math.min(0, tw) + Math.max(0, tw) * 0.5;                        // la visière : vue de face, ou de trois quarts
+  P.r(vl, cy - bq(3.5), vr - vl, bq(5), C.ink); P.r(vl + 0.6, cy - bq(3), vr - vl - 1.2, bq(4), C.ink2);
+  const lx = bq(18) + tw * 0.9, ly = cy - bq(1);
+  P.disc(lx, ly, bq(2.3), C.o3); P.disc(lx + 0.2, ly, bq(1.5), C.o2); P.p(lx + 0.4, ly - 0.4, C.o0); P.p(vl + 2, cy - bq(2.4), C.s3);
+  return finish(c);
+}
+const TORSOS = [-1, 0, 1, 2].map((tw) => [-1, 0, 1].map((sq) => torsoArt(tw, sq)));
+
+// un trait épais et arrondi : une suite de disques
+function stroke(P, x0, y0, x1, y1, r, col) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2));
+  for (let i = 0; i <= n; i++) { const t = i / n; P.disc(Math.round(x0 + (x1 - x0) * t) + 0.5, Math.round(y0 + (y1 - y0) * t) + 0.5, r, col); }
+}
+// le liseré éclairé (en haut) et ombré (en bas) d'un segment épais
+function edges(P, x0, y0, x1, y1, hi, lo) {
+  const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1; let nx = dy / d, ny = -dx / d; if (ny > 0) { nx = -nx; ny = -ny; }
+  P.line(Math.round(x0 + nx), Math.round(y0 + ny), Math.round(x1 + nx), Math.round(y1 + ny), hi);
+  P.line(Math.round(x0 - nx), Math.round(y0 - ny), Math.round(x1 - nx), Math.round(y1 - ny), lo);
+}
+// deux segments de longueurs fixes, de la racine à l'extrémité ; `bend` choisit le côté de l'articulation (0..1, mêlé en douceur)
+function ik(sx, sy, fx, fy, A, Bl, pick) {
+  let dx = fx - sx, dy = fy - sy, d = Math.hypot(dx, dy);
+  if (d > A + Bl - 0.3) { const k = (A + Bl - 0.3) / d; dx *= k; dy *= k; d = A + Bl - 0.3; }
+  d = Math.max(d, 2.5);
+  const ang = Math.acos(Math.min(1, Math.max(-1, (A * A + d * d - Bl * Bl) / (2 * A * d)))), base = Math.atan2(dy, dx);
+  const e1 = [sx + Math.cos(base + ang) * A, sy + Math.sin(base + ang) * A], e2 = [sx + Math.cos(base - ang) * A, sy + Math.sin(base - ang) * A];
+  return { e: pick(e1, e2), f: [sx + dx, sy + dy] };
+}
+// une jambe : hanche, genou vers l'avant, pied à plat (ou sur la pointe quand il pivote)
+function drawLeg(P, hx, hy, fx, fy, toe, rear) {
+  const { e: [kx, ky] } = ik(hx, hy, fx, fy - 1, 4.5, 4.5, (a, b) => (a[0] > b[0] ? a : b));
+  const core = rear ? C.s3 : C.s2, hi = rear ? C.s2 : C.s1;
+  stroke(P, hx, hy, kx, ky, 2.5, C.ink); stroke(P, kx, ky, fx, fy - 1, 2.5, C.ink);
+  if (toe) P.r(fx - 1, fy - 3, 6, 4, C.ink); else P.r(fx - 4, fy - 2, 9, 4, C.ink);
+  stroke(P, hx, hy, kx, ky, 1.5, C.s3); stroke(P, kx, ky, fx, fy - 1, 1.5, core); P.p(Math.round(kx) - 1, Math.round(ky) - 1, hi);
+  if (toe) { P.r(fx, fy - 2, 4, 2, C.s2); P.r(fx, fy - 2, 4, 1, C.s1); }
+  else { P.r(fx - 3, fy - 1, 7, 2, C.s2); P.r(fx - 3, fy - 1, 7, 1, C.s1); P.p(fx + 3, fy, C.s3); }
+}
+// un bras : une épaulière couleur de coque, un bras d'acier, un avant-bras à manchon, un poing à trois jointures
+function drawArm(P, sx, sy, fx, fy, up, rear) {
+  const { e: el, f } = ik(sx, sy, fx, fy, 7.5, 8.5, (a, b) => { const [lo, hi] = a[1] > b[1] ? [a, b] : [b, a]; return [lo[0] + (hi[0] - lo[0]) * up, lo[1] + (hi[1] - lo[1]) * up]; });
+  const ex = Math.round(el[0]), ey = Math.round(el[1]); fx = Math.round(f[0]); fy = Math.round(f[1]);
+  const s = 3, core = rear ? C.s3 : C.s2, fore = rear ? C.s2 : C.s1, hi = rear ? C.s1 : C.s0, lo = rear ? C.s4 : C.s3;
+  stroke(P, sx, sy, ex, ey, 2.5, C.ink); stroke(P, ex, ey, fx, fy, 2.5, C.ink);
+  P.r(fx - s, fy - s + 1, s * 2 + 1, s * 2 - 1, C.ink); P.r(fx - s + 1, fy - s, s * 2 - 1, s * 2 + 1, C.ink); P.disc(sx + 0.5, sy + 0.5, 3.5, C.ink);   // un poing aux coins arrondis
+  stroke(P, sx, sy, ex, ey, 1.5, core); edges(P, sx, sy, ex, ey, fore, lo);
+  stroke(P, ex, ey, fx, fy, 1.5, fore); edges(P, ex, ey, fx, fy, hi, lo);
+  P.disc(ex + 0.5, ey + 0.5, 1.5, lo); P.p(ex, ey, hi);                                                     // le coude
+  const mx = Math.round(ex + (fx - ex) * 0.55), my = Math.round(ey + (fy - ey) * 0.55); P.disc(mx + 0.5, my + 0.5, 1.5, lo); P.p(mx, my - 1, core);   // le manchon
+  P.r(fx - s + 1, fy - s + 1, s * 2 - 1, s * 2 - 1, fore); P.r(fx - s + 2, fy - s + 1, s * 2 - 3, 1, hi); P.r(fx - s + 1, fy - s + 2, 1, s * 2 - 3, hi);   // le poing
+  P.r(fx + s - 1, fy - s + 1, 1, s * 2 - 1, lo); for (let j = -s + 2; j < s; j += 2) P.p(fx + s - 2, fy + j, lo);   // ses jointures
+  P.r(fx - s + 1, fy + s - 2, 3, 1, lo);                                                                     // le pouce replié
+  P.disc(sx + 0.5, sy + 0.5, 2.5, rear ? C.s3 : C.s2); P.disc(sx, sy, 1.5, rear ? C.s2 : C.s1); P.p(sx, sy, hi);   // l'épaule, une rotule d'acier
+}
+
+// ---- l'enchaînement : des poses clés reliées en douceur ; chaque coup part de la garde et y revient.
+// x, y : la coque avance ou se baisse ; L, R : poing avant, poing arrière (G = en garde) ; tw : rotation de la coque ;
+// sq : tassement ; up : coude avant levé (crochet) ; e : la courbe qui mène à cette clé (back = qui dépasse puis revient)
+const G = 'g';
+const K = (u, o = {}) => ({ u, x: 0, y: 0, L: G, R: G, e: 'io', up: 0, tw: 0, sq: 0, ...o });
+const MOVES = {
+  garde:    { d: 0.9,  k: [K(0), K(1)] },
+  direct:   { d: 0.4,  hit: [0.4, 'L', 1], k: [K(0), K(0.16, { x: -1, L: [27, 22], tw: -1 }), K(0.4, { x: 2, L: [37, 21], e: 'back', tw: 1 }), K(0.56, { x: 2, L: [36, 21], tw: 1 }), K(1)] },
+  croise:   { d: 0.5,  hit: [0.44, 'R', 1.4], k: [K(0), K(0.2, { x: -2, y: 1, R: [24, 18], tw: -1, sq: 1 }), K(0.44, { x: 3, R: [37, 20], e: 'back', tw: 2, sq: -1 }), K(0.6, { x: 3, R: [36, 20], tw: 2 }), K(1)] },
+  crochet:  { d: 0.56, hit: [0.5, 'L', 1.8], k: [K(0), K(0.24, { x: -2, L: [28, 12], up: 1, tw: -1 }), K(0.5, { x: 2, L: [36, 18], e: 'back', up: 1, tw: 2 }), K(0.64, { x: 2, L: [35, 18], up: 1, tw: 1 }), K(1)] },
+  uppercut: { d: 0.7,  hit: [0.5, 'R', 2.2], k: [K(0), K(0.3, { x: -1, y: 3, R: [26, 30], tw: -1, sq: 1 }), K(0.5, { x: 3, y: -2, R: [36, 13], e: 'back', tw: 2, sq: -1 }), K(0.66, { x: 3, y: -2, R: [35, 14], tw: 2, sq: -1 }), K(1)] },
+  esquive:  { d: 0.9,  k: [K(0), K(0.36, { x: -2, y: 3, tw: -1, sq: 1 }), K(0.7, { x: 1, y: 2, tw: 1, sq: 1 }), K(1)] },
+  retrait:  { d: 0.62, k: [K(0), K(0.3, { x: -3, y: 1, tw: -1, e: 'out' }), K(1)] },
+};
+const COMBO = ['garde', 'direct', 'direct', 'croise', 'garde', 'esquive', 'crochet', 'uppercut', 'garde', 'retrait', 'croise', 'crochet', 'garde',
+  'direct', 'uppercut', 'esquive', 'direct', 'croise', 'crochet', 'garde', 'garde'];
+const TL = []; let COMBO_T = 0;
+for (const name of COMBO) { const m = MOVES[name], d = m.d * PACE; TL.push({ m, t0: COMBO_T, d }); COMBO_T += d; }
+const HITS = TL.filter((s) => s.m.hit).map((s) => ({ t: s.t0 + s.m.hit[0] * s.d, side: s.m.hit[1], pow: s.m.hit[2] }));
+const sm = (u) => u * u * (3 - 2 * u);
+const EASE = { io: sm, out: (u) => 1 - (1 - u) ** 3, back: (u) => 1 + 2.9 * (u - 1) ** 3 + 1.9 * (u - 1) ** 2 };
+const GUARD_L = [32, 19], GUARD_R = [29, 13];
+function poseAt(t) {
+  const tc = ((t % COMBO_T) + COMBO_T) % COMBO_T;
+  let s = TL[TL.length - 1]; for (const x of TL) if (tc >= x.t0 && tc < x.t0 + x.d) { s = x; break; }
+  const u = (tc - s.t0) / s.d, k = s.m.k; let i = 0; while (i < k.length - 2 && u > k[i + 1].u) i++;
+  const a = k[i], b = k[i + 1], e = EASE[b.e](Math.min(1, Math.max(0, (u - a.u) / (b.u - a.u))));
+  const bounce = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 / (0.7 * PACE));   // le sautillement du boxeur, sous tout le reste
+  const mix = (p, q) => p + (q - p) * e;
+  const at = (key, f, gd) => (key[f] === G ? [gd[0] + key.x, gd[1] + key.y + key.sq + bounce] : key[f]);
+  const pa = (f, gd) => { const p = at(a, f, gd), q = at(b, f, gd); return [mix(p[0], q[0]), mix(p[1], q[1])]; };
+  return { tx: mix(a.x, b.x), ty: mix(a.y, b.y) + bounce, L: pa('L', GUARD_L), R: pa('R', GUARD_R), up: mix(a.up, b.up), tw: mix(a.tw, b.tw), sq: mix(a.sq, b.sq) };
+}
+function drawBuilder(ctx, P) {
+  const B = BUILDER, ps = poseAt(now), tx = Math.round(ps.tx), ty = Math.round(ps.ty), tw = Math.max(-1, Math.min(2, Math.round(ps.tw))), sq = Math.max(-1, Math.min(1, Math.round(ps.sq)));
+  const back = poseAt(now - 0.35), lagX = Math.max(-2, Math.min(2, Math.round(back.tx - ps.tx))), lagY = Math.max(-2, Math.min(2, Math.round(back.ty - ps.ty)));
+  const flash = now - lastHit < 0.3;
+  P.ell(B.x + 17 + Math.round(tx / 2), B.y + 38, 12, 3, C.shade);
+  // les jambes : les pieds restent plantés, les genoux plient quand la coque descend ; le pied arrière pivote sur la pointe quand le coup part de l'arrière
+  drawLeg(P, B.x + 12 + tx, B.y + 30 + ty, B.x + 9, B.y + 37, ps.tw > 1.2, true);
+  drawLeg(P, B.x + 19 + tx, B.y + 31 + ty, B.x + 24, B.y + 37, false, false);
+  const smear = (f, g) => { const d = Math.hypot(f[0] - g[0], f[1] - g[1]); if (d > 4) { P.line(B.x + g[0], B.y + g[1], B.x + f[0], B.y + f[1], 'rgba(255,243,220,0.35)', 2); } };
+  const prev = poseAt(now - 0.1);
+  smear(ps.R, prev.R);
+  drawArm(P, B.x + 17 + tx + Math.round(ps.tw * 1.2), B.y + 21 + ty + sq, B.x + ps.R[0], B.y + ps.R[1], 0, true);
+  for (const [x0, y0, x1, y1] of [[10, 13, 6, 5], [15, 12, 17, 3]]) {
+    const ax = B.x + Math.round(bq(x0)) + tx, ay = B.y + Math.round(bq(y0)) + ty + sq, bx = B.x + Math.round(bq(x1)) + tx + lagX, by = B.y + Math.round(bq(y1)) + ty + lagY + sq;
+    P.line(ax - 1, ay - 1, bx - 1, by - 1, C.ink, 3); P.line(ax, ay, bx, by, C.s2);
+    P.r(bx - 2, by - 2, 5, 5, C.ink); P.r(bx - 1, by - 1, 3, 3, flash ? C.o1 : C.o3); P.p(bx, by, flash ? C.white : C.o0);
+  }
+  ctx.drawImage(TORSOS[tw + 1][sq + 1], B.x + tx, B.y + ty);
+  smear(ps.L, prev.L);
+  drawArm(P, B.x + 22 + tx + Math.round(ps.tw * 0.4), B.y + 27 + ty + sq, B.x + ps.L[0], B.y + ps.L[1], ps.up, false);
+}
+function canopy(R, seed, kind) {
+  const S = Math.ceil(R * 2 + 8), [c, x] = mk(S, S), P = pen(x), r = rng(seed), cx = S / 2, cy = S / 2;
+  if (kind === 'palm') {
+    for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283 + r() * 0.35, len = R * (0.85 + r() * 0.2); for (let s = 1; s < len; s++) { const px = cx + Math.cos(a) * s, py = cy + Math.sin(a) * s * 0.8 + (s / len) * (s / len) * 4; P.r(px, py, 2, 2, s < len * 0.4 ? C.g4 : C.g3); P.p(px, py, C.g2); if (s % 3 === 0) { P.r(px + Math.sin(a) * 2.4, py - Math.cos(a) * 2.4, 2, 1, C.g2); P.r(px - Math.sin(a) * 2.4, py + Math.cos(a) * 2.4, 2, 1, C.g4); } } }
+    P.disc(cx, cy, 3, C.e2); P.p(cx - 1, cy - 1, C.e1);
+  } else {
+    const blob = (ox, oy, rr, col, n) => { P.disc(cx + ox, cy + oy, rr, col); for (let k = 0; k < n; k++) { const a = k / n * 6.283 + r() * 0.5; P.disc(cx + ox + Math.cos(a) * rr * 0.85, cy + oy + Math.sin(a) * rr * 0.85, rr * (0.26 + r() * 0.12), col); } };
+    blob(0, 0, R * 0.92, C.g5, 14); blob(-0.5, -1.2, R * 0.8, C.g4, 12); blob(-1.4, -2.6, R * 0.6, C.g3, 10); blob(-2.6, -3.8, R * 0.38, C.g2, 8); blob(-3.4, -4.6, R * 0.17, C.g1, 5);
+    // des grappes de feuilles en relief, éclairées en haut à gauche
+    for (let k = 0; k < R * 2.2; k++) { const a = r() * 6.283, d = Math.sqrt(r()) * R * 0.78, px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d * 0.9; const lit = (px - cx) + (py - cy) < -R * 0.2; P.r(px, py, 3, 2, lit ? C.g1 : C.g4); P.p(px, py, lit ? C.g0 : C.g3); P.p(px + 1, py + 2, C.g5); }
+    if (kind === 'flower') for (let k = 0; k < 12; k++) { const a = r() * 6.283, d = R * (0.25 + r() * 0.55), px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d - 1; P.r(px, py, 3, 2, C.pink); P.p(px + 1, py - 1, C.pink); P.p(px + 1, py, C.white); P.p(px + 2, py + 1, C.pink2); }
+  }
+  return finish(c);
+}
+/** Un rocher en volume : un dessus éclairé, une face avant dans l'ombre, des facettes. */
+// chaque roche a sa pierre : [arête, dessus clair, dessus, face, pied]
+const ROCK = {
+  st: [C.st0, C.st1, C.st2, C.st3, C.st4],
+  fe: ['#dcc6b6', '#ae9282', '#866c60', '#5f4b45', '#41332f'],   // une pierre brune, lourde, que la rouille a teintée
+  cu: ['#dedcce', '#b1b0a0', '#888a7a', '#5f6258', '#41443d'],   // une pierre grise, un peu verte dans l'ombre
+  qz: ['#efebe2', '#cbc5b9', '#a29c92', '#77716a', '#4f4a45'],   // un granit clair
+};
+function boulder(P, cx, cy, w, h, r, pal = ROCK.st, sep = false) {
+  const [hi, t1, t2, f, ft] = pal, fh = Math.max(3, Math.round(h * 0.9));
+  if (sep) { P.ell(cx, cy + fh * 0.5, w + 1, h * 0.85 + 1, C.ink); P.ell(cx, cy, w + 1, h * 0.8 + 1, C.ink); }   // le trait qui sépare ce bloc de celui de derrière
+  P.ell(cx, cy + fh * 0.5, w, h * 0.85, ft);                          // pied, dans l'ombre
+  P.r(cx - w + 1, cy, w * 2 - 2, fh * 0.6, f);                        // face avant
+  P.ell(cx, cy, w, h * 0.8, f);
+  P.ell(cx - 0.6, cy - 1, w * 0.92, h * 0.72, t2);                    // dessus
+  P.ell(cx - w * 0.25, cy - h * 0.3, w * 0.55, h * 0.42, t1);
+  P.r(cx - w * 0.55, cy - h * 0.5, Math.max(2, w * 0.3), 1, hi);      // l'arête qui prend le soleil
+  P.line(cx - w * 0.2, cy + h * 0.1, cx + w * 0.35, cy - h * 0.25, f);   // une facette
+  for (let k = 0; k < w * 0.6; k++) P.p(cx + (r() - 0.5) * w * 1.4, cy + fh * 0.3 + r() * fh * 0.4, ft);
+}
+/**
+ * Un affleurement qu'on mine : trois blocs de la même pierre, et le minerai qui ne se montre que là où la pierre
+ * casse. Le fer rouille en traînées, le cuivre court en veines vertes dans les fissures, le quartz pointe en
+ * petites aiguilles blanches. Une cassure fraîche (la pioche est passée) et des cailloux tombés au pied.
+ */
+function outcrop(kind, w, h, seed) {
+  const [c, x] = mk(w * 3 + 10, h * 3 + 14), P = pen(x), r = rng(seed), pal = ROCK[kind], cx = w * 1.5 + 5, cy = h * 1.4 + 6;
+  // du fond vers l'avant : le gros bloc derrière, deux plus petits devant, chacun détaché de l'autre par un trait
+  const lumps = [[w * 0.05, -h * 0.25, w * 0.9, h], [-w * 0.6, h * 0.35, w * 0.62, h * 0.7], [w * 0.62, h * 0.5, w * 0.55, h * 0.62]];
+  lumps.forEach(([dx, dy, lw, lh], n) => boulder(P, cx + dx, cy + dy, lw, lh, r, pal, n > 0));
+  const marks = [];
+  lumps.forEach(([dx, dy, lw, lh], n) => {
+    const bx = Math.round(cx + dx), by = Math.round(cy + dy), fh = Math.max(3, Math.round(lh * 0.9));
+    if (kind === 'fe') {
+      for (let k = 0; k < Math.max(2, Math.round(lw * 0.3)); k++) {   // la rouille coule du dessus sur la face
+        const sx = Math.round(bx - lw * 0.75 + r() * lw * 1.5), sy = Math.round(by + lh * 0.25), L = 2 + Math.floor(r() * fh * 0.5);
+        P.r(sx, sy, 1, L, C.ir2); P.p(sx, sy, C.ir1); if (r() < 0.4) P.p(sx + 1, sy + 1, C.ir3);
+      }
+      P.ell(bx + lw * 0.1, by - lh * 0.2, lw * 0.32, lh * 0.18, C.ir1);   // une plaque de rouille au soleil
+      for (let k = 0; k < 2; k++) { const px = Math.round(bx + (r() - 0.5) * lw), py = Math.round(by - lh * 0.3 + r() * lh * 0.3); P.p(px, py, C.irm); marks.push([px + 1, py + 1]); }
+    } else if (kind === 'cu') {
+      let px = bx - lw * 0.7, py = by - lh * 0.1 + r() * lh * 0.3;   // une fissure qui traverse, verte au fond
+      for (let k = 0; k < 4; k++) {
+        const nx = px + lw * 0.35, ny = py + (r() - 0.4) * lh * 0.5;
+        P.line(px, py, nx, ny, C.ma3); P.line(px, py - 1, nx, ny - 1, C.ma2);
+        if (k % 2) { marks.push([Math.round(nx) + 1, Math.round(ny) + 0]); P.p(nx, ny - 1, C.ma1); }
+        px = nx; py = ny;
+      }
+      if (n === 0) { P.r(bx + lw * 0.35, by + lh * 0.05, 2, 1, C.az); P.p(bx + lw * 0.35, by + lh * 0.05 - 1, C.az2); }
+    } else {
+      for (let k = 0; k < (n === 0 ? 3 : 2); k++) {   // de petites aiguilles de quartz, sorties d'une fente
+        const ax = Math.round(bx - lw * 0.45 + k * lw * 0.42 + r() * 3), ay = Math.round(by - lh * 0.35 + r() * lh * 0.3), hh = 3 + Math.floor(r() * (n === 0 ? 5 : 3));
+        P.r(ax - 1, ay, 4, 1, pal[4]);
+        P.r(ax, ay - hh, 2, hh, C.qz2); P.r(ax, ay - hh, 1, hh, C.qz0); P.p(ax + 1, ay - hh, C.qz1); P.p(ax, ay - hh - 1, C.qz0);
+        P.p(ax + 1, ay - 1, C.qz3);
+        marks.push([ax + 1, ay - hh]);
+      }
+    }
+  });
+  // la cassure fraîche : la pierre claire, le minerai au cœur
+  { const bx = Math.round(cx + w * 0.15), by = Math.round(cy + h * 0.25), core = { fe: C.ir1, cu: C.ma2, qz: C.qz1 }[kind];
+    P.r(bx - 3, by - 1, 7, 4, pal[1]); P.r(bx - 2, by - 2, 5, 1, pal[1]); P.r(bx - 3, by + 3, 7, 1, pal[3]); P.r(bx - 1, by, 3, 2, core); P.p(bx - 1, by, kind === 'cu' ? C.ma1 : kind === 'fe' ? C.ir0 : C.white); }
+  // des cailloux tombés au pied, dont un qui montre le minerai
+  for (let k = 0; k < 5; k++) {
+    const px = Math.round(cx - w * 1.1 + r() * w * 2.2), py = Math.round(cy + h * 1.15 + r() * h * 0.3);
+    P.r(px, py, 3, 2, pal[3]); P.r(px, py, 2, 1, pal[1]); if (k === 1) P.p(px + 1, py + 1, { fe: C.ir1, cu: C.ma2, qz: C.qz1 }[kind]);
+  }
+  return { img: finish(c), marks, kind, foot: Math.round(cy + h * 1.15) + 1 };
+}
+// une petite histoire en haut de la clairière : un vieux tronc tombé, moussu, des champignons ; un buisson de baies et un lapin
+const LOG_FALLEN = (() => {
+  const [c, x] = mk(66, 26), P = pen(x), r = rng(61);
+  P.r(4, 9, 56, 11, C.e3); P.r(4, 9, 56, 3, C.e2); P.r(4, 9, 56, 1, C.e1); P.r(4, 18, 56, 2, C.e4);
+  for (let i = 8; i < 58; i += 5) P.r(i, 12 + (i % 3), 3, 1, C.e4);                       // écorce
+  P.ell(60, 14.5, 4, 6, C.e1); P.ell(60, 14.5, 3, 4.5, C.e0); P.ell(60, 14.5, 1.6, 2.4, C.e1); P.p(60, 14, C.e2);   // cerne de la coupe
+  P.ell(4, 14.5, 3, 5.5, C.e4);
+  for (let k = 0; k < 40; k++) { const px = 6 + r() * 48, py = 8 + r() * 4; P.p(px, py, r() < 0.5 ? C.m4 : C.m3); if (r() < 0.4) P.p(px, py - 1, C.m2); }   // mousse sur le dessus
+  for (const [mx, h] of [[16, 5], [22, 3], [40, 4]]) { P.r(mx, 9 - h, 2, h, C.c1); P.ell(mx + 1, 9 - h, 4, 2.2, C.red); P.p(mx - 1, 8 - h, C.white); P.p(mx + 2, 8 - h, C.white); P.p(mx, 9 - h - 1, '#ff9a7a'); }
+  P.r(46, 20, 3, 3, C.m3); P.r(10, 20, 4, 2, C.m4); P.p(11, 19, C.m2);
+  return finish(c);
+})();
+const BUSH = (() => {
+  const [c, x] = mk(44, 30), P = pen(x), r = rng(71);
+  for (const [bx, by, br] of [[12, 18, 10], [24, 14, 12], [34, 19, 9]]) { P.ell(bx, by, br, br * 0.8, C.g4); P.ell(bx - 1.5, by - 2, br * 0.75, br * 0.55, C.g3); P.ell(bx - 3, by - 4, br * 0.4, br * 0.3, C.g2); }
+  for (let k = 0; k < 28; k++) { const px = 4 + r() * 36, py = 8 + r() * 16; P.r(px, py, 2, 1, r() < 0.5 ? C.g1 : C.g3); }
+  for (let k = 0; k < 11; k++) { const px = 6 + r() * 32, py = 10 + r() * 14; P.r(px, py, 2, 2, '#7a2a6a'); P.p(px, py, '#c75aa8'); }   // des baies sombres
+  return finish(c);
+})();
+function drawRabbit(P) {
+  // il reste assis, remue une oreille, puis traverse en trois petits bonds ; au cycle suivant, il revient
+  const cyc = Math.floor(now / 9), c = now % 9, dir = cyc % 2 ? -1 : 1, x0 = dir > 0 ? 438 : 470;
+  let x = x0, hop = 0;
+  if (c > 6 && c < 7.8) { const u = (c - 6) / 1.8; x = x0 + dir * 32 * u; hop = Math.round(Math.abs(Math.sin(u * Math.PI * 3)) * 4); }
+  else if (c >= 7.8) x = x0 + dir * 32;
+  x = Math.round(x); const y = 120 - hop, ear = (c % 3) < 0.25 ? 1 : 0;
+  P.ell(x + 1, 121, 5, 1.5, C.shade);
+  const f = dir > 0 ? 1 : -1, bx = x - 4 * f;
+  P.ell(x, y - 3, 5, 4, C.ink); P.ell(x, y - 3, 4, 3, C.e1); P.ell(x - f, y - 4, 2.5, 1.6, C.e0);   // le corps
+  P.disc(x + 4 * f, y - 6, 3, C.ink); P.disc(x + 4 * f, y - 6, 2.2, C.e1); P.p(x + 5 * f, y - 7, C.ink);   // la tête et l'œil
+  P.r(x + 3 * f, y - 12 + ear, 1, 5 - ear, C.ink); P.r(x + 4 * f, y - 12, 1, 5, C.ink); P.p(x + 4 * f, y - 11, C.pink);   // les oreilles
+  P.disc(bx, y - 3, 1.6, C.white);   // la queue
+}
+const CRATE = (() => {
+  const [c, x] = mk(28, 28), P = pen(x);
+  box(P, 0, 8, 28, 8, 12, M.wood, false); for (const i of [9, 18]) P.r(i, 16, 1, 12, C.e3); P.r(0, 21, 28, 1, C.e3);
+  for (const [cx0, cy0] of [[0, 16], [25, 16], [0, 25], [25, 25]]) { P.r(cx0, cy0, 3, 3, C.s2); P.p(cx0 + 1, cy0 + 1, C.s0); }
+  for (const [lx, ly] of [[1, 4], [13, 4], [7, 0]]) { P.r(lx, ly, 13, 5, C.e2); P.r(lx, ly, 13, 1, C.e1); P.r(lx, ly, 3, 5, C.e0); P.p(lx + 1, ly + 2, C.e1); P.r(lx + 12, ly, 1, 5, C.e3); }
+  return finish(c);
+})();
+
+// ---------------------------------------------------------------- le lieu
+const SHORE = Array.from({ length: H + 2 }, (_, y) => 104 + 16 * Math.sin(y / 46) + 6 * Math.sin(y / 17 + 1.3) + (vnoise(0.5, y * 0.04, 5) - 0.5) * 6);
+// une dalle sous chaque machine, une bande sous le tapis qui les relie : rien de plus
+const SLAB = (tx, ty) => (tx >= 14 && tx <= 16 && ty >= 6 && ty <= 9) || (tx >= 17 && tx <= 19 && ty === 7) || (tx >= 20 && tx <= 24 && ty >= 5 && ty <= 9);
+function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); }
+// les sentiers que le bâtisseur a tracés à force de passer : du camp au bosquet, du camp à la dalle
+function curve(p0, p1, p2, n = 10) { const out = []; for (let i = 0; i < n; i++) { const a = i / n, b = (i + 1) / n, q = (t) => [(1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]]; out.push([q(a), q(b)]); } return out; }
+const PATHS_DIRT = [...curve([204, 272], [236, 248], [226, 214]), ...curve([212, 284], [262, 286], [312, 244])];
+const dirtD = (x, y) => Math.min(...PATHS_DIRT.map(([a, b]) => segDist(x, y, a[0], a[1], b[0], b[1]))) - (vnoise(x * 0.12, y * 0.12, 31) - 0.5) * 3;
+const DIRT = (x, y) => dirtD(x, y) < 3.5;
+const FIRE = { x: 190, y: 290 };
+function paintGround() {
+  const [c, x] = mk(W, H), img = x.createImageData(W, H), d = img.data;
+  const put = (i, j, hex) => { const [r, g, b] = rgb(hex), k = (j * W + i) * 4; d[k] = r; d[k + 1] = g; d[k + 2] = b; d[k + 3] = 255; };
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const dd = SHORE[j] - i; let col;
+    if (dd > 3) { const n = (vnoise(i * 0.03, j * 0.022, 3) - 0.5) * 10, e = dd + n; col = e > 76 ? C.q7 : e > 58 ? C.q6 : e > 42 ? C.q5 : e > 27 ? C.q4 : e > 13 ? C.q3 : C.q2; }
+    else if (dd > -6) col = C.sd2;
+    else if (dd > -8) col = C.sd1;
+    else if (dd > -34) col = hash(i, j, 9) < 0.035 ? C.sd1 : C.sd0;
+    else if (dd > -38) col = (i + j) % 2 ? C.sd0 : C.m1;
+    else if (SLAB(Math.floor(i / T), Math.floor(j / T))) col = C.c1;
+    else if (DIRT(i, j)) { const h = hash(i, j, 15), dd2 = dirtD(i, j); col = dd2 < 2 ? C.e1 : C.e0; if (h > 0.96) col = C.e2; else if (h < 0.03) col = C.sd1; }   // un sentier plein, plus clair sur les bords
+    else {
+      // la prairie : trois tons, et une bande tramée entre deux tons pour adoucir les bords
+      const n = vnoise(i * 0.016, j * 0.016, 11), ck = (i + j) % 2 === 0;
+      col = n > 0.67 ? C.m1 : n > 0.62 ? (ck ? C.m1 : C.m2) : n > 0.37 ? C.m2 : n > 0.32 ? (ck ? C.m2 : C.m3) : C.m3;
+      const dd2 = dirtD(i, j); if (dd2 < 4.5 && ck && dd2 > 3.5) col = C.e0;
+    }
+    put(i, j, col);
+  }
+  x.putImageData(img, 0, 0);
+  const P = pen(x);
+  // la dalle : joints, lèvre en façade, quelques taches
+  for (let ty = 0; ty < 15; ty++) for (let tx = 0; tx < 27; tx++) {
+    if (!SLAB(tx, ty)) continue; const X = tx * T, Y = ty * T, r = rng(tx * 17 + ty);
+    P.r(X, Y, T, 1, C.c0); P.r(X, Y, 1, T, C.c0); P.r(X + T - 1, Y, 1, T, C.c2); P.r(X, Y + T - 1, T, 1, C.c2);
+    if (r() < 0.4) { const a = X + 3 + Math.floor(r() * 12), b = Y + 3 + Math.floor(r() * 12); for (let k = 0; k < 9; k++) if (r() < 0.7) P.p(a + (k % 3) * 2, b + Math.floor(k / 3), C.c2); }
+    if (r() < 0.15) { const a = X + 4 + Math.floor(r() * 12), b = Y + 4 + Math.floor(r() * 12); P.line(a, b, a + 5, b + 3, C.c3); }
+    if (!SLAB(tx, ty + 1)) { P.r(X, Y + T - 3, T, 1, C.c2); P.r(X, Y + T - 2, T, 1, C.c3); P.r(X, Y + T - 1, T, 1, C.c4); P.r(X, Y + T, T, 1, C.m5); }
+    if (!SLAB(tx + 1, ty)) { P.r(X + T - 1, Y, 1, T, C.c3); P.r(X + T, Y + 2, 1, T - 1, C.m5); }
+    if (!SLAB(tx, ty - 1)) for (let i = 0; i < T; i += 3) if (r() < 0.6) P.p(X + i, Y, C.m3);
+    if (!SLAB(tx - 1, ty)) for (let j = 0; j < T; j += 3) if (r() < 0.6) P.p(X, Y + j, C.m3);
+  }
+  const r = rng(3);
+  for (let k = 0; k < 40; k++) { const j = 2 + Math.floor(r() * (H - 4)), i = Math.round(SHORE[j] - 8 - r() * 10); P.r(i, j, 3, 2, C.q1); P.p(i + 2, j + 1, C.q3); }
+  for (let k = 0; k < 30; k++) { const j = 2 + Math.floor(r() * (H - 4)), i = Math.round(SHORE[j] + 12 + r() * 18); P.r(i, j, 3, 2, C.st1); P.p(i, j, C.st0); P.r(i, j + 2, 3, 1, C.sd2); }
+  for (let j = 210, n = 0; j < 352; j += 9, n++) { const i = Math.round(SHORE[j] + 20 + Math.sin(j / 20) * 3) + (n % 2 ? 4 : 0); P.r(i, j, 3, 3, C.sd1); P.r(i, j + 2, 3, 1, C.sd2); }
+  return c;
+}
+const GROUND = paintGround();
+
+// des choses posées, avec leur emprise (pour que rien ne se chevauche)
+const TREES = [
+  { x: 214, y: 196, R: 20, img: canopy(20, 3, 'broad'), chop: true },
+  { x: 232, y: 92, R: 18, img: canopy(18, 5, 'broad') },
+  { x: 300, y: 126, R: 15, img: canopy(15, 11, 'flower') },
+  { x: 150, y: 314, R: 13, img: canopy(13, 13, 'palm'), palm: true },
+  { x: 612, y: 150, R: 18, img: canopy(18, 17, 'broad') },
+  { x: 604, y: 318, R: 20, img: canopy(20, 19, 'flower') },
+  { x: 396, y: 70, R: 16, img: canopy(16, 23, 'broad') },
+];
+const IRONS = [{ x: 420, y: 262, ...outcrop('fe', 14, 9, 31) }, { x: 532, y: 300, ...outcrop('fe', 12, 8, 32) }, { x: 470, y: 344, ...outcrop('fe', 10, 7, 33) }];
+const COPPER = { x: 366, y: 268, ...outcrop('cu', 16, 10, 41) };
+const QUARTZ = { x: 13 * T - 4, y: 11 * T - 4, ...outcrop('qz', 13, 8, 52) };
+const ORES = [...IRONS, COPPER, QUARTZ];
+const SHORE_ROCKS = [[70, 9, 6, 1], [150, 7, 5, 2], [250, 10, 7, 3]].map(([y, w, h, s]) => ({ x: Math.round(SHORE[y] - 4), y, img: rockGrey(w, h, s), ph: s }));
+function rockGrey(w, h, seed) { const [c, x] = mk(w * 2 + 8, h * 3 + 8), P = pen(x), r = rng(seed); boulder(P, w + 4, h * 1.2 + 3, w, h, r); boulder(P, w * 1.5 + 3, h * 1.8 + 3, w * 0.45, h * 0.5, r); return finish(c); }
+const LILY = [[Math.round(SHORE[118] - 26), 118, true], [Math.round(SHORE[214] - 40), 214, false], [Math.round(SHORE[226] - 22), 226, true]];
+const BELTS = [
+  { item: CHAR, speed: 16, gap: 16, tiles: [[16, 7, 0], [17, 7, 0], [18, 7, 0], [19, 7, 0], [20, 7, 0]] },
+  { item: LOG, speed: 11, gap: 22, tiles: [[11, 7, 0], [12, 7, 0], [13, 7, 0]] },
+  { item: OREI, speed: 5, gap: 30, tiles: [[21, 12, 3, 0], [21, 11, 3], [21, 10, 3], [21, 9, 3]] },
+];
+const CRATE_POS = { x: 10 * T - 2, y: 7 * T - 6 };
+const BUILDER = { x: 174, y: 168 };
+const HUDBOX = [[8, 8, 156, 66], [286, 6, 70, 28], [544, 8, 88, 60], [206, 299, 226, 58]];
+const FOOT = [
+  ...TREES.map((t) => [t.x - t.R, t.y - t.R * 2.4, t.R * 2, t.R * 2.6]), [CRATE_POS.x, CRATE_POS.y, 30, 30], [BUILDER.x, BUILDER.y, 50, 54], [300, 44, 66, 30], [446, 80, 44, 32],
+  [KILN.x - 4, KILN.y - 50, 56, 102], [TOWER.x - 4, TOWER.y - 72, 80, 148], [PUITS.x - 4, PUITS.y - 58, 80, 134],
+  [FIRE.x - 40, FIRE.y - 30, 76, 46], [QUARTZ.x - 22, QUARTZ.y - 14, 44, 28], [COPPER.x - 24, COPPER.y - 14, 48, 28],
+  ...IRONS.map((r) => [r.x - 16, r.y - 11, 32, 22]), ...HUDBOX,
+];
+const freeAt = (x, y, m = 3) => SHORE[Math.min(H, Math.max(0, y))] - x < -40 && !SLAB(Math.floor(x / T), Math.floor(y / T)) && !DIRT(x, y) && !FOOT.some(([a, b, w, h]) => x > a - m && x < a + w + m && y > b - m && y < b + h + m);
+const TUFTS = [], FLOWERS = [], REEDS = [];
+{
+  const r = rng(21);
+  // des touffes en petits groupes, près des choses (pied des arbres, bord des dalles), pas semées au hasard
+  const anchors = [...TREES.map((t) => [t.x, t.y + 6]), [KILN.x - 10, KILN.y + 52], [TOWER.x + 80, TOWER.y + 90], [CRATE_POS.x + 30, CRATE_POS.y + 30], [470, 120], [120 + 60, 120]];
+  for (const [ax, ay] of anchors) for (let k = 0, n = 0; k < 60 && n < 4; k++) { const x = Math.round(ax + (r() - 0.5) * 34), y = Math.round(ay + (r() - 0.5) * 14); if (freeAt(x, y)) { TUFTS.push([x, y]); n++; } }
+  const FC = [[C.pink, C.pink2], [C.white, C.c2], [C.o1, C.o2], [C.blue, '#6f8fd8']];
+  for (let k = 0; k < 400 && FLOWERS.length < 42; k++) { const cx = Math.floor(r() * W), cy = 12 + Math.floor(r() * (H - 16)); if (!freeAt(cx, cy, 8)) continue; const col = FC[(FLOWERS.length / 6 | 0) % 4]; for (let n = 0; n < 6; n++) { const x = cx + Math.round((r() - 0.5) * 18), y = cy + Math.round((r() - 0.5) * 10); if (freeAt(x, y)) FLOWERS.push([x, y, col, r() * 6.28]); } }
+  for (const [y0, y1] of [[90, 140], [270, 352]]) for (let y = y0; y < y1; y += 4) if (r() < 0.8) REEDS.push([Math.round(SHORE[y] - 3 - r() * 6), y, 8 + Math.floor(r() * 8), r() * 6.28]);
+}
+
+// tapis à 24 px : rails, rouleaux, bande qui avance
+const D4 = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+function pivotOf(inD, outD) {
+  const entry = (inD + 2) & 3, px = entry === 0 || outD === 0 ? T : 0, py = entry === 1 || outD === 1 ? T : 0, hT = T / 2;
+  const side = [[T, hT], [hT, T], [0, hT], [hT, 0]], norm = ([a, b]) => { const l = Math.hypot(a, b); return [a / l, b / l]; };
+  return { px, py, E: norm([side[entry][0] - px, side[entry][1] - py]), X: norm([side[outD][0] - px, side[outD][1] - py]) };
+}
+function beltTile(P, X, Y, inD, outD, off) {
+  const ph = Math.floor(off) % 6;
+  if (inD === outD) {
+    const horiz = outD % 2 === 0;
+    for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+      const a = horiz ? j : i, b = horiz ? i : j; let col = null;
+      if (a === 3 || a === 20) col = C.ink2; else if (a === 4) col = C.s1; else if (a === 5) col = C.s2; else if (a === 19) col = C.s3; else if (a === 18) col = C.s2;
+      else if (a > 5 && a < 18) { const s = outD === 0 || outD === 1 ? b - ph : b + ph; col = (((s % 6) + 6) % 6) === 0 ? C.s3 : C.s4; if (a === 6) col = C.s3; }
+      if (col) P.p(X + i, Y + j, col);
+    }
+    for (const k of [4, 12, 20]) { if (horiz) { P.p(X + k, Y + 4, C.s0); P.p(X + k, Y + 21, C.s1); } else { P.p(X + 4, Y + k, C.s0); P.p(X + 19, Y + k, C.s1); } }   // boulons des rouleaux
+    if (horiz) { P.r(X, Y + 21, T, 1, C.s3); P.r(X, Y + 22, T, 1, C.ink2); }
+    return;
+  }
+  const { px, py, E, X: XX } = pivotOf(inD, outD);
+  for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+    const vx = i + 0.5 - px, vy = j + 0.5 - py, d = Math.hypot(vx, vy); if (d < 3 || d >= 21) continue;
+    let col; if (d < 4 || d >= 20) col = C.ink2; else if (d < 5) col = C.s1; else if (d < 6) col = C.s2; else if (d >= 19) col = C.s3; else if (d >= 18) col = C.s2;
+    else { const th = Math.atan2(vx * XX[0] + vy * XX[1], vx * E[0] + vy * E[1]), s = Math.floor(th * 12); col = (((s - ph) % 6) + 6) % 6 === 0 ? C.s3 : C.s4; }
+    P.p(X + i, Y + j, col);
+  }
+}
+function pathPos(tiles, s) {
+  const k = Math.floor(s / T); if (k < 0 || k >= tiles.length) return null;
+  const u = (s - k * T) / T, [tx, ty, out, firstIn] = tiles[k], inD = k ? tiles[k - 1][2] : (firstIn ?? out);
+  if (inD === out) { const [dx, dy] = D4[out]; return [tx * T + T / 2 + dx * (u * T - T / 2), ty * T + T / 2 + dy * (u * T - T / 2)]; }
+  const { px, py, E, X } = pivotOf(inD, out), th = u * Math.PI / 2, R = T / 2;
+  return [tx * T + px + R * (Math.cos(th) * E[0] + Math.sin(th) * X[0]), ty * T + py + R * (Math.cos(th) * E[1] + Math.sin(th) * X[1])];
+}
+
+// ------------------------------------------------------------ l'état vivant
+let tick = 0, now = 0, lastHit = -9, hitCount = 0;
+const parts = [], floats = [];
+// un coup qui porte : l'arbre tremble (plus fort pour un crochet ou un uppercut), des éclats d'écorce, un éclair blanc au point d'impact
+function impact(h) {
+  const tr = TREES[0], ps = poseAt(now), f = h.side === 'L' ? ps.L : ps.R, x = BUILDER.x + Math.round(f[0]) + 2, y = BUILDER.y + Math.round(f[1]);
+  tr.hitAt = now; tr.hitPow = h.pow; lastHit = now; hitCount++;
+  parts.push({ k: 'flash', x, y, life: 0, max: 3 });
+  for (let k = 0; k < Math.round(2 + h.pow * 2); k++) parts.push({ k: 'chip', x, y: y - 1, vx: -0.3 - Math.random() * 0.9 * h.pow, vy: -0.8 - Math.random() * 0.6 * h.pow, life: 0, max: 16, col: k % 2 ? C.e0 : C.c1 });
+  if (h.pow > 1.5) parts.push({ k: 'leaf', x: tr.x - 14 + Math.random() * 28, y: tr.y - 44 + Math.random() * 10, vx: 0.12, vy: 0.2, life: 0, max: 140, ph: Math.random() * 6, land: tr.y + 2 + Math.random() * 8 });
+  if (hitCount % 8 === 0) floats.push({ s: '+1 Bois', x: BUILDER.x - 22, y: BUILDER.y + 2, life: 0 });
+}
+function update() {
+  const prev = tick / FPS * PACE; tick++; now = tick / FPS * PACE;
+  const a = ((prev % COMBO_T) + COMBO_T) % COMBO_T, b = ((now % COMBO_T) + COMBO_T) % COMBO_T;
+  for (const h of HITS) if (a <= b ? (h.t > a && h.t <= b) : (h.t > a || h.t <= b)) impact(h);
+  if (Math.random() < 0.6 / FPS) { const tr = TREES[1 + Math.floor(Math.random() * (TREES.length - 1))]; if (!tr.palm) parts.push({ k: 'leaf', x: tr.x - 10 + Math.random() * 20, y: tr.y - 36, vx: 0.15, vy: 0.18, life: 0, max: 160, ph: Math.random() * 6, land: tr.y + 3 }); }
+  if (Math.random() < 2.2 / FPS) parts.push({ k: 'spark', x: FIRE.x + (Math.random() - 0.5) * 10, y: FIRE.y - 16, vx: (Math.random() - 0.5) * 0.3 + 0.08, vy: -0.45 - Math.random() * 0.4, life: 0, max: 18 + Math.random() * 20 });
+  if (tick % 8 === 0) parts.push({ k: 'smoke', x: FIRE.x + (Math.random() - 0.5) * 4, y: FIRE.y - 26, vx: 0.14, vy: -0.22, life: 0, max: 80, r: 1.5, col: [C.c0, C.c1, C.c2] });
+  if (tick % 18 === 0) parts.push({ k: 'smoke', x: KILN.x + 36, y: KILN.y - 46, vx: 0.18, vy: -0.18, life: 0, max: 90, r: 2.5, col: [C.s1, C.s2, C.s3] });
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life++;
+    if (p.k === 'leaf') { if (p.y < p.land) { p.x += p.vx + Math.sin(p.life * 0.08 + p.ph) * 0.3; p.y += p.vy; } }
+    else if (p.k === 'chip') { p.x += p.vx; p.y += p.vy; p.vy += 0.22; }
+    else { p.x += p.vx; p.y += p.vy; if (p.r) p.r += 0.05; }
+    if (p.life > p.max) parts.splice(i, 1);
+  }
+  for (let i = floats.length - 1; i >= 0; i--) { floats[i].life++; floats[i].y -= 0.2; if (floats[i].life > 30) { floats[i].el?.remove(); floats.splice(i, 1); } }
+}
+
+// --------------------------------------------------------------- dessin
+function drawFire(P, x, y) {
+  // des flammes lentes : la hauteur de chaque langue suit un bruit continu, rien ne saute
+  for (let k = 0; k < 8; k++) {
+    const fx = x - 8 + k * 2, base = [3, 6, 9, 12, 12, 9, 6, 3][k], h = Math.round(base * (0.6 + 0.6 * vnoise(k * 2.7, now * 1.6, 9)));
+    for (let j = 0; j < h; j++) { const u = j / h, col = u < 0.2 ? C.o3 : u < 0.5 ? C.o2 : u < 0.8 ? C.o1 : C.o0; const wob = u > 0.55 ? Math.round((vnoise(k, now * 2 + j * 0.3, 12) - 0.5) * 2) : 0; P.r(fx + wob, y - j, 2, 1, col); }
+  }
+  P.r(x - 2, y - 2, 3, 2, C.o0); P.p(x - 1, y - 3, C.white);
+}
+function drawCamp(P) {
+  const { x, y } = FIRE;
+  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283, sx = x + Math.cos(a) * 14, sy = y + Math.sin(a) * 7; P.r(sx - 3, sy - 2, 6, 5, C.ink); P.r(sx - 2, sy - 1, 4, 3, k % 2 ? C.st1 : C.st2); P.r(sx - 2, sy - 1, 2, 1, C.st0); }
+  P.ell(x, y, 11, 5, C.c5); P.ell(x, y - 0.5, 8, 3.5, C.e4); P.ell(x - 2, y, 4, 2, C.c4);
+  for (const [x0, y0, x1, y1] of [[x - 10, y + 3, x + 7, y - 4], [x - 7, y - 4, x + 10, y + 3]]) { P.line(x0, y0 + 2, x1, y1 + 2, C.ink, 3); P.line(x0, y0, x1, y1, C.e3, 3); P.line(x0, y0, x1, y1, C.e1); }
+  for (const [lx, ly] of [[x - 44, y + 2], [x + 22, y - 2]]) { P.r(lx - 1, ly - 1, 20, 8, C.ink); P.r(lx, ly, 18, 6, C.e2); P.r(lx, ly, 18, 1, C.e1); P.r(lx, ly, 3, 6, C.e0); P.p(lx + 1, ly + 2, C.e1); P.p(lx + 1, ly + 3, C.e2); P.r(lx + 17, ly, 1, 6, C.e3); for (let i = 5; i < 16; i += 4) P.p(lx + i, ly + 3, C.e3); }
+  drawFire(P, x, y - 3);
+}
+function drawTree(ctx, P, tr) {
+  const since = tr.hitAt != null ? now - tr.hitAt : 9, amp = (tr.hitPow || 1) > 1.5 ? 2 : 1, sh = since < 0.35 ? (Math.floor(since * 16) % 2 ? amp : -amp) * (since < 0.18 ? 1 : 0.5) : 0, sway = Math.round(Math.sin(now * 1.05 + tr.x * 0.07) * 0.7);
+  if (tr.palm) { for (let j = 0; j < 24; j++) { const xo = Math.round(Math.sin(j / 9) * 3); P.r(tr.x - 3 + xo, tr.y - j, 6, 1, C.ink); P.r(tr.x - 2 + xo, tr.y - j, 4, 1, j % 4 < 2 ? C.e2 : C.e3); P.p(tr.x - 2 + xo, tr.y - j, C.e1); } }
+  else {
+    const th = 16; P.r(tr.x - 4, tr.y - th, 8, th + 1, C.ink); P.r(tr.x - 3, tr.y - th, 6, th, C.e3); P.r(tr.x - 3, tr.y - th, 2, th, C.e2); P.p(tr.x - 3, tr.y - th + 3, C.e1); P.r(tr.x + 2, tr.y - th, 1, th, C.e4);
+    for (let j = tr.y - th + 2; j < tr.y; j += 4) P.p(tr.x, j, C.e4);
+    P.r(tr.x - 6, tr.y, 3, 1, C.e3); P.r(tr.x + 3, tr.y, 3, 1, C.e4); P.p(tr.x - 7, tr.y + 1, C.e3);
+    if (tr.chop) { P.r(tr.x - 4, tr.y - 9, 3, 4, C.e0); P.p(tr.x - 3, tr.y - 8, C.c1); P.p(tr.x - 2, tr.y - 7, C.e1); }
+  }
+  const top = tr.palm ? tr.y - 24 : tr.y - 16;
+  ctx.drawImage(tr.img, Math.round(tr.x - tr.img.width / 2 + sh + sway), Math.round(top - tr.img.height * 0.76));
+}
+function drawPuitsLive(P) {
+  // la benne : 4 s pour monter chargée, 1 s pour verser, 2 s pour redescendre à vide, 1 s pour se remplir
+  const c = now % 8, X = PUITS.x - 1, Y = PUITS.y - PUITS_S.up - 1, yb = Y + 56 + 30, yt = Y + 56 - 26;
+  const e = (u) => u * u * (3 - 2 * u);
+  let by, full = true, tilt = 0;
+  if (c < 4) by = yb + (yt - yb) * e(c / 4);
+  else if (c < 5) { by = yt; tilt = Math.round(bump(c - 4) * 3); full = c < 4.5; }
+  else if (c < 7) { by = yt + (yb - yt) * e((c - 5) / 2); full = false; }
+  else by = yb;
+  by = Math.round(by);
+  const px = X + 37, py = Y + 56 - 49, ang = (yb - by) / 7;
+  P.disc(px, py, 7, C.ink); P.disc(px, py, 6, C.s1); P.disc(px, py, 4, C.s2); P.disc(px, py, 1.6, C.ink2);
+  for (let k = 0; k < 4; k++) { const a = ang + k * Math.PI / 2; P.line(px, py, px + Math.cos(a) * 5, py + Math.sin(a) * 5, C.s3); }
+  P.r(px + 6, py, 1, by - py, C.ink2);
+  const bx = px + 2;
+  P.r(bx - 1, by - 1, 12, 9, C.ink); P.r(bx, by, 10, 7, C.s2); P.r(bx, by, 10, 1, C.s0); P.r(bx + 9, by + 1, 1, 6, C.s3); P.r(bx, by + 6, 10, 1, C.s3);
+  if (full) { P.r(bx + 1, by - 2 + tilt, 8, 3, C.ir1); P.p(bx + 2, by - 2 + tilt, C.ir0); P.p(bx + 5, by - 1 + tilt, C.irm); P.p(bx + 7, by - 1 + tilt, C.ir2); }
+}
+function drawKilnLive(P) {
+  const X = KILN.x - 1, Y = KILN.y - KILN_S.up - 1 + 48, b = (Math.sin(now * Math.PI * 2 / 6) + 1) / 2;   // six secondes par souffle
+  P.r(X + 16, Y + 34, 18, 10, b > 0.6 ? C.o3 : C.o4); P.r(X + 17, Y + 36, 16, 7, b > 0.5 ? C.o2 : C.o3);
+  for (let i = 0; i < 14; i++) { const v = vnoise(i * 1.7, now * 0.5, 4); P.r(X + 18 + i, Y + 39 + (i % 2), 1, 2, v > 0.62 ? C.o1 : v > 0.4 ? C.o2 : C.o3); }
+  const k = Math.floor(now / 2) % 3, on = (now % 2) < 0.8; if (on) { const fx = X + 20 + k * 5; P.p(fx, Y + 36, C.blue); P.p(fx, Y + 35, '#d8e8ff'); P.p(fx + 1, Y + 36, C.blue); }
+}
+// chaque minerai vit à sa façon, discrètement : le fer accroche une paillette, le cuivre fait luire ses veines, le quartz étincelle à la pointe
+function drawOreLive(P, rk, k) {
+  const X = Math.round(rk.x - rk.img.width / 2), Y = Math.round(rk.y - rk.img.height / 2), m = rk.marks; if (!m.length) return;
+  if (rk.kind === 'fe') { const ph = (now + k * 1.3) % 3.2; if (ph < 0.4) { const [gx, gy] = m[Math.floor(now / 3.2 + k) % m.length]; P.p(X + gx, Y + gy, C.white); if (ph > 0.1 && ph < 0.3) { P.p(X + gx - 1, Y + gy, C.irm); P.p(X + gx + 1, Y + gy, C.irm); P.p(X + gx, Y + gy - 1, C.irm); } } }
+  else if (rk.kind === 'cu') { const b = (Math.sin(now * Math.PI * 2 / 8) + 1) / 2; if (b > 0.6) m.forEach(([gx, gy]) => P.p(X + gx, Y + gy, b > 0.9 ? C.ma0 : C.ma1)); }
+  else { const ph = now % 2.4; if (ph < 0.45) { const [gx, gy] = m[Math.floor(now / 2.4) % m.length]; P.p(X + gx, Y + gy, C.white); if (ph > 0.1 && ph < 0.32) { P.p(X + gx - 1, Y + gy, C.qz1); P.p(X + gx + 1, Y + gy, C.qz1); P.p(X + gx, Y + gy - 1, C.qz1); } } }
+}
+
+const scene = document.getElementById('scene'), SX = scene.getContext('2d'); SX.imageSmoothingEnabled = false;
+function render(ctx) {
+  const P = pen(ctx);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.drawImage(GROUND, 0, 0);
+  // l'eau, lentement
+  for (let k = 0; k < 26; k++) { const y = 3 + Math.floor(hash(k, 1, 2) * (H - 6)), dd = 16 + hash(k, 2, 3) * 74, per = 7 + hash(k, 4, 4) * 5, ph = (now + hash(k, 5, 5) * per) % per; if (ph < 1.1) { const x = Math.round(SHORE[y] - dd - ph * 2); const w = ph < 0.25 || ph > 0.85 ? 2 : 4; if (x > 2) P.r(x, y, w, 1, ph > 0.25 && ph < 0.85 ? C.o0 : C.o1); } }
+  for (let j = 0; j < H; j++) {
+    const lap = Math.sin(now * Math.PI * 2 / 6 + j * 0.025) * 2.5, x0 = SHORE[j] + lap;
+    P.r(x0 - 5, j, 2, 1, C.q1);
+    if ((j + Math.floor(now * 0.7)) % 9 !== 0) P.r(x0 - 3, j, 3, 1, C.q0);
+    if (lap < -0.6) P.r(x0 + 1, j, Math.round(-lap), 1, C.sd3);
+  }
+  for (const rk of SHORE_ROCKS) { const rad = (now * 1.2 + rk.ph * 2) % 8; if (rad < 6.5) for (let a = 0; a < 6.28; a += 0.22) { const px = Math.round(rk.x + Math.cos(a) * (rad + 11)), py = Math.round(rk.y + 3 + Math.sin(a) * (rad + 5) * 0.5); if (py >= 0 && py < H && SHORE[py] - px > 4 && (px + py) % 2 === 0) P.p(px, py, rad < 3.5 ? C.q0 : C.q1); } }
+  for (const [lx, ly, fl] of LILY) { const bob = Math.round(Math.sin(now * Math.PI * 2 / 5 + lx) * 0.6); P.ell(lx, ly + bob, 8, 4, C.ink2); P.ell(lx, ly + bob - 0.5, 7, 3.3, C.g3); P.ell(lx - 1.5, ly + bob - 1, 4, 1.6, C.g2); P.r(lx, ly + bob - 3, 5, 1, C.q4); P.r(lx + 1, ly + bob - 2, 3, 1, C.q4); if (fl) { P.r(lx - 3, ly + bob - 5, 5, 3, C.pink); P.r(lx - 2, ly + bob - 6, 3, 1, C.pink); P.p(lx - 1, ly + bob - 5, C.white); P.p(lx - 1, ly + bob - 4, C.o1); } }
+  { const fx = 24 + ((now * 6) % 54), fy = 196 + Math.sin(now * 0.3) * 30; P.ell(fx, fy, 5, 2, C.q7); P.r(fx - 8, fy - 1, 3, 2, C.q7); }
+  for (const [x, y, h, ph] of REEDS) { const s = Math.sin(now * Math.PI * 2 / 4.5 + ph) * 1.5; for (let j = 0; j < h; j++) P.p(x + Math.round(s * j / h), y - j, j < 3 ? C.reed2 : C.reed); P.r(x + Math.round(s), y - h - 3, 2, 4, C.e3); P.p(x + Math.round(s), y - h - 3, C.e2); }
+  { const dx = 50 + Math.sin(now * 0.45) * 26 + Math.sin(now * 1.7) * 3, dy = 160 + Math.cos(now * 0.33) * 50, fl = Math.floor(now * 10) % 2; P.r(dx - 2, dy, 7, 1, C.q6); P.p(dx + 4, dy, C.ma2); P.r(dx - 1, dy - 1 - fl, 2, 1, C.q0); P.r(dx + 2, dy - 1 - fl, 2, 1, C.q0); P.r(dx - 1, dy + 1 + fl, 2, 1, C.q1); P.r(dx + 2, dy + 1 + fl, 2, 1, C.q1); }
+  // la prairie : un coup de vent toutes les dix secondes
+  const gust = (x, y) => { const front = ((now % 10) / 3) * 900 - 120, d = x + y * 0.4 - front; return d > -40 && d < 0 ? 1 : 0; };
+  for (const [x, y] of TUFTS) {   // une touffe : un pied sombre, des brins qui s'écartent, des pointes au soleil
+    const s = gust(x, y);
+    P.r(x - 3, y, 7, 1, C.m5);
+    for (const [bx, h] of [[-3, 3], [-1, 5], [1, 6], [3, 4]]) for (let j = 1; j <= h; j++) { const lean = Math.round((bx > 0 ? 1 : -1) * j / 4) + (j > 2 ? s : 0); P.p(x + bx + lean, y - j, j === h ? C.m1 : j > h - 2 ? C.m2 : C.m4); }
+  }
+  for (const [x, y, [c1, c2], ph] of FLOWERS) { const s = gust(x, y) || Math.round(Math.sin(now * 0.9 + ph) * 0.6); P.p(x, y, C.m5); P.p(x + s, y - 1, C.m4); P.p(x + s, y - 2, C.m4); P.p(x + s - 1, y - 3, c1); P.p(x + s + 1, y - 3, c1); P.p(x + s, y - 4, c1); P.p(x + s, y - 2 + 0, C.m4); P.p(x + s, y - 3, C.o1); P.p(x + s + 1, y - 2, c2); }
+  // tapis, puis ombres longues vers l'est
+  for (const b of BELTS) b.tiles.forEach(([tx, ty, out, fi], k) => beltTile(P, tx * T, ty * T, k ? b.tiles[k - 1][2] : (fi ?? out), out, now * b.speed));
+  for (const tr of TREES) P.ell(tr.x + tr.R * 1.15, tr.y + 2, tr.R * 1.6, tr.R * 0.34, C.shade);
+  for (const rk of [...ORES, ...SHORE_ROCKS]) P.ell(rk.x + rk.img.width * 0.4, rk.foot ? Math.round(rk.y - rk.img.height / 2) + rk.foot - 2 : rk.y + 3, rk.img.width * 0.6, 3, C.shadeL);
+  P.ell(FIRE.x + 18, FIRE.y + 5, 26, 4, C.shadeL); P.ell(CRATE_POS.x + 30, CRATE_POS.y + 27, 22, 3, C.shadeL);
+  for (const [s, o] of [[KILN_S, KILN], [TOWER_S, TOWER], [PUITS_S, PUITS]]) castShadow(ctx, s, o.x - 1, o.y - s.up - 1);
+  for (const b of BELTS) { const len = b.tiles.length * T; for (let s = (now * b.speed) % b.gap; s < len - 4; s += b.gap) { const q = pathPos(b.tiles, s); if (q) ctx.drawImage(b.item, Math.round(q[0] - b.item.width / 2), Math.round(q[1] - b.item.height / 2 - 1)); } }
+  // tout ce qui a de la hauteur, du nord au sud
+  const objs = [];
+  for (const tr of TREES) objs.push([tr.y, () => drawTree(ctx, P, tr)]);
+  for (const [i, rk] of ORES.entries()) objs.push([rk.y + 4, () => { ctx.drawImage(rk.img, Math.round(rk.x - rk.img.width / 2), Math.round(rk.y - rk.img.height / 2)); drawOreLive(P, rk, i); }]);
+  for (const rk of SHORE_ROCKS) objs.push([rk.y + 4, () => ctx.drawImage(rk.img, Math.round(rk.x - rk.img.width / 2), Math.round(rk.y - rk.img.height / 2))]);
+  objs.push([CRATE_POS.y + 28, () => ctx.drawImage(CRATE, CRATE_POS.x, CRATE_POS.y)]);
+  objs.push([66, () => { P.ell(338, 66, 34, 4, C.shadeL); ctx.drawImage(LOG_FALLEN, 300, 44); }]);
+  objs.push([108, () => { P.ell(474, 109, 24, 4, C.shadeL); ctx.drawImage(BUSH, 446, 80); }]);
+  objs.push([121, () => drawRabbit(P)]);
+  objs.push([FIRE.y + 6, () => drawCamp(P)]);
+  objs.push([KILN.y + 48, () => { ctx.drawImage(KILN_S.img, KILN.x - 1, KILN.y - KILN_S.up - 1); drawKilnLive(P); }]);
+  objs.push([TOWER.y + 72, () => { ctx.drawImage(TOWER_S.img, TOWER.x - 1, TOWER.y - TOWER_S.up - 1); drawLights(P, TOWER_S.lights, TOWER.x, TOWER.y - TOWER_S.up); }]);
+  objs.push([PUITS.y + 72, () => { ctx.drawImage(PUITS_S.img, PUITS.x - 1, PUITS.y - PUITS_S.up - 1); drawPuitsLive(P); }]);
+  objs.push([BUILDER.y + 38, () => drawBuilder(ctx, P)]);
+  objs.sort((a, b) => a[0] - b[0]);
+  for (const [, fn] of objs) fn();
+  { const fl = 0.06 + vnoise(now * 2, 0, 2) * 0.03; ctx.globalCompositeOperation = 'lighter'; for (const [k, a] of [[1, fl * 0.6], [0.62, fl], [0.34, fl * 1.3]]) P.ell(FIRE.x, FIRE.y, 46 * k, 22 * k, rgba(C.o2, a)); ctx.globalCompositeOperation = 'source-over'; }
+  for (const p of parts) {
+    if (p.k === 'chip') P.r(p.x, p.y, 2, 1, p.col);
+    else if (p.k === 'flash') { const r = p.life < 2 ? 3 : 2; P.r(p.x - r, p.y, r * 2 + 1, 1, C.o0); P.r(p.x, p.y - r, 1, r * 2 + 1, C.o0); P.p(p.x, p.y, C.white); if (p.life < 2) { P.p(p.x - 1, p.y, C.white); P.p(p.x + 1, p.y, C.white); } }
+    else if (p.k === 'leaf') { const c = Math.floor(p.life / 9) % 2; P.r(p.x, p.y, 2, 1, c ? C.g1 : C.g2); P.p(p.x + 2, p.y, c ? C.g2 : C.g3); }
+    else if (p.k === 'spark') { if (p.life < p.max * 0.6 || p.life % 3) P.p(p.x, p.y, p.life < 6 ? C.white : p.life < 14 ? C.o0 : C.o1); }
+    else if (p.k === 'smoke') { const u = p.life / p.max, col = p.col[u < 0.3 ? 0 : u < 0.65 ? 1 : 2], x = p.x + Math.sin(p.life * 0.06) * 3; if (u < 0.55) P.disc(x, p.y, p.r, col); else { const n = Math.round(14 * (1 - u)), rr = rng(Math.round(p.x * 13 + p.y)); for (let k = 0; k < n; k++) P.p(x + (rr() - 0.5) * p.r * 2.2, p.y + (rr() - 0.5) * p.r * 1.8, col); } }
+  }
+  for (let k = 0; k < 2; k++) {
+    const bx = 470 + Math.sin(now * 0.18 + k * 2.1) * 60 + Math.sin(now * 0.7 + k) * 6, by = 90 + k * 140 + Math.cos(now * 0.25 + k) * 16, open = Math.floor(now * 6 + k) % 2, col = [C.white, C.o1][k];
+    P.r(bx, by, 1, 3, C.ink2); P.r(bx - 2, by - (open ? 1 : 0), 2, 2, col); P.r(bx + 1, by - (open ? 1 : 0), 2, 2, col); if (open) { P.p(bx - 3, by - 2, col); P.p(bx + 3, by - 2, col); }
+  }
+  { const ph = now % 30; if (ph < 9) { const bx = 160 + ph * 52, by = 20 + ph * 26, w = Math.floor(now * 3) % 2 ? 4 : 5; P.line(bx - w, by - 2, bx, by, C.shade); P.line(bx, by, bx + w, by - 2, C.shade); P.p(bx, by + 1, C.shade); } }
+  for (let k = 0; k < 22; k++) { const x = (hash(k, 9, 1) * W + now * 3) % W, y = (hash(k, 9, 2) * H + Math.sin(now * 0.5 + k) * 5 + now * 1.2) % H, ph = (now * 0.6 + k * 0.37) % 1; if (ph < 0.8) P.p(x, y, k % 3 ? '#ffe6a8' : C.white); }
+  // filtre chaud, très léger, et lumière de l'ouest
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#fff1dc'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 4; k++) { const x0 = -120 + k * 190 + Math.sin(now * 0.05 + k) * 6; ctx.fillStyle = rgba(C.o1, 0.022); ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 50, 0); ctx.lineTo(x0 + 50 + 220, H); ctx.lineTo(x0 + 220, H); ctx.fill(); }
+  for (const [r, a] of [[260, 0.025], [170, 0.025], [90, 0.025]]) P.ell(0, 0, r * 1.4, r, rgba(C.o1, a));
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// ------------------------------------------------------------ l'interface
+function panel(P, x, y, w, h) {
+  P.r(x + 1, y, w - 2, h, C.ink); P.r(x, y + 1, w, h - 2, C.ink); P.r(x + 1, y + 1, w - 2, h - 2, C.ui0);
+  P.r(x + 2, y + 1, w - 4, 1, C.ui1); P.r(x + 1, y + 2, 1, h - 4, C.ui1); P.r(x + 2, y + h - 2, w - 4, 1, C.ui2); P.r(x + w - 2, y + 2, 1, h - 4, C.ui2);
+}
+// les icônes de la barre : de petits sprites faits comme les bâtiments (volumes, contour, liseré), 32 × 28 points
+function iconArt(fn) { const [c, x] = mk(30, 26); fn(pen(x), x); return finish(c); }
+const ICONS = {
+  // un bout de tapis sur ses pieds, une bûche et un minerai dessus, deux flèches sur le flanc : ça transporte
+  belt: iconArt((P, x) => {
+    P.r(4, 21, 2, 5, C.s3); P.r(24, 21, 2, 5, C.s3); P.p(4, 21, C.s2); P.p(24, 21, C.s2);
+    P.r(0, 9, 30, 8, C.s4); P.r(0, 9, 30, 1, C.s1); P.r(0, 16, 30, 1, C.s3);
+    for (let i = 2; i < 30; i += 4) P.r(i, 10, 1, 6, C.s3);
+    P.r(0, 17, 30, 5, C.s3); P.r(0, 17, 30, 1, C.s2); P.r(0, 21, 30, 1, C.s4);
+    chev(P, 12, 19, 0, C.o2); chev(P, 18, 19, 0, C.o2); chev(P, 24, 19, 0, C.o1);
+    x.drawImage(LOG, 2, 6); x.drawImage(OREI, 16, 6);
+  }),
+  // le symbole de la mine : un tas de minerai de fer, la pioche posée en travers
+  puits: iconArt((P) => {
+    const r = rng(5);
+    boulder(P, 19, 16, 9, 6, r, ROCK.fe); boulder(P, 10, 19, 9, 6, r, ROCK.fe, true);
+    for (const [a, b] of [[7, 18], [12, 20], [20, 14], [23, 17], [16, 21]]) { P.r(a, b, 2, 1, C.ir1); P.p(a, b - 1, C.irm); }
+    P.line(4, 25, 20, 7, C.e2, 2); P.line(4, 24, 19, 7, C.e0);                                      // le manche
+    for (const [a, b] of [[13, 3], [15, 3], [17, 3], [19, 4], [21, 5], [23, 7], [24, 9], [25, 11], [26, 13]]) P.r(a, b, 3, 3, C.s1);   // le fer, en arc
+    for (const [a, b] of [[14, 3], [16, 3], [18, 3], [20, 4], [22, 5], [23, 7], [24, 9]]) P.p(a, b, C.s0);
+    for (const [a, b] of [[15, 5], [17, 5], [19, 6], [21, 7], [23, 9], [24, 11], [25, 13]]) P.p(a, b, C.s2);
+    P.r(18, 6, 4, 4, C.s2); P.p(19, 7, C.s0);                                                    // l'œil de la pioche
+  }),
+  // le four de béton, sa cheminée qui fume, sa porte rougeoyante, le charbon qui en sort
+  kiln: iconArt((P, x) => {
+    P.disc(21, 2, 1.5, C.st1); P.disc(24, 1, 1, C.st2);
+    box(P, 1, 11, 22, 7, 8, M.conc, false); P.r(2, 12, 20, 2, C.c2);
+    cyl(P, 17, 4, 3, 10, M.dark);
+    P.r(5, 19, 10, 7, C.s3); P.r(6, 20, 8, 6, C.ink2); P.r(5, 19, 10, 1, C.s1);
+    P.r(7, 22, 6, 4, C.o3); P.r(8, 23, 4, 3, C.o2); P.r(9, 24, 2, 2, C.o1);
+    x.drawImage(CHAR, 21, 20);
+  }),
+  // la caisse de la scène, une bûche et un minerai posés dessus : on y range
+  crate: iconArt((P, x) => { crate(P, 4, 8, 22, 7, 11); x.drawImage(LOG, 6, 4); x.drawImage(OREI, 15, 3); }),
+  // un poing d'acier fermé, vu de face, et l'étincelle du coup
+  fist: iconArt((P) => {
+    const FIST = ['.KKK.KKK.KKK.KKK.', 'KLLMKLLMKLLMKLLMK', 'KLMMKLMMKLMMKLMMK', 'KMMDKMMDKMMDKMMDK', 'KMMDKMMDKMMDKMMDK', 'KDDSKDDSKDDSKDDSK',
+      'KKKKKKKKKKKKKMMDK', 'KLLLLLLLLLLLKMMDK', 'KMMMMMMMMMMDKMMDK', 'KKKKKKKKKKKKKDDSK', '.KMMMMMMMMMMMMMK.', '.KDDDDDDDDDDDDDK.',
+      '..KKKKKKKKKKKKK..', '...KSDSDSDSDSDK..', '...KKKKKKKKKKKK..'];
+    const pal = { K: C.ink, L: C.s0, M: C.s1, D: C.s2, S: C.s3 };
+    FIST.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (pal[row[i]]) P.p(4 + i, 8 + j, pal[row[i]]); });
+    P.line(23, 7, 27, 3, C.o1); P.r(24, 13, 5, 1, C.o1); P.line(23, 19, 27, 23, C.o1); P.p(23, 7, C.o0); P.p(24, 13, C.o0); P.p(23, 19, C.o0);   // l'impact
+  }),
+};
+const TOOLS = [['belt', 'Convoyeur'], ['puits', 'Puits'], ['kiln', 'Charbonnière'], ['crate', 'Caisse'], ['fist', 'Poings']], TOOL_SEL = 0;
+const slotAt = (i) => { const [x, y] = HUDBOX[3]; return [x + 7 + i * 43, y + 15]; };
+
+// le texte de l'interface : du vrai texte, net à toutes les tailles, posé sur la scène en coordonnées du monde
+// (y = haut d'une ligne de 7 points ; la taille est en points d'écran quand la scène s'affiche à ×2)
+const hud = document.getElementById('hud');
+function hudText(html, x, y, col, size, cls = '') {
+  const s = document.createElement('span'); s.innerHTML = html; if (cls) s.className = cls;
+  s.style.left = (x / W * 100) + '%'; s.style.top = ((y + 3.5) / H * 100) + '%';
+  s.style.color = col; s.style.fontSize = (size / (W * 2) * 100) + 'cqw';
+  hud.append(s); return s;
+}
+{
+  let [x, y, w] = HUDBOX[0];
+  hudText('ÈRE 3 · VERS L’ACIER', x + 8, y + 8, C.o2, 14, 'cap');
+  hudText('Minerai de fer', x + 23, y + 25, C.c0, 15); hudText('18 / 30', x + w - 8, y + 25, C.white, 15, 'r num');
+  hudText('livré à la Tour par convoyeur', x + 8, y + 51, C.c3, 13, 'thin');
+  [x, y] = HUDBOX[1]; hudText('17:40', x + 36, y + 11, C.c0, 16, 'num');
+  [x, y, w] = HUDBOX[2]; hudText('STOCK', x + 8, y + 7, C.o2, 14, 'cap');
+  [['Bois', '14'], ['Charbon', '6'], ['Minerai', '18']].forEach(([name, v], i) => { const ry = y + 22 + i * 12; hudText(name, x + 23, ry, C.c1, 15); hudText(v, x + w - 8, ry, C.white, 15, 'r num'); });
+  [x, y] = HUDBOX[3]; hudText(`<b>${TOOLS[TOOL_SEL][1]}</b> · glisse pour tracer`, x + 8, y + 3, C.c3, 13, 'thin');
+  TOOLS.forEach(([, name], i) => {
+    const [sx, sy] = slotAt(i), on = i === TOOL_SEL;
+    hudText(String(i + 1), sx + 3, sy, on ? C.o1 : C.c4, 11, 'num');
+    hudText(name, sx + 20, sy + 30, on ? C.o1 : C.c2, 11.5, 'c' + (on ? '' : ' thin'));
+  });
+}
+// « +1 Bois » : un texte qui monte et clignote avant de partir
+function syncFloats() {
+  for (const fl of floats) {
+    if (!fl.el) fl.el = hudText(fl.s, fl.x, fl.y, C.white, 15, 'float');
+    fl.el.style.top = ((fl.y + 3.5) / H * 100) + '%'; fl.el.style.visibility = fl.life < 24 || fl.life % 2 ? 'visible' : 'hidden';
+  }
+}
+
+function drawHUD(ctx, P) {
+  // l'objectif
+  let [x, y, w, h] = HUDBOX[0];
+  panel(P, x, y, w, h);
+  P.r(x + 8, y + 18, w - 16, 1, C.ui3);
+  ctx.drawImage(OREI, x + 8, y + 24);
+  P.r(x + 8, y + 38, w - 16, 6, C.ui2); P.r(x + 8, y + 44, w - 16, 1, C.ui3);
+  const n = Math.round((w - 16) * 0.6); for (let i = 0; i < n; i++) if (i % 6 !== 5) { P.r(x + 8 + i, y + 38, 1, 6, C.o2); P.p(x + 8 + i, y + 38, C.o1); P.p(x + 8 + i, y + 43, C.o3); }
+  // le cadran du soleil
+  [x, y, w, h] = HUDBOX[1]; panel(P, x, y, w, h);
+  const cx = x + 18, cy = y + 21; for (let a = Math.PI; a <= 2 * Math.PI + 0.01; a += 0.12) P.p(cx + Math.cos(a) * 11, cy + Math.sin(a) * 11, C.ui1);
+  P.r(cx - 13, cy, 27, 1, C.c4);
+  const sa = Math.PI + 0.82 * Math.PI; P.disc(cx + Math.cos(sa) * 11, cy + Math.sin(sa) * 11, 3, C.o1); P.p(cx + Math.cos(sa) * 11 - 1, cy + Math.sin(sa) * 11 - 1, C.o0);
+  // le stock
+  [x, y, w, h] = HUDBOX[2]; panel(P, x, y, w, h);
+  P.r(x + 8, y + 17, w - 16, 1, C.ui3);
+  [LOG, CHAR, OREI].forEach((im, i) => ctx.drawImage(im, x + 8, y + 22 + i * 12));
+  // la barre de construction : cinq cases, l'icône en grand, le nom dessous
+  [x, y, w, h] = HUDBOX[3]; panel(P, x, y, w, h);
+  TOOLS.forEach(([k], i) => {
+    const [sx, sy] = slotAt(i), on = i === TOOL_SEL;
+    P.r(sx, sy, 40, 40, on ? C.ui3 : C.ui2);
+    if (on) { P.r(sx, sy, 40, 1, C.o2); P.r(sx, sy + 39, 40, 1, C.o2); P.r(sx, sy, 1, 40, C.o2); P.r(sx + 39, sy, 1, 40, C.o2); }
+    ctx.drawImage(ICONS[k], sx + 4, sy + 2);
+  });
+}
+
+// ------------------------------------------------------------- la loupe
+const LOUPES = [
+  ['Le bâtisseur', 'Il abat l’arbre à la boxe : direct, direct, croisé, esquive, crochet, uppercut… Un enchaînement de dix secondes qui ne se répète pas d’un coup à l’autre ; tous les huit coups, « +1 Bois ».', 150, 148, 96, 72],
+  ['Le feu de bois', 'Huit langues qui montent et descendent lentement, des étincelles éparses, une fumée claire qui s’effiloche.', 138, 248, 96, 72],
+  ['La charbonnière', 'Le charbon ne flambe pas : il rougeoie et respire, trois secondes par souffle ; une petite flamme bleue passe de temps en temps.', 316, 110, 96, 104],
+  ['Trois poids, trois vitesses', 'Le charbon, léger, file ; le bois avance ; le minerai, lourd, se traîne. Chacun est posé sur sa bande et glisse avec elle.', 384, 150, 160, 120],
+  ['Le Puits', 'La benne monte en deux secondes, verse son minerai dans la trémie, redescend à vide, se remplit. La poulie tourne avec elle.', 420, 200, 112, 120],
+  ['Le fer', 'Une pierre brune que la rouille a teintée. Là où la pioche a cassé, le minerai se montre ; une paillette accroche la lumière de temps en temps.', 384, 236, 72, 54],
+  ['Quartz et cuivre', 'Un granit clair d’où sortent de petites aiguilles de quartz, qui étincellent tour à tour ; à côté, une pierre grise dont les fissures vertes luisent lentement.', 270, 222, 128, 72],
+  ['La rive', 'L’écume va et vient en quatre secondes, le sable mouillé brille quand l’eau se retire, les roseaux plient, le nénuphar flotte.', 40, 180, 96, 72],
+  ['La Tour', 'Un hall trapu, un fût de béton coffré, l’œil de la capsule au milieu qui respire. Le fanal bat deux fois puis se repose, toutes les deux secondes.', 488, 64, 104, 136],
+];
+const loupeRoot = document.getElementById('loupes'), loupes = [];
+for (const [title, desc, x, y, w, h] of LOUPES) {
+  const fig = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', title);
+  const cap = document.createElement('figcaption'); cap.innerHTML = `<b>${title}</b><span>${desc}</span>`;
+  fig.append(cv, cap); loupeRoot.append(fig);
+  const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  loupes.push({ cv, ctx, x, y, w, h, visible: true });
+}
+
+// ------------------------------------------- quatre ères, cinq bâtiments : chacun change de matière
+const ERA_NAMES = ['Ère 1 · Bois', 'Ère 2 · Pierre', 'Ère 3 · Béton', 'Ère 4 · Acier'];
+const ROWS = [
+  { title: 'La Tour', line: 'Le cœur de la colonie, bâti autour de la capsule d’arrivée. Tout ce qu’on livre y entre, et c’est là qu’une ère se gagne.', fp: 72, arts: [
+    [towerE1, 16, 'La capsule', 'Posée sur un plancher de rondins. Un mât, un fanion, deux caisses : on vient d’arriver.'],
+    [towerE2, 30, 'Le tambour', 'Un socle de pierres taillées ; la capsule s’enfonce dans un tambour. Un brasero veille sur le pilier.'],
+    [towerE3, 72, 'Le fût', 'Un hall trapu, un fût de béton coffré ; l’œil de la capsule brille au milieu. Le fanal bat.'],
+    [towerE4, 124, 'Le phare', 'Un treillis d’acier, une lanterne de verre, un feu rouge tout en haut : on la voit de partout.'],
+  ] },
+  { title: 'Le Puits', line: 'Il prend le minerai là où la roche affleure, et le verse sur un tapis.', fp: 72, arts: [
+    [puitsE1, 10, 'Le trou', 'Creusé à la main. Un trépied de perches, une corde, un seau, une lanterne. Lent.'],
+    [puitsE2, 42, 'Le treuil', 'Un anneau de pierres sèches, un chevalement de bois, une grande roue.'],
+    [puitsE3, 56, 'Le chevalement', 'Une tour de fer sur un anneau de béton ; la benne monte et verse dans la trémie.'],
+    [puitsE4, 96, 'La foreuse', 'Un treillis d’acier, un train de tiges, un moufle peint, une cabine éclairée.'],
+  ] },
+  { title: 'La Charbonnière', line: 'Elle change le bois en charbon, le combustible de tout le reste.', fp: 48, arts: [
+    [kilnE1, 2, 'La meule', 'Du bois en dôme sous la terre et les mottes. Elle cuit sans flamme ; les évents rougeoient.'],
+    [kilnE2, 4, 'Le four', 'Une ruche de pierres sèches, une bouche voûtée, un trou de fumée au sommet.'],
+    [kilnE3, 48, 'Le four de béton', 'Une porte de fonte, une cheminée d’acier ; il respire.'],
+    [kilnE4, 56, 'La cornue', 'Un cylindre d’acier couché ; le gaz du bois part dans une sphère et chauffe la fournée suivante.'],
+  ] },
+  { title: 'Le Stockage', line: 'Il garde ce qui attend son tour.', fp: 48, arts: [
+    [storeE1, 2, 'Les caisses', 'Empilées à même l’herbe, un tonneau, une corde.'],
+    [storeE2, 20, 'La réserve', 'Des murs de pierre, un toit de planches, une lampe à la fenêtre.'],
+    [storeE3, 64, 'Le silo', 'Un fût de béton coffré, un chapeau, une échelle.'],
+    [storeE4, 24, 'Le hangar', 'De l’acier ondulé, une voûte, un pont roulant peint.'],
+  ] },
+];
+// le sol de chaque vignette suit l'ère : de l'herbe, un chemin de gravier, puis une dalle
+function groundCell(P, cw, ch, era, fx, fy, fp, seed) {
+  const r = rng(seed);
+  P.r(0, 0, cw, ch, C.m2);
+  for (let k = 0; k < cw * ch / 70; k++) P.p(Math.floor(r() * cw), Math.floor(r() * ch), r() < 0.7 ? C.m3 : C.m1);
+  for (let k = 0; k < cw * ch / 420; k++) { const x = 2 + Math.floor(r() * (cw - 4)), y = 3 + Math.floor(r() * (ch - 4)); P.r(x - 1, y, 3, 1, C.m4); P.p(x - 1, y - 1, C.m3); P.p(x + 1, y - 2, C.m1); P.p(x, y - 1, C.m3); }
+  if (era === 1) { const x0 = fx + fp / 2 - 6; P.r(x0, fy + fp - 2, 12, ch - fy - fp + 2, C.sd3); for (let k = 0; k < 30; k++) P.p(x0 + r() * 12, fy + fp + r() * (ch - fy - fp), r() < 0.5 ? C.sd1 : C.st2); }
+  if (era >= 2) {
+    P.r(fx - 4, fy - 2, fp + 8, fp + 6, C.c2); P.r(fx - 4, fy + fp + 4, fp + 8, 1, C.c4);
+    for (let i = 24; i < fp + 8; i += 24) P.r(fx - 4 + i, fy - 2, 1, fp + 6, C.c3);
+    for (let j = 24; j < fp + 6; j += 24) P.r(fx - 4, fy - 2 + j, fp + 8, 1, C.c3);
+  }
+}
+const erasRoot = document.getElementById('eras'), eraCells = [];
+ROWS.forEach((row, ri) => {
+  const sec = document.createElement('div'); sec.className = 'era-row';
+  const h = document.createElement('h3'); h.textContent = row.title;
+  const p = document.createElement('p'); p.textContent = row.line;
+  const grid = document.createElement('div'); grid.className = 'era-cells';
+  sec.append(h, p, grid); erasRoot.append(sec);
+  const maxUp = Math.max(...row.arts.map((a) => a[1])), cw = row.fp + 32, ch = maxUp + row.fp + 20;
+  row.arts.forEach(([fn, up, name, desc], e) => {
+    const s = build(row.fp, row.fp, up, fn), fx = 16, fy = ch - row.fp - 12;
+    const [base, bx] = mk(cw, ch); groundCell(pen(bx), cw, ch, e, fx, fy, row.fp, 90 + ri * 7 + e);
+    castShadow(bx, s, fx - 1, fy - up - 1); bx.drawImage(s.img, fx - 1, fy - up - 1);
+    bx.globalCompositeOperation = 'multiply'; bx.fillStyle = '#fff1dc'; bx.fillRect(0, 0, cw, ch); bx.globalCompositeOperation = 'source-over';   // le même filtre chaud que la scène
+    const fig = document.createElement('figure'), [cv, cx] = mk(cw, ch);
+    cv.style.width = cw * 2 + 'px'; cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${row.title}, ${ERA_NAMES[e]} : ${name}`);
+    const cap = document.createElement('figcaption'); cap.innerHTML = `<i>${ERA_NAMES[e]}</i><b>${name}</b><span>${desc}</span>`;
+    fig.append(cv, cap); grid.append(fig);
+    eraCells.push({ cx, P: pen(cx), base, lights: s.lights, X: fx, Y: fy - up });
+  });
+});
+const BELT_TIERS = [
+  ['Rondins', 'Des rondins qui roulent sous la charge, entre deux longrines. Lent, mais on le pose dès le premier jour.', 4, [C.e2, C.e1, C.e3, C.e0], LOG],
+  ['Cuir', 'Des bandes de peau cousues, tendues sur des rouleaux de bois. Deux fois plus rapide ; il s’use.', 8, [C.e3, C.e2, C.e4, C.e0], CHAR],
+  ['Caoutchouc de mycélium', 'Une résine de champignon, souple et rainurée, sur rouleaux de fer (celui de la scène).', 13, [C.s4, '#4a4048', '#2a2228', C.s1], OREI],
+  ['Acier', 'Des plaques rivetées sur rouleaux. Le plus rapide, le plus sonore : plus de cinq fois les rondins.', 22, [C.s1, C.s2, C.s3, C.s0], OREI],
+];
+{
+  const sec = document.createElement('div'); sec.className = 'era-row';
+  const h = document.createElement('h3'); h.textContent = 'Le Convoyeur';
+  const p = document.createElement('p'); p.textContent = 'Le seul bâtiment qu’on pose par dizaines : chaque ère change sa bande, et sa vitesse.';
+  const grid = document.createElement('div'); grid.className = 'era-cells';
+  sec.append(h, p, grid); erasRoot.append(sec);
+  BELT_TIERS.forEach(([title, desc, speed, pal, item], e) => {
+    const fig = document.createElement('figure'), [cv, cx] = mk(96, 28); cv.style.width = '192px'; cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `Convoyeur, ${ERA_NAMES[e]} : ${title}`);
+    const cap = document.createElement('figcaption'); cap.innerHTML = `<i>${ERA_NAMES[e]}</i><b>${title}</b><span>${desc}</span>`; fig.append(cv, cap); grid.append(fig);
+    eraCells.push({ belt: true, cx, P: pen(cx), speed, pal, item, title });
+  });
+}
+function drawBelt(v) {
+  const P = v.P, off = now * v.speed, [face, light, dark, edge] = v.pal;
+  P.r(0, 0, 96, 28, C.m2);
+  if (v.title === 'Rondins') {
+    P.r(0, 3, 96, 1, C.ink2); P.r(0, 4, 96, 2, C.e1); P.r(0, 22, 96, 2, C.e3); P.r(0, 24, 96, 1, C.ink2);
+    const spin = Math.floor(off * 1.6) % 5;
+    for (let i = 0; i < 96; i += 6) { P.r(i, 6, 5, 16, face); P.r(i, 6, 1, 16, light); P.r(i + 4, 6, 1, 16, dark); P.r(i + spin, 7, 1, 14, dark); P.r(i + 5, 6, 1, 16, C.ink2); P.p(i + 2, 6, edge); }
+  } else {
+    P.r(0, 3, 96, 1, C.ink2); P.r(0, 4, 96, 2, C.s1); P.r(0, 22, 96, 2, C.s3); P.r(0, 24, 96, 1, C.ink2);
+    for (let i = 0; i < 96; i++) { const s = ((Math.floor(i - off) % 8) + 8) % 8; P.r(i, 6, 1, 16, s === 0 ? dark : s < 4 ? face : light); }
+    if (v.title === 'Cuir') for (let i = 0; i < 96; i++) if (((i - Math.floor(off)) % 4 + 4) % 4 === 0) { P.p(i, 7, edge); P.p(i, 20, edge); }
+    if (v.title === 'Acier') for (let i = 0; i < 96; i++) if (((i - Math.floor(off)) % 8 + 8) % 8 === 2) { P.p(i, 8, edge); P.p(i, 19, edge); }
+  }
+  for (let s = off % 24; s < 96; s += 24) v.cx.drawImage(v.item, Math.round(s - 4), 14 - Math.round(v.item.height / 2));
+}
+let erasVisible = true;
+function drawEras() {
+  if (!erasVisible) return;
+  for (const c of eraCells) { if (c.belt) { drawBelt(c); continue; } c.cx.drawImage(c.base, 0, 0); drawLights(c.P, c.lights, c.X, c.Y); }
+}
+
+// ------------------------------------------------------------- mise en route
+const stage = document.getElementById('stage');
+function fit() { const avail = stage.parentElement.clientWidth; stage.style.width = (avail >= W * 2 ? W * 2 : avail) + 'px'; }
+addEventListener('resize', fit); fit();
+let visible = true;
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((es) => { for (const e of es) { if (e.target === scene) visible = e.isIntersecting; const l = loupes.find((q) => q.cv === e.target); if (l) l.visible = e.isIntersecting; } });
+  io.observe(scene); for (const l of loupes) io.observe(l.cv);
+  new IntersectionObserver((es) => { erasVisible = es[0].isIntersecting; }).observe(erasRoot);
+}
+let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+const bPlay = document.getElementById('b-play'); bPlay.setAttribute('aria-pressed', String(playing));
+bPlay.addEventListener('click', () => { playing = !playing; bPlay.setAttribute('aria-pressed', String(playing)); });
+// le monde se dessine à part ; l'écran = le monde + l'interface ; la loupe ne montre que le monde
+const [WORLD, WX] = mk(W, H);
+function frame() {
+  drawEras();
+  if (!visible && !loupes.some((l) => l.visible)) return;
+  render(WX);
+  SX.setTransform(1, 0, 0, 1, 0, 0); SX.drawImage(WORLD, 0, 0); drawHUD(SX, pen(SX)); syncFloats();
+  for (const l of loupes) if (l.visible) l.ctx.drawImage(WORLD, l.x, l.y, l.w, l.h, 0, 0, l.w, l.h);
+}
+for (let k = 0; k < 90; k++) update();
+frame();
+let last = 0, lastDraw = 0;
+const DRAW_FPS = 24;   // la simulation avance à 12 pas par seconde ; l'image, elle, est interpolée deux fois plus souvent
+function loop(ts) {
+  if (playing) {
+    if (ts - last > 1000 / FPS) { last = ts; update(); }
+    if (ts - lastDraw > 1000 / DRAW_FPS - 2) { lastDraw = ts; now = (tick + Math.min(1, (ts - last) * FPS / 1000)) / FPS * PACE; frame(); }
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
