@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Banc pixel — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 24px; background: #16121a; color: #ead7b8; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 4px; font-size: 20px; color: #ffcc5c; }
+    #verdict { margin: 0 0 20px; font-size: 15px; }
+    .ok { color: #9be07a; }
+    .ko { color: #ff6a4a; }
+    .case { margin: 0 0 18px; padding: 10px 12px; border: 1px solid #3a323c; background: #1f1924; border-radius: 6px; }
+    .case h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #ddd6d0; }
+    .case h2 .count { margin-left: 8px; font-weight: 400; color: #ffcc5c; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    figure { margin: 0; }
+    figcaption { margin: 0 0 3px; font-size: 11px; color: #958170; }
+    canvas { display: block; image-rendering: pixelated; background: #120e15; border: 1px solid #2b1d26; }
+    .values { color: #9be07a; }
+  </style>
+</head>
+<body>
+  <h1>Banc pixel — portage contre maquette</h1>
+  <p id="verdict">Chargement de la maquette…</p>
+  <div id="cases"></div>
+  <script type="module" src="/src/banc/banc.ts"></script>
+</body>
+</html>
