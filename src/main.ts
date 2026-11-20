@@ -9,13 +9,23 @@ import { GROUND_WATER } from './sim/world';
 import { serialize, deserialize, writeSave, readSave } from './sim/save';
 import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
-import { Renderer, type Camera, type PlayerView, type Ring, type RouteView } from './render/renderer';
+import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
+import { PxRenderer } from './render/px/renderer';
+import { TILE_PX, pickScale, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
 
 interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
+/** Ce que la boucle attend d'un rendu, quel qu'il soit. */
+interface WorldRenderer {
+  render(g: Game, cam: Camera, opts: RenderOpts): void;
+  reset(): void;
+  burst(kind: 'leaf' | 'dust' | 'spark' | 'chip' | 'star', x: number, y: number, color: string, n: number): void;
+  hit(x: number, y: number): void;
+  fell(g: Game, x: number, y: number, size: number): void;
+}
 
 const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
@@ -52,7 +62,9 @@ class Player implements PlayerView {
 
 class App {
   game: Game;
-  renderer: Renderer;
+  renderer: WorldRenderer;
+  private readonly pixel: boolean;
+  private scale = 0;
   hud: Hud;
   audio = new AudioEngine();
   players: Player[] = [new Player(0, null)];
@@ -70,7 +82,8 @@ class App {
 
   constructor() {
     this.game = new Game((Math.random() * 1e9) | 0);
-    this.renderer = new Renderer(this.canvas);
+    this.pixel = new URLSearchParams(location.search).get('rendu') === 'pixel';
+    this.renderer = this.pixel ? new PxRenderer(this.canvas) : new Renderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
       tool: () => this.players[0].tool,
@@ -100,8 +113,25 @@ class App {
     const w = window.innerWidth, h = window.innerHeight;
     if (w < 2 || h < 2) return;
     this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(h * dpr);
+    this.fitPixelScale();
   }
   private get dpr(): number { return this.canvas.width / Math.max(1, window.innerWidth); }
+
+  /** Garde l'échelle pixel entière dans les bornes de l'écran et met `zoom` en accord. */
+  private fitPixelScale(): void {
+    if (!this.pixel) return;
+    const b = scaleBounds(this.canvas.width, this.canvas.height);
+    if (!this.scale) this.scale = pickScale(this.canvas.width, this.canvas.height);
+    this.scale = Math.min(b.max, Math.max(b.min, this.scale));
+    this.zoom = (TILE_PX * this.scale) / this.dpr;
+  }
+
+  /** Un cran d'échelle pixel, toujours ramené dans les bornes de l'écran. */
+  private setPixelScale(scale: number): void {
+    const b = scaleBounds(this.canvas.width, this.canvas.height);
+    this.scale = Math.min(b.max, Math.max(b.min, scale));
+    this.zoom = (TILE_PX * this.scale) / this.dpr;
+  }
 
   /** Point du monde sous un point de l'écran. */
   private pick(sx: number, sy: number): { x: number; y: number } {
@@ -140,7 +170,11 @@ class App {
     cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
     cv.addEventListener('wheel', (ev) => {
       ev.preventDefault();
-      if (this.started) this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom * Math.exp(-ev.deltaY * 0.0011)));
+      if (!this.started) return;
+      if (this.pixel) {
+        const step = -Math.sign(ev.deltaY);
+        if (step) this.setPixelScale(stepScale(this.scale, step, this.canvas.width, this.canvas.height));
+      } else this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom * Math.exp(-ev.deltaY * 0.0011)));
     }, { passive: false });
     document.getElementById('btn-new')!.addEventListener('click', () => this.begin(true));
     document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then((ok) => this.begin(!ok)); });
@@ -544,8 +578,14 @@ class App {
       if (down(1)) this.secondaryDown(p);
       else if (b[1] && p.gesture && moved) this.removeAt(p);
       if (up(1)) this.endGesture(p);
-      if (down(12)) this.zoom = Math.min(MAX_ZOOM, this.zoom * 1.25);
-      if (down(13)) this.zoom = Math.max(MIN_ZOOM, this.zoom / 1.25);
+      if (down(12)) {
+        if (this.pixel) this.setPixelScale(stepScale(this.scale, 1, this.canvas.width, this.canvas.height));
+        else this.zoom = Math.min(MAX_ZOOM, this.zoom * 1.25);
+      }
+      if (down(13)) {
+        if (this.pixel) this.setPixelScale(stepScale(this.scale, -1, this.canvas.width, this.canvas.height));
+        else this.zoom = Math.max(MIN_ZOOM, this.zoom / 1.25);
+      }
       if (down(9)) { if (this.hud.menuOpen) this.menu('resume'); else this.menu('pause'); }
       p.prev = b;
     }
@@ -642,13 +682,28 @@ class App {
       const tx = (x0 + x1) / 2 + this.look.x, ty = (y0 + y1) / 2 + this.look.y;
       const k = Math.min(1, dt * 6);
       this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
-      this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
+      if (this.pixel) {
+        // échelle entière : la plus grande qui tienne tout le monde, ou celle choisie à un joueur
+        const b = scaleBounds(this.canvas.width, this.canvas.height);
+        let s: number;
+        if (this.players.length > 1) {
+          const fitPx = Math.min(window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)) * this.dpr;
+          s = Math.floor(fitPx / TILE_PX);
+        } else {
+          s = Math.round((this.zoom * this.dpr) / TILE_PX);
+          this.scale = Math.max(b.min, Math.min(b.max, s));
+        }
+        this.cam.zoom = TILE_PX * Math.max(b.min, Math.min(b.max, s));
+      } else {
+        this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
+      }
       this.aim(p0);
       const e = m.over ? g.entAt(p0.cx, p0.cy) : null;
       this.hover = e && (!p0.tool || p0.tool === 'demolir') ? e : null;
     } else {
       // écran-titre : la vue dérive lentement autour de la clairière
-      this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 6; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4; this.cam.zoom = 38 * this.dpr;
+      this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 6; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4;
+      this.cam.zoom = this.pixel ? TILE_PX * pickScale(this.canvas.width, this.canvas.height) : 38 * this.dpr;
       g.step();
     }
 
