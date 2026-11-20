@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { C, GLASS, M, PANEL, PANEL2, STONE, STONE_F } from '../src/render/px/palette';
 import { EASE, bump, hash, hexToRgb, rgba, rng, smooth, vnoise } from '../src/render/px/noise';
-import { edges, pen, stroke, type Pen } from '../src/render/px/pen';
+import { edges, pen, stroke, type Pen, type PixelTarget } from '../src/render/px/pen';
 import { box, chev, courses, crate, cyl, logEnds, moss } from '../src/render/px/volumes';
 
 // =====================================================================================
@@ -69,7 +69,7 @@ function oracleVnoise(x: number, y: number, s: number): number {
 const oracleSm = (u: number): number => u * u * (3 - 2 * u);
 const ORACLE_EASE = { io: oracleSm, out: (u: number): number => 1 - (1 - u) ** 3, back: (u: number): number => 1 + 2.9 * (u - 1) ** 3 + 1.9 * (u - 1) ** 2 };
 
-function oraclePen(x: CanvasRenderingContext2D): Pen {
+function oraclePen(x: PixelTarget): Pen {
   const r = (a: number, b: number, w: number, h: number, col: string): void => {
     a = Math.round(a); b = Math.round(b); w = Math.round(w); h = Math.round(h);
     if (w <= 0 || h <= 0) return;
@@ -168,15 +168,15 @@ function oracleLogEnds(P: Pen, pts: readonly (readonly [number, number])[]): voi
 type Call = ['style', string] | ['rect', number, number, number, number];
 
 /** Un contexte 2D minimal qui note les appels dans l'ordre. */
-function recorder(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
+function recorder(): { ctx: PixelTarget; calls: Call[] } {
   const calls: Call[] = [];
   let style = '';
-  const ctx = {
+  const ctx: PixelTarget = {
     get fillStyle(): string { return style; },
-    set fillStyle(v: string) { style = v; calls.push(['style', v]); },
+    set fillStyle(v) { style = v; calls.push(['style', v]); },
     fillRect(x: number, y: number, w: number, h: number): void { calls.push(['rect', x, y, w, h]); },
   };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+  return { ctx, calls };
 }
 
 /** Compare les appels du portage à ceux de l'oracle pour un même dessin. */

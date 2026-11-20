@@ -17,8 +17,11 @@ export interface Pen {
   disc(cx: number, cy: number, rad: number, col: string): void;
 }
 
+/** Le strict nécessaire d'un contexte 2D pour dessiner au crayon : une couleur et un rectangle plein. */
+export type PixelTarget = Pick<CanvasRenderingContext2D, 'fillStyle' | 'fillRect'>;
+
 /** Enveloppe un contexte 2D dans un crayon pixel. */
-export function pen(ctx: CanvasRenderingContext2D): Pen {
+export function pen(ctx: PixelTarget): Pen {
   const r = (a: number, b: number, w: number, h: number, col: string): void => {
     a = Math.round(a);
     b = Math.round(b);

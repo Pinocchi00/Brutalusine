@@ -115,7 +115,7 @@ export function crate(P: Pen, x: number, y: number, w: number, d: number, h: num
   }
 }
 
-/** Les sections de rondins : trois cercles de bois clair et leur éclat. */
+/** Dessine une section de rondin par point : bois clair, cerne sombre et éclat. */
 export function logEnds(P: Pen, pts: readonly (readonly [number, number])[]): void {
   for (const [x, y] of pts) {
     P.disc(x, y, 3, C.e3);
