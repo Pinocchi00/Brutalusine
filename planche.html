@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Planche provisoire — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; background: #9cbf57; color: #1a1018; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 16px; font-size: 20px; color: #1a1018; }
+    section { margin: 0 0 28px; }
+    h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #2b1d26; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+    figure { margin: 0; padding: 8px; background: #9cbf57; border: 1px solid #76a24b; border-radius: 4px; }
+    figcaption { margin: 6px 0 0; font-size: 12px; color: #1a1018; }
+    canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+    #warm { position: fixed; inset: 0; background: #fff1dc; mix-blend-mode: multiply; pointer-events: none; z-index: 10; }
+  </style>
+</head>
+<body>
+  <h1>Planche des volumes provisoires</h1>
+  <div id="planche"></div>
+  <div id="warm"></div>
+  <script type="module" src="/src/banc/planche.ts"></script>
+</body>
+</html>
