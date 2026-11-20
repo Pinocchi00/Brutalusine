@@ -27,7 +27,7 @@ import {
   placeholderTree,
   type DepositType,
 } from './placeholders';
-import type { Sprite } from './sprite';
+import { castShadow, type Sprite } from './sprite';
 import {
   drawBrackets,
   drawCauseBubble,
@@ -42,12 +42,6 @@ import { chev } from './volumes';
 
 /** Le rayon du houppier d'un arbre provisoire, en pixels, selon sa taille. */
 const TREE_RADIUS: Record<1 | 2 | 3, number> = { 1: 10, 2: 14, 3: 18 };
-
-/** L'ombre du sol sans opacité : la couche `cast` porte l'alpha du soleil. */
-const SHADOW = 'rgba(72,44,104,1)';
-
-/** L'ombre plus légère des gisements, même teinte. */
-const SHADOW_LIGHT = 'rgba(72,44,104,0.67)';
 
 /** Une entité visible et son volume provisoire, retenus pour les bulles de cause. */
 interface Shown {
@@ -87,17 +81,6 @@ function drawSapling(P: Pen, tx: number, ty: number, now: number): void {
   P.ell(x + 3 + sway, y - 2, 4, 2, C.g3);
   P.ell(x - 2 + sway, y - 3, 3, 1.5, C.g2);
   P.ell(x + 4 + sway, y - 3, 3, 1.5, C.g2);
-}
-
-/** Projette l'ombre d'un bâtiment en biais, sans toucher à l'alpha de la couche `cast`. */
-function castBuildingShadow(ctx: CanvasRenderingContext2D, sprite: Sprite, X: number, Y: number): void {
-  const gy = Y + sprite.img.height - 2;
-  const K = 1.1;
-  const tt = 0.16;
-  ctx.save();
-  ctx.transform(1, 0, -K, -tt, K * gy, gy * (1 + tt));
-  ctx.drawImage(sprite.shadow, X, Y);
-  ctx.restore();
 }
 
 /** La goulotte de sortie : un chevron orange sur le bord du bâtiment, dans le sens de `rot`. */
@@ -176,11 +159,11 @@ export class PxRenderer {
     ctx.setTransform(1, 0, 0, 1, -view.originX, -view.originY);
 
     const frame: Frame = { g, opts, view, ctx, P: pen(ctx), now: this.now, shown: [] };
-    const shadow = g.sun.day ? 0.3 * Math.min(1, g.sun.elev * 4) : 0;
+    const fade = g.sun.day ? Math.min(1, g.sun.elev * 4) : 0;
     this.lit.length = 0;
     this.addGround(frame);
     this.addBelts(frame);
-    this.queue.add('cast', () => { ctx.globalAlpha = shadow; });
+    this.queue.add('cast', () => { ctx.globalAlpha = fade; });
     this.addTrees(frame);
     this.addBuildings(frame);
     this.queue.add('cast', () => { ctx.globalAlpha = 1; });
@@ -259,7 +242,7 @@ export class PxRenderer {
     const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + jitter + sway + shake);
     const Y = Math.round(base - sprite.img.height);
     const shadowX = (tx + 0.5) * TILE_PX + jitter;
-    this.queue.add('cast', () => f.P.ell(shadowX + radius * 1.15, base + 2, radius * 1.6, radius * 0.34, SHADOW));
+    this.queue.add('cast', () => f.P.ell(shadowX + radius * 1.15, base + 2, radius * 1.6, radius * 0.34, C.shade));
     this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
   }
 
@@ -271,7 +254,7 @@ export class PxRenderer {
     const base = (ty + 0.85) * TILE_PX;
     const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + (hx - 0.5) * 8);
     const Y = Math.round(base - sprite.img.height + (hy - 0.5) * 4);
-    this.queue.add('cast', () => f.P.ell((tx + 0.5) * TILE_PX, base - 2, sprite.img.width * 0.55, 4, SHADOW_LIGHT));
+    this.queue.add('cast', () => f.P.ell((tx + 0.5) * TILE_PX, base - 2, sprite.img.width * 0.55, 4, C.shadeL));
     this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
   }
 
@@ -285,7 +268,7 @@ export class PxRenderer {
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
       const foot = (e.y + e.h) * TILE_PX;
-      this.queue.add('cast', () => castBuildingShadow(ctx, sprite, X, Y));
+      this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       this.queue.addTall(foot, X, () => {
         ctx.drawImage(sprite.img, X, Y);
