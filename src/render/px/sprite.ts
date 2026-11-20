@@ -50,11 +50,11 @@ export function build(
   return { img, shadow: shadowSurface.canvas, up, lights };
 }
 
-/** Projette l'ombre longue d'un sprite en biais : renversée sous le pied et décalée vers l'est. */
+/** Projette l'ombre longue d'un sprite en biais ; son alpha se multiplie à celui déjà posé autour. */
 export function castShadow(ctx: CanvasRenderingContext2D, sprite: Sprite, X: number, Y: number): void {
   const gy = Y + sprite.img.height - 2, K = 1.1, tt = 0.16;
   ctx.save();
-  ctx.globalAlpha = 0.28;
+  ctx.globalAlpha *= 0.28;
   ctx.transform(1, 0, -K, -tt, K * gy, gy * (1 + tt));
   ctx.drawImage(sprite.shadow, X, Y);
   ctx.restore();
