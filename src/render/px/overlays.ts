@@ -13,13 +13,16 @@ import { C } from './palette';
 import { TILE_PX } from './view';
 import { chev } from './volumes';
 import { makeSurface } from './surface';
-import { hexToRgb, rgba } from './noise';
+import { hexToRgb } from './noise';
 
 /** Le rouge de refus, adouci vers l'encre : lisible sans crier. */
 const REFUSED = blendHex(C.red, C.ink, 0.38);
 
 /** Le rouge de refus pour les arêtes claires. */
 const REFUSED_HI = blendHex(C.red, C.ink, 0.16);
+
+/** La teinte sourde de l'aperçu refusé : du rouge mêlé à l'acier sombre. */
+const GHOST_REFUSED = blendHex(C.red, C.s3, 0.5);
 
 /** Les petits sprites teintés, gardés d'un aperçu à l'autre. */
 const tinted = new WeakMap<Sprite, HTMLCanvasElement>();
@@ -181,7 +184,7 @@ export function drawGhost(ctx: CanvasRenderingContext2D, sprite: Sprite, X: numb
       const surface = makeSurface(sprite.img.width, sprite.img.height);
       surface.ctx.drawImage(sprite.img, 0, 0);
       surface.ctx.globalCompositeOperation = 'source-atop';
-      surface.ctx.fillStyle = rgba(C.red, 0.72);
+      surface.ctx.fillStyle = GHOST_REFUSED;
       surface.ctx.fillRect(0, 0, sprite.img.width, sprite.img.height);
       t = surface.canvas;
       tinted.set(sprite, t);
@@ -193,6 +196,18 @@ export function drawGhost(ctx: CanvasRenderingContext2D, sprite: Sprite, X: numb
   ctx.globalAlpha = 0.5;
   ctx.drawImage(image, Math.round(X), Math.round(Y));
   ctx.restore();
+  if (!ok) {
+    const cx = Math.round(X + sprite.img.width / 2);
+    const cy = Math.round(Y + sprite.img.height / 2 + sprite.up / 2);
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(cx, cy - 2, 1, 5);
+    ctx.fillRect(cx - 2, cy, 5, 1);
+    ctx.fillStyle = C.red;
+    ctx.fillRect(cx, cy, 1, 1);
+    ctx.restore();
+  }
 }
 
 /** Le tracé d'un convoyeur case par case : chevrons dans le sens de marche, rouge sur les refus. */

@@ -1,9 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Pen } from '../src/render/px/pen';
+import type { Sprite } from '../src/render/px/sprite';
 import type { Ring, RouteView } from '../src/render/renderer';
 import { Status } from '../src/sim/ent';
 import { C } from '../src/render/px/palette';
-import { drawCauseBubble, drawRange, drawRing, drawRoute } from '../src/render/px/overlays';
+import { drawCauseBubble, drawGhost, drawRange, drawRing, drawRoute } from '../src/render/px/overlays';
+
+vi.mock('../src/render/px/surface', () => ({
+  makeSurface: (w: number, h: number) => {
+    const ctx = {
+      drawImage: () => undefined,
+      fillRect: () => undefined,
+      fillStyle: '',
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+    };
+    return { canvas: { width: w, height: h }, ctx };
+  },
+}));
 
 interface Call {
   m: string;
@@ -42,6 +56,66 @@ function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
   } as unknown as CanvasRenderingContext2D;
   return { ctx, calls };
 }
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  col: string;
+}
+
+function fakeTarget(): { ctx: CanvasRenderingContext2D; draws: unknown[][]; rects: Rect[] } {
+  let fillStyle = '';
+  const draws: unknown[][] = [];
+  const rects: Rect[] = [];
+  const ctx = {
+    save: () => undefined,
+    restore: () => undefined,
+    imageSmoothingEnabled: true,
+    globalAlpha: 1,
+    get fillStyle() { return fillStyle; },
+    set fillStyle(value: string) { fillStyle = value; },
+    drawImage: (...args: unknown[]) => draws.push(args),
+    fillRect: (x: number, y: number, w: number, h: number) => rects.push({ x, y, w, h, col: fillStyle }),
+  } as unknown as CanvasRenderingContext2D;
+  return { ctx, draws, rects };
+}
+
+function fakeSprite(): Sprite {
+  return {
+    img: { width: 50, height: 62 } as unknown as HTMLCanvasElement,
+    shadow: { width: 50, height: 62 } as unknown as HTMLCanvasElement,
+    up: 18,
+    lights: [],
+  };
+}
+
+describe('aperçu de pose', () => {
+  it('ne teinte ni ne croise un aperçu accepté', () => {
+    const sprite = fakeSprite();
+    const { ctx, draws, rects } = fakeTarget();
+    drawGhost(ctx, sprite, 10, 20, true);
+    expect(draws).toHaveLength(1);
+    expect(draws[0][0]).toBe(sprite.img);
+    expect(rects).toHaveLength(0);
+  });
+
+  it('teinte un refus et pose une croix de 5×5 à cœur rouge au centre de l’emprise', () => {
+    const sprite = fakeSprite();
+    const { ctx, draws, rects } = fakeTarget();
+    drawGhost(ctx, sprite, 10, 20, false);
+    expect(draws).toHaveLength(1);
+    expect(draws[0][0]).not.toBe(sprite.img);
+    const cx = 10 + sprite.img.width / 2;
+    const cy = 20 + sprite.img.height / 2 + sprite.up / 2;
+    expect(rects).toEqual(expect.arrayContaining([
+      { x: cx, y: cy - 2, w: 1, h: 5, col: C.ink },
+      { x: cx - 2, y: cy, w: 5, h: 1, col: C.ink },
+      { x: cx, y: cy, w: 1, h: 1, col: C.red },
+    ]));
+  });
+});
 
 describe('bulles de cause', () => {
   it('dessine une marque différente pour chaque cause', () => {
