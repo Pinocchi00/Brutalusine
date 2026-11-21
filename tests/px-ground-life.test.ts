@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { C } from '../src/render/px/palette';
 import { pen, type Pen } from '../src/render/px/pen';
 import {
+  contourSegments,
   drawGroundLife,
   layoutLife,
   type GroundLife,
@@ -354,15 +355,6 @@ describe('le coup de vent', () => {
 });
 
 describe('plafond de dessin', () => {
-  it('environ 26 reflets par vue de 640×360 à moitié d’eau', () => {
-    for (const seed of [1, 2, 4, 99]) {
-      const life = layoutLife(makeSource(seed, 0, 0, (i, j) => i - 1.778 * j));
-      const n = life.glints.filter((g) => g.x >= 0 && g.x < 640 && g.y >= 0 && g.y < 360).length;
-      expect(n).toBeGreaterThanOrEqual(18);
-      expect(n).toBeLessThanOrEqual(36);
-    }
-  });
-
   it('moins de 2 500 fillRect pour une vue de 640×360 traversée par une rivière', () => {
     const src = makeSource(99, 0, 0, (i, j) => i - 1.778 * j);
     const life = layoutLife(src);
@@ -370,5 +362,185 @@ describe('plafond de dessin', () => {
     const rects = calls.filter((c) => c[0] === 'rect').length;
     expect(rects).toBeGreaterThan(0);
     expect(rects).toBeLessThanOrEqual(2500);
+  });
+});
+
+describe('ligne zéro', () => {
+  it('les 14 configurations de signes donnent le bon nombre de segments', () => {
+    const cell = 10;
+    const lo = cell * T;
+    const hi = (cell + 1) * T;
+    for (let mask = 1; mask < 15; mask++) {
+      const water = [0, 1, 2, 3].map((k) => (mask & (1 << k)) !== 0);
+      const countWater = water.filter(Boolean).length;
+      const shore = new Float32Array(33 * 33).fill(10);
+      const values = water.map((w) => {
+        if (countWater === 1 && w) return -50;
+        if (countWater === 3 && !w) return 50;
+        return w ? -10 : 10;
+      });
+      shore[cell * 33 + cell] = values[0];
+      shore[cell * 33 + cell + 1] = values[1];
+      shore[(cell + 1) * 33 + cell + 1] = values[2];
+      shore[(cell + 1) * 33 + cell] = values[3];
+      const crossings = [
+        water[0] !== water[1],
+        water[1] !== water[2],
+        water[2] !== water[3],
+        water[3] !== water[0],
+      ].filter(Boolean).length;
+      const inside = contourSegments(shore, 0, 0).filter((s) =>
+        [s.a, s.b].every((p) =>
+          p.x >= lo - 0.001 && p.x <= hi + 0.001 && p.y >= lo - 0.001 && p.y <= hi + 0.001));
+      expect({ mask, n: inside.length }).toEqual({ mask, n: crossings === 4 ? 2 : 1 });
+    }
+  });
+});
+
+describe('phase du clapotis', () => {
+  it('deux blocs voisins suivent la même phase monde à leur frontière', () => {
+    const field = (ox: number) => (i: number, j: number): number => ox + i - 1.5 * j - 20;
+    const a = layoutLife(makeSource(41, 0, 0, field(0)));
+    const b = layoutLife(makeSource(41, 32, 0, field(32)));
+    const nearest = (life: GroundLife): GroundLife['shore'][number] => {
+      let best = life.shore[0];
+      for (const s of life.shore) if (Math.abs(s.x - 32 * T) < Math.abs(best.x - 32 * T)) best = s;
+      return best;
+    };
+    const sa = nearest(a), sb = nearest(b);
+    expect(Math.abs(sa.x - sb.x)).toBeLessThan(2);
+    for (const now of [0.3, 1.7, 4.2]) {
+      for (const s of [sa, sb]) {
+        const life = lifeWith({ shore: [s] });
+        const calls = countRects(life, now, -100, -100, 1700, 1000);
+        const q1: number[][] = [];
+        for (let i = 0; i < calls.length; i++) {
+          const c = calls[i];
+          const prev = calls[i - 1];
+          if (c[0] === 'rect' && prev !== undefined && prev[0] === 'style' && prev[1] === C.q1) q1.push([c[1], c[2], c[3], c[4]]);
+        }
+        const lap = Math.sin(now * Math.PI * 2 / 6 + (s.x + s.y) * 0.025) * 2.5;
+        const lx = -s.nx, ly = -s.ny, mid = lap - 4.5;
+        if (Math.abs(s.nx) >= Math.abs(s.ny)) {
+          const start = lx >= 0 ? Math.round(s.x + lx * (lap - 5)) : Math.round(s.x + lx * (lap - 4));
+          expect(q1).toContainEqual([start, Math.round(s.y + ly * mid), 2, 1]);
+        } else {
+          const start = ly >= 0 ? Math.round(s.y + ly * (lap - 5)) : Math.round(s.y + ly * (lap - 4));
+          expect(q1).toContainEqual([Math.round(s.x + lx * mid), start, 1, 2]);
+        }
+      }
+    }
+  });
+
+});
+
+describe('débordement sur une dalle', () => {
+  it('une dalle voisine de la rive ne reçoit aucun pixel', () => {
+    const point = { x: 12 * T, y: 100, nx: -1, ny: 0, tx: 11, ty: 4 };
+    const life = lifeWith({ shore: [point] });
+    const rec = recorder();
+    drawGroundLife(pen(rec.ctx), life, 4.23, 0, 0, 32 * T, 32 * T, (tx) => tx === 12);
+    for (const c of rec.calls) {
+      if (c[0] !== 'rect') continue;
+      const overlaps = c[1] < 13 * T && c[1] + c[3] > 12 * T;
+      expect(overlaps).toBe(false);
+    }
+  });
+
+  it('une touffe dont la case au nord est bloquée disparaît', () => {
+    const tuft: GroundTuft = { x: 100, y: 100, tx: 4, ty: 4 };
+    const life = lifeWith({ tufts: [tuft] });
+    const rec = recorder();
+    drawGroundLife(pen(rec.ctx), life, 0, 0, 0, 500, 500, (_tx, ty) => ty === 3);
+    expect(rec.calls.length).toBe(0);
+  });
+});
+
+describe('reflets du soleil', () => {
+  it('toujours un trait horizontal, quelle que soit la rive', () => {
+    const life = layoutLife(makeSource(3, 0, 0, (_i, j) => j - 12));
+    const glints = lifeWith({ glints: life.glints });
+    const rects: number[][] = [];
+    for (let n = 0; n < 60; n++) {
+      const calls = countRects(glints, n * 0.31, 0, 0, 32 * T, 32 * T);
+      for (let i = 0; i < calls.length; i++) {
+        const c = calls[i];
+        const prev = calls[i - 1];
+        if (c[0] === 'rect' && prev !== undefined && prev[0] === 'style' && (prev[1] === C.o0 || prev[1] === C.o1)) {
+          rects.push([c[1], c[2], c[3], c[4]]);
+        }
+      }
+    }
+    expect(rects.length).toBeGreaterThan(0);
+    for (const r of rects) {
+      expect(r[3]).toBe(1);
+      expect(r[2] === 2 || r[2] === 4).toBe(true);
+    }
+  });
+
+  it('environ 0,13 reflet par case d’eau éligible', () => {
+    let glints = 0;
+    let eligible = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const src = makeSource(seed, 0, 0, (i) => i - 20);
+      for (let ly = 0; ly < 32; ly++) {
+        for (let lx = 0; lx < 32; lx++) {
+          if (src.ground[ly * 32 + lx] !== 1) continue;
+          const depth = -(lx + 0.5 - 20) * T;
+          if (depth >= 16 && depth <= 90) eligible++;
+        }
+      }
+      glints += layoutLife(src).glints.length;
+    }
+    expect(glints / eligible).toBeGreaterThan(0.05);
+    expect(glints / eligible).toBeLessThan(0.22);
+  });
+});
+
+describe('roseaux et nénuphars au pixel près', () => {
+  it('respecte la profondeur interpolée exacte sur une rive diagonale', () => {
+    let reeds = 0;
+    let lilies = 0;
+    for (let seed = 1; seed <= 16; seed++) {
+      const life = layoutLife(makeSource(seed, 0, 0, (i, j) => i - 1.3 * j - 14));
+      for (const e of life.reeds) {
+        const dd = -(e.x / T - 1.3 * (e.y / T) - 14) * T;
+        expect(dd).toBeGreaterThanOrEqual(3 - 0.001);
+        expect(dd).toBeLessThanOrEqual(12 + 0.001);
+        reeds++;
+      }
+      for (const e of life.lilies) {
+        const dd = -(e.x / T - 1.3 * (e.y / T) - 14) * T;
+        expect(dd).toBeGreaterThanOrEqual(18 - 0.001);
+        expect(dd).toBeLessThanOrEqual(60 + 0.001);
+        lilies++;
+      }
+    }
+    expect(reeds).toBeGreaterThan(0);
+    expect(lilies).toBeGreaterThan(0);
+  });
+});
+
+describe('tronçons de roseaux', () => {
+  it('environ un quart de la rive en porte, avec de longues pauses', () => {
+    const rows = 32 * 24;
+    const wet = new Set<number>();
+    for (let n = 0; n < 24; n++) {
+      const life = layoutLife(makeSource(7, 0, n * 32, (i) => i - 20));
+      for (const r of life.reeds) wet.add(Math.floor(r.y / T));
+    }
+    const fraction = wet.size / rows;
+    expect(fraction).toBeGreaterThan(0.12);
+    expect(fraction).toBeLessThan(0.4);
+    let gap = 0;
+    let maxGap = 0;
+    for (let row = 0; row < rows; row++) {
+      if (wet.has(row)) gap = 0;
+      else {
+        gap++;
+        if (gap > maxGap) maxGap = gap;
+      }
+    }
+    expect(maxGap).toBeGreaterThanOrEqual(20);
   });
 });

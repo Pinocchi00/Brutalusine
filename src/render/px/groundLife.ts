@@ -4,7 +4,7 @@
  * rivière qui tourne dans tous les sens : le champ de rivage donne la ligne zéro et sa normale,
  * au lieu du seul `SHORE[j]` horizontal de la maquette.
  */
-import { hash } from './noise';
+import { hash, vnoise } from './noise';
 import { C } from './palette';
 import type { Pen } from './pen';
 
@@ -33,7 +33,6 @@ export interface ShorePoint {
   readonly y: number;
   readonly nx: number;
   readonly ny: number;
-  readonly k: number;
   readonly tx: number;
   readonly ty: number;
 }
@@ -42,8 +41,6 @@ export interface ShorePoint {
 export interface GroundGlint {
   readonly x: number;
   readonly y: number;
-  readonly nx: number;
-  readonly ny: number;
   readonly per: number;
   readonly phase: number;
   readonly tx: number;
@@ -108,7 +105,6 @@ export interface GroundLife {
 // =====================================================================================
 
 interface Cross {
-  readonly id: number;
   readonly x: number;
   readonly y: number;
 }
@@ -128,7 +124,7 @@ function hCross(shore: ArrayLike<number>, i: number, j: number, ox: number, oy: 
   const a = cornerAt(shore, i, j);
   const b = cornerAt(shore, i + 1, j);
   const t = a / (a - b);
-  return { id: (j * CORNER + i) * 2, x: ox + (i + t) * T, y: oy + j * T };
+  return { x: ox + (i + t) * T, y: oy + j * T };
 }
 
 /** Le croisement vertical de l'arête entre les coins (i, j) et (i, j + 1). */
@@ -136,11 +132,11 @@ function vCross(shore: ArrayLike<number>, i: number, j: number, ox: number, oy: 
   const a = cornerAt(shore, i, j);
   const d = cornerAt(shore, i, j + 1);
   const t = a / (a - d);
-  return { id: (j * CORNER + i) * 2 + 1, x: ox + i * T, y: oy + (j + t) * T };
+  return { x: ox + i * T, y: oy + (j + t) * T };
 }
 
 /** Assemble les segments de la ligne zéro de tout le bloc. */
-function contourSegments(shore: ArrayLike<number>, ox: number, oy: number): Segment[] {
+export function contourSegments(shore: ArrayLike<number>, ox: number, oy: number): Segment[] {
   const out: Segment[] = [];
   const add = (a: Cross | null, b: Cross | null): void => {
     if (a !== null && b !== null) out.push({ a, b });
@@ -155,21 +151,18 @@ function contourSegments(shore: ArrayLike<number>, ox: number, oy: number): Segm
       const tb = b < 0;
       const tc = c < 0;
       const td = d < 0;
-      const n = (ta ? 1 : 0) + (tb ? 1 : 0) + (tc ? 1 : 0) + (td ? 1 : 0);
-      if (n === 0 || n === 4) continue;
       const top = ta !== tb ? hCross(shore, i, j, ox, oy) : null;
       const right = tb !== tc ? vCross(shore, i + 1, j, ox, oy) : null;
       const bottom = tc !== td ? hCross(shore, i, j + 1, ox, oy) : null;
       const left = ta !== td ? vCross(shore, i, j, ox, oy) : null;
-      if (n === 2) {
-        // Deux croisements opposés sont possibles quand la ligne zéro longe une arête.
-        const pts: Cross[] = [];
-        if (top !== null) pts.push(top);
-        if (right !== null) pts.push(right);
-        if (bottom !== null) pts.push(bottom);
-        if (left !== null) pts.push(left);
+      const pts: Cross[] = [];
+      if (top !== null) pts.push(top);
+      if (right !== null) pts.push(right);
+      if (bottom !== null) pts.push(bottom);
+      if (left !== null) pts.push(left);
+      if (pts.length === 2) {
         add(pts[0], pts[1]);
-      } else {
+      } else if (pts.length === 4) {
         // Cas selle : le signe au centre départage les deux diagonales.
         const centre = (a + b + c + d) / 4;
         const centreWater = centre < 0;
@@ -220,122 +213,52 @@ function shoreLine(shore: ArrayLike<number>, originX: number, originY: number): 
   const ox = originX * T;
   const oy = originY * T;
   const segments = contourSegments(shore, ox, oy);
-  if (segments.length === 0) return [];
-
-  const edges = new Map<number, number[]>();
-  for (let s = 0; s < segments.length; s++) {
-    const seg = segments[s];
-    const la = edges.get(seg.a.id);
-    const lb = edges.get(seg.b.id);
-    if (la === undefined) edges.set(seg.a.id, [s]);
-    else la.push(s);
-    if (lb === undefined) edges.set(seg.b.id, [s]);
-    else lb.push(s);
-  }
-
-  const used = new Uint8Array(segments.length);
   const points: ShorePoint[] = [];
-
-  const extend = (fromId: number, fromSeg: number, chain: Cross[]): void => {
-    let seg = fromSeg;
-    let id = fromId;
-    let guard = 0;
-    while (guard++ < segments.length + 2) {
-      const list = edges.get(id);
-      if (list === undefined) return;
-      let next = -1;
-      for (let n = 0; n < list.length; n++) {
-        const candidate = list[n];
-        if (candidate !== seg && used[candidate] === 0) {
-          next = candidate;
-          break;
+  for (let q = 0; q < segments.length; q++) {
+    const seg = segments[q];
+    const dx = seg.b.x - seg.a.x;
+    const dy = seg.b.y - seg.a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.0001) continue;
+    const n = Math.max(1, Math.round(len));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      const x = seg.a.x + dx * t;
+      const y = seg.a.y + dy * t;
+      const u = (x - ox) / T;
+      const v = (y - oy) / T;
+      // La normale vient du gradient du champ : elle regarde le côté où il diminue.
+      const cu = u < 0 ? 0 : u > CHUNK ? CHUNK : u;
+      const cv = v < 0 ? 0 : v > CHUNK ? CHUNK : v;
+      let i = Math.floor(cu);
+      let j = Math.floor(cv);
+      if (i >= CHUNK) i = CHUNK - 1;
+      if (j >= CHUNK) j = CHUNK - 1;
+      const fu = cu - i;
+      const fv = cv - j;
+      const a = cornerAt(shore, i, j);
+      const b = cornerAt(shore, i + 1, j);
+      const c = cornerAt(shore, i, j + 1);
+      const d = cornerAt(shore, i + 1, j + 1);
+      const mix = a - b - c + d;
+      let nx = -((b - a) + mix * fv);
+      let ny = -((c - a) + mix * fu);
+      const mag = Math.hypot(nx, ny);
+      if (mag > 0.000001) {
+        nx /= mag;
+        ny /= mag;
+      } else {
+        nx = -dy / len;
+        ny = dx / len;
+        const here = shoreAt(shore, u, v);
+        if (shoreAt(shore, (x + nx - ox) / T, (y + ny - oy) / T) > here) {
+          nx = -nx;
+          ny = -ny;
         }
       }
-      if (next < 0) return;
-      used[next] = 1;
-      const s = segments[next];
-      const far = s.a.id === id ? s.b : s.a;
-      chain.push(far);
-      seg = next;
-      id = far.id;
-    }
-  };
-
-  const local = { u: 0, v: 0 };
-
-  for (let s = 0; s < segments.length; s++) {
-    if (used[s] === 1) continue;
-    used[s] = 1;
-    const seed = segments[s];
-    const forward: Cross[] = [seed.a, seed.b];
-    extend(seed.b.id, s, forward);
-    const backward: Cross[] = [];
-    extend(seed.a.id, s, backward);
-    backward.reverse();
-    const chain = backward.concat(forward);
-
-    // L'indice part d'une projection monde le long de la tangente : deux blocs voisins
-    // retrouvent la même phase sans se connaître, et le pas reste de 0,025 par point.
-    const first = chain[0];
-    const second = chain[1];
-    let k0 = 0;
-    let localIndex = 0;
-    if (first !== undefined && second !== undefined) {
-      const tx = second.x - first.x;
-      const ty = second.y - first.y;
-      const len = Math.hypot(tx, ty);
-      if (len > 0.0001) k0 = Math.round(first.x * tx / len + first.y * ty / len);
-    }
-
-    for (let q = 0; q + 1 < chain.length; q++) {
-      const p0 = chain[q];
-      const p1 = chain[q + 1];
-      const dx = p1.x - p0.x;
-      const dy = p1.y - p0.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 0.0001) continue;
-      let nx = -dy / len;
-      let ny = dx / len;
-      // La normale doit regarder l'eau, c'est-à-dire le côté où le champ diminue.
-      const mx = (p0.x + p1.x) / 2;
-      const my = (p0.y + p1.y) / 2;
-      local.u = (mx - ox) / T;
-      local.v = (my - oy) / T;
-      const here = shoreAt(shore, local.u, local.v);
-      local.u = (mx + nx - ox) / T;
-      local.v = (my + ny - oy) / T;
-      if (shoreAt(shore, local.u, local.v) > here) {
-        nx = -nx;
-        ny = -ny;
-      }
-
-      const n = Math.max(1, Math.round(len));
-      for (let k = 0; k < n; k++) {
-        const t = k / n;
-        const x = p0.x + dx * t;
-        const y = p0.y + dy * t;
-        const tx = Math.max(originX, Math.min(originX + CHUNK - 1, Math.floor(x / T)));
-        const ty = Math.max(originY, Math.min(originY + CHUNK - 1, Math.floor(y / T)));
-        points.push({ x, y, nx, ny, k: k0 + localIndex++, tx, ty });
-      }
-    }
-    if (chain.length > 1) {
-      const last = chain[chain.length - 1];
-      const prev = chain[chain.length - 2];
-      const dx = last.x - prev.x;
-      const dy = last.y - prev.y;
-      const len = Math.hypot(dx, dy);
-      let nx = len > 0.0001 ? -dy / len : 0;
-      let ny = len > 0.0001 ? dx / len : 1;
-      local.u = (last.x + nx - ox) / T;
-      local.v = (last.y + ny - oy) / T;
-      if (shoreAt(shore, local.u, local.v) > shoreAt(shore, (last.x - ox) / T, (last.y - oy) / T)) {
-        nx = -nx;
-        ny = -ny;
-      }
-      const tx = Math.max(originX, Math.min(originX + CHUNK - 1, Math.floor(last.x / T)));
-      const ty = Math.max(originY, Math.min(originY + CHUNK - 1, Math.floor(last.y / T)));
-      points.push({ x: last.x, y: last.y, nx, ny, k: k0 + localIndex++, tx, ty });
+      const tx = Math.max(originX, Math.min(originX + CHUNK - 1, Math.floor(x / T)));
+      const ty = Math.max(originY, Math.min(originY + CHUNK - 1, Math.floor(y / T)));
+      points.push({ x, y, nx, ny, tx, ty });
     }
   }
   return points;
@@ -393,8 +316,10 @@ export function layoutLife(src: LifeSource): GroundLife {
     return t >= 0 && src.ground[t] === 1;
   };
   const depthAt = (x: number, y: number): number => {
-    const t = tileOf(x, y);
-    return t >= 0 ? -centre[t] * T : -1;
+    const u = (x - ox) / T;
+    const v = (y - oy) / T;
+    if (u < 0 || u > CHUNK || v < 0 || v > CHUNK) return -1;
+    return -shoreAt(src.shore, u, v) * T;
   };
 
   let flowerGroup = 0;
@@ -439,33 +364,25 @@ export function layoutLife(src: LifeSource): GroundLife {
         }
       } else if (code === 1) {
         // Des reflets sur l'eau profonde, à 16-90 pixels du bord.
-        if (depth >= 16 && depth <= 90 && hash(tx, ty, salt(seed, 9)) < 0.55) {
-          const u = lx + 0.5;
-          const v = ly + 0.5;
-          const e = 0.25;
-          let gx = shoreAt(src.shore, u + e, v) - shoreAt(src.shore, u - e, v);
-          let gy = shoreAt(src.shore, u, v + e) - shoreAt(src.shore, u, v - e);
-          const gl = Math.hypot(gx, gy) || 1;
-          gx /= gl;
-          gy /= gl;
+        if (depth >= 16 && depth <= 90 && hash(tx, ty, salt(seed, 9)) < 0.13) {
           const per = 7 + hash(tx, ty, salt(seed, 10)) * 5;
           glints.push({
-            x: Math.round(ax + (hash(tx, ty, salt(seed, 11)) - 0.5) * 12),
-            y: Math.round(ay + (hash(tx, ty, salt(seed, 12)) - 0.5) * 12),
-            nx: -gx, ny: -gy, per,
+            x: Math.round(ax + (hash(tx, ty, salt(seed, 11)) - 0.5) * 22),
+            y: Math.round(ay + (hash(tx, ty, salt(seed, 12)) - 0.5) * 22),
+            per,
             phase: hash(tx, ty, salt(seed, 13)) * per,
             tx, ty,
           });
         }
         // Des roseaux par groupes, juste au bord de l'eau.
-        if (depth >= 2 && depth <= 16 && hash(tx, ty, salt(seed, 14)) < 0.3) {
+        if (depth >= 3 && depth <= 12 && vnoise(tx / 10, ty / 10, salt(seed, 24)) > 0.74) {
           const count = 3 + Math.floor(hash(tx, ty, salt(seed, 15)) * 3);
           for (let n = 0; n < count; n++) {
             const x = Math.round(ax + (hash(tx + n * 43 + 19, ty, salt(seed, 16)) - 0.5) * 20);
             const y = Math.round(ay + (hash(tx, ty + n * 61 + 23, salt(seed, 17)) - 0.5) * 8);
             if (!waterAt(x, y)) continue;
             const d = depthAt(x, y);
-            if (d < 1 || d > 18) continue;
+            if (d < 3 || d > 12) continue;
             const h = 8 + Math.floor(hash(tx + n * 13, ty + n * 17, salt(seed, 18)) * 8);
             reeds.push({
               x, y, h,
@@ -481,7 +398,8 @@ export function layoutLife(src: LifeSource): GroundLife {
             const x = Math.round(ax + (hash(tx + n * 83 + 3, ty + 1, salt(seed, 22)) - 0.5) * 16);
             const y = Math.round(ay + (hash(tx + 1, ty + n * 67 + 9, salt(seed, 23)) - 0.5) * 10);
             if (!waterAt(x, y)) continue;
-            if (depthAt(x, y) < 16) continue;
+            const d = depthAt(x, y);
+            if (d < 18 || d > 60) continue;
             lilies.push({ x, y, fl: n % 2 === 0, tx: Math.floor(x / T), ty: Math.floor(y / T) });
           }
         }
@@ -496,18 +414,38 @@ export function layoutLife(src: LifeSource): GroundLife {
 // Le dessin
 // =====================================================================================
 
+/** Vrai si l'une des cases que couvre un rectangle en pixels est bloquée. */
+function blockedBox(blocked: (tx: number, ty: number) => boolean, x0: number, y0: number, x1: number, y1: number): boolean {
+  const tx0 = Math.floor(x0 / T);
+  const ty0 = Math.floor(y0 / T);
+  const tx1 = Math.floor(x1 / T);
+  const ty1 = Math.floor(y1 / T);
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) {
+      if (blocked(tx, ty)) return true;
+    }
+  }
+  return false;
+}
+
 /** Une bande d'épaisseur entière le long de la normale, du côté de la terre. */
-function band(P: Pen, x: number, y: number, nx: number, ny: number, o1: number, o2: number, col: string): void {
+function band(P: Pen, blocked: (tx: number, ty: number) => boolean, x: number, y: number, nx: number, ny: number, o1: number, o2: number, col: string): void {
   const lx = -nx;
   const ly = -ny;
   const thick = Math.round(Math.abs(o2 - o1)) + 1;
   const mid = (o1 + o2) / 2;
   if (Math.abs(nx) >= Math.abs(ny)) {
     const start = lx >= 0 ? Math.round(x + lx * o1) : Math.round(x + lx * o2);
-    P.r(start, Math.round(y + ly * mid), thick, 1, col);
+    const other = Math.round(y + ly * mid);
+    if (blocked(Math.floor(start / T), Math.floor(other / T))) return;
+    if (blocked(Math.floor((start + thick - 1) / T), Math.floor(other / T))) return;
+    P.r(start, other, thick, 1, col);
   } else {
     const start = ly >= 0 ? Math.round(y + ly * o1) : Math.round(y + ly * o2);
-    P.r(Math.round(x + lx * mid), start, 1, thick, col);
+    const other = Math.round(x + lx * mid);
+    if (blocked(Math.floor(other / T), Math.floor(start / T))) return;
+    if (blocked(Math.floor(other / T), Math.floor((start + thick - 1) / T))) return;
+    P.r(other, start, 1, thick, col);
   }
 }
 
@@ -518,14 +456,13 @@ function drawShore(P: Pen, life: GroundLife, now: number, x0: number, y0: number
   for (let n = 0; n < pts.length; n++) {
     const s = pts[n];
     if (s.x + 9 < x0 || s.x - 9 >= x1 || s.y + 9 < y0 || s.y - 9 >= y1) continue;
-    if (blocked(s.tx, s.ty)) continue;
-    const lap = Math.sin(now * TAU / 6 + s.k * 0.025) * 2.5;
-    band(P, s.x, s.y, s.nx, s.ny, lap - 5, lap - 4, C.q1);
-    const phase = s.k + turn;
-    if ((((phase % 9) + 9) % 9) !== 0) band(P, s.x, s.y, s.nx, s.ny, lap - 3, lap - 1, C.q0);
+    const lap = Math.sin(now * TAU / 6 + (s.x + s.y) * 0.025) * 2.5;
+    band(P, blocked, s.x, s.y, s.nx, s.ny, lap - 5, lap - 4, C.q1);
+    const foam = Math.abs(s.nx) >= Math.abs(s.ny) ? Math.round(s.y) : Math.round(s.x);
+    if ((((foam + turn) % 9) + 9) % 9 !== 0) band(P, blocked, s.x, s.y, s.nx, s.ny, lap - 3, lap - 1, C.q0);
     if (lap < -0.6) {
       const w = Math.round(-lap);
-      band(P, s.x, s.y, s.nx, s.ny, lap + 1, lap + w, C.sd3);
+      band(P, blocked, s.x, s.y, s.nx, s.ny, lap + 1, lap + w, C.sd3);
     }
   }
 }
@@ -535,20 +472,13 @@ function drawGlints(P: Pen, life: GroundLife, now: number, x0: number, y0: numbe
   for (let n = 0; n < life.glints.length; n++) {
     const g = life.glints[n];
     if (g.x + 7 < x0 || g.x - 7 >= x1 || g.y + 7 < y0 || g.y - 7 >= y1) continue;
-    if (blocked(g.tx, g.ty)) continue;
+    if (blockedBox(blocked, g.x - 3, g.y, g.x + 4, g.y)) continue;
     const ph = ((now + g.phase) % g.per + g.per) % g.per;
     if (ph >= 1.1) continue;
-    const x = g.x + g.nx * ph * 2;
-    const y = g.y + g.ny * ph * 2;
+    const x = g.x - ph * 2;
     const w = ph < 0.25 || ph > 0.85 ? 2 : 4;
     const col = ph > 0.25 && ph < 0.85 ? C.o0 : C.o1;
-    if (Math.abs(g.nx) >= Math.abs(g.ny)) {
-      const start = -g.nx >= 0 ? Math.round(x) : Math.round(x) - (w - 1);
-      P.r(start, Math.round(y), w, 1, col);
-    } else {
-      const start = -g.ny >= 0 ? Math.round(y) : Math.round(y) - (w - 1);
-      P.r(Math.round(x), start, 1, w, col);
-    }
+    P.r(Math.round(x), Math.round(g.y), w, 1, col);
   }
 }
 
@@ -557,7 +487,7 @@ function drawLilies(P: Pen, life: GroundLife, now: number, x0: number, y0: numbe
   for (let n = 0; n < life.lilies.length; n++) {
     const l = life.lilies[n];
     if (l.x + 9 < x0 || l.x - 9 >= x1 || l.y + 5 < y0 || l.y - 6 >= y1) continue;
-    if (blocked(l.tx, l.ty)) continue;
+    if (blockedBox(blocked, l.x - 9, l.y - 6, l.x + 9, l.y + 5)) continue;
     const bob = Math.round(Math.sin(now * TAU / 5 + l.x) * 0.6);
     const y = l.y + bob;
     P.ell(l.x, y, 8, 4, C.ink2);
@@ -579,7 +509,7 @@ function drawReeds(P: Pen, life: GroundLife, now: number, x0: number, y0: number
   for (let n = 0; n < life.reeds.length; n++) {
     const r = life.reeds[n];
     if (r.x + 3 < x0 || r.x - 3 >= x1 || r.y < y0 || r.y - r.h - 3 >= y1) continue;
-    if (blocked(r.tx, r.ty)) continue;
+    if (blockedBox(blocked, r.x - 3, r.y - r.h - 3, r.x + 3, r.y)) continue;
     const s = Math.sin(now * TAU / 4.5 + r.ph) * 1.5;
     let j = 0;
     while (j < r.h) {
@@ -611,7 +541,7 @@ function drawTufts(P: Pen, life: GroundLife, now: number, x0: number, y0: number
   for (let n = 0; n < life.tufts.length; n++) {
     const t = life.tufts[n];
     if (t.x + 3 < x0 || t.x - 3 >= x1 || t.y < y0 || t.y - 6 >= y1) continue;
-    if (blocked(t.tx, t.ty)) continue;
+    if (blockedBox(blocked, t.x - 3, t.y - 6, t.x + 3, t.y)) continue;
     const wind = gust(t.x, t.y, now);
     P.r(t.x - 3, t.y, 7, 1, C.m5);
     for (let q = 0; q < TUFT_STEMS.length; q++) {
@@ -641,7 +571,7 @@ function drawFlowers(P: Pen, life: GroundLife, now: number, x0: number, y0: numb
   for (let n = 0; n < life.flowers.length; n++) {
     const f = life.flowers[n];
     if (f.x + 2 < x0 || f.x - 2 >= x1 || f.y < y0 || f.y - 4 >= y1) continue;
-    if (blocked(f.tx, f.ty)) continue;
+    if (blockedBox(blocked, f.x - 2, f.y - 4, f.x + 2, f.y)) continue;
     const s = gust(f.x, f.y, now) || Math.round(Math.sin(now * 0.9 + f.ph) * 0.6);
     P.p(f.x, f.y, C.m5);
     P.p(f.x + s, f.y - 1, C.m4);
