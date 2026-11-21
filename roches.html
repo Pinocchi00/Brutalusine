@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="data:," />
+  <title>Planche des roches — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; background: #16121a; color: #ead7b8; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 6px; font-size: 20px; color: #ffcc5c; }
+    p { margin: 0 0 20px; color: #a68c6d; }
+    section { margin: 0 0 28px; }
+    h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #ddd6d0; }
+    .grid { display: grid; grid-template-columns: repeat(3, max-content); gap: 18px; }
+    .row { display: flex; flex-wrap: wrap; gap: 18px; }
+    figure { margin: 0; padding: 8px; background: #1f1924; border: 1px solid #3a323c; border-radius: 4px; }
+    figcaption { margin: 6px 0 0; font-size: 12px; color: #cdb592; }
+    canvas { display: block; image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h1>Planche des affleurements</h1>
+  <p>Quatre roches, trois variantes, puis la vie du minerai et un coup de pioche toutes les deux secondes.</p>
+  <section>
+    <h2>Types × variantes</h2>
+    <div id="grille" class="grid"></div>
+  </section>
+  <section>
+    <h2>Vie et coup de pioche</h2>
+    <div id="anime" class="row"></div>
+  </section>
+  <script type="module" src="/src/banc/roches.ts"></script>
+</body>
+</html>
