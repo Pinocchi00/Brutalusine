@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CHUNK, GROUND_WATER, Chunk, World } from '../src/sim/world';
-import { GROUND_PX, groundSignature, paintChunk } from '../src/render/px/ground';
+import { GroundLayer } from '../src/render/px/groundLayer';
 import { coopScale } from '../src/render/px/renderer';
 import { TILE_PX, computeView, screenToWorld } from '../src/render/px/view';
 
-/** Compte les octets qui diffèrent entre deux peintures. */
-function differences(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
-  let n = 0;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) n++;
-  }
-  return n;
-}
+/** Le nombre de codes par côté, marge comprise. */
+const CODES = CHUNK + 2;
 
 /** Un bloc de test qui couvre l'eau, la terre, les dalles et un débris. */
 function sampleChunk(): Chunk {
@@ -27,73 +21,50 @@ function sampleChunk(): Chunk {
   return chunk;
 }
 
-describe('peinture du sol', () => {
-  it('donne exactement les mêmes pixels pour un même bloc et une même graine', () => {
-    const a = paintChunk(sampleChunk(), new World(123456));
-    const b = paintChunk(sampleChunk(), new World(123456));
-    expect(a.length).toBe(GROUND_PX * GROUND_PX * 4);
-    expect(differences(a, b)).toBe(0);
-  });
+/** Les codes du sol lus par la couche, marge comprise. */
+function codes(world: World, chunk: Chunk): Uint8Array {
+  const out = new Uint8Array(CODES * CODES);
+  new GroundLayer().readCodes(world, chunk, out);
+  return out;
+}
 
-  it('peint chaque pixel en opaque et couvre tous les tons', () => {
-    const pixels = paintChunk(sampleChunk(), new World(7));
-    const colors = new Set<number>();
-    let transparent = 0;
-    for (let i = 0; i < pixels.length; i += 4) {
-      if (pixels[i + 3] !== 255) transparent++;
-      colors.add((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
-    }
-    // Eau (plusieurs bandes), herbe (plusieurs tons) et béton : bien plus que trois couleurs.
-    expect(transparent).toBe(0);
-    expect(colors.size).toBeGreaterThan(12);
-  });
-
-  it('reste stable quand on repeint le même objet bloc', () => {
+describe('codes du sol', () => {
+  it('donne exactement les mêmes codes pour un même bloc et une même graine', () => {
     const chunk = sampleChunk();
-    const world = new World(99);
-    const first = paintChunk(chunk, world);
-    const second = paintChunk(chunk, world);
-    expect(differences(first, second)).toBe(0);
+    const a = codes(new World(123456), chunk);
+    const b = codes(new World(123456), chunk);
+    expect(a.length).toBe(CODES * CODES);
+    expect(a).toEqual(b);
   });
-});
 
-describe('signature du sol', () => {
-  it('garde la même signature quand seule la canopée change', () => {
+  it('garde les mêmes codes quand seule la canopée change', () => {
     const before = sampleChunk();
     const after = sampleChunk();
     after.canopy[(10 << 5) | 10] = 220;
     after.canopy[(11 << 5) | 10] = 0;
-    after.version++;
-    expect(groundSignature(after)).toBe(groundSignature(before));
+    expect(codes(new World(7), after)).toEqual(codes(new World(7), before));
   });
 
-  it('change quand une dalle apparaît', () => {
+  it('change les codes quand une dalle apparaît', () => {
     const before = sampleChunk();
     const after = sampleChunk();
     after.slab[(2 << 5) | 2] = 1;
-    expect(groundSignature(after)).not.toBe(groundSignature(before));
+    expect(codes(new World(7), after)).not.toEqual(codes(new World(7), before));
   });
 
-  it('change quand une dalle se déplace à nombre égal', () => {
+  it('change les codes quand une dalle se déplace à nombre égal', () => {
     const before = sampleChunk();
     const after = sampleChunk();
     after.slab[(10 << 5) | 20] = 0;
     after.slab[(10 << 5) | 15] = 1;
-    expect(groundSignature(after)).not.toBe(groundSignature(before));
+    expect(codes(new World(7), after)).not.toEqual(codes(new World(7), before));
   });
 
-  it('change quand un débris apparaît', () => {
+  it('change les codes quand un débris apparaît', () => {
     const before = sampleChunk();
     const after = sampleChunk();
     after.loot[(5 << 5) | 5] = 1;
-    expect(groundSignature(after)).not.toBe(groundSignature(before));
-  });
-
-  it('change quand une case passe de la terre à l’eau', () => {
-    const before = sampleChunk();
-    const after = sampleChunk();
-    after.ground[(20 << 5) | 2] = GROUND_WATER;
-    expect(groundSignature(after)).not.toBe(groundSignature(before));
+    expect(codes(new World(7), after)).not.toEqual(codes(new World(7), before));
   });
 });
 
