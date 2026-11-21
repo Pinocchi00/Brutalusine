@@ -50,7 +50,7 @@ interface RiverParams {
   center0: number;                 // le tracé brut au départ, pour que C(0) = offset
   h0: number; ha: number; hw: number; hp: number;
   bankBase: number; bankAmp: number; bankW: number; bankP: number;
-  fordShift: number; fordSpacing: number; fordRise: number; fordReach: number;
+  fordShift: number; fordSpacing: number;
 }
 
 interface Grove { x: number; y: number; r: number; }
@@ -89,7 +89,7 @@ export class World {
       center0: 0,
       h0: 2.75, ha: 0.5, hw: 0.05, hp: rnd() * TAU,
       bankBase: 0.5, bankAmp: 0.3, bankW: 0.08, bankP: rnd() * TAU,
-      fordShift: 16 + rnd() * 6, fordSpacing: 40 + rnd() * 30, fordRise: 0.8, fordReach: 9.5,
+      fordShift: 16 + rnd() * 6, fordSpacing: 40 + rnd() * 30,
     };
     this.params.center0 = this.riverWave(0).v;
     const near = this.placeRiver();
@@ -133,16 +133,17 @@ export class World {
     return p.h0 + p.ha * Math.sin(p.hw * u + p.hp);
   }
 
-  private fordCut(u: number): number {
+  /** Le demi-cercle de terre du gué à l'abscisse `u` : distance à son axe, ou `along - hw` loin du gué. */
+  private fordField(u: number, along: number, hw: number): number {
     const p = this.params;
     const base = Math.floor((u - p.fordShift) / p.fordSpacing);
-    const height = this.halfWidth(u) + p.fordRise;
-    let cut = 0;
+    let du = Infinity;
     for (let k = base - 1; k <= base + 1; k++) {
-      const du = Math.abs(u - (p.fordShift + k * p.fordSpacing));
-      if (du < p.fordReach) cut = Math.max(cut, height * (1 - du / p.fordReach));
+      du = Math.min(du, Math.abs(u - (p.fordShift + k * p.fordSpacing)));
     }
-    return cut;
+    const L = 2;   // demi-longueur de terre du gué : le passage fait donc 4 cases de large
+    if (du < L + hw) return Math.hypot(L + hw - du, along) - hw;
+    return along - hw;
   }
 
   /** Distance signée du coin au rivage : négative dans l'eau, positive sur la terre. */
@@ -153,7 +154,7 @@ export class World {
     const wave = this.riverWave(u);
     const c = p.offset + wave.v - p.center0;
     const along = Math.abs(v - c) / Math.sqrt(1 + wave.d * wave.d);
-    let raw = along - this.halfWidth(u) + this.fordCut(u);
+    let raw = this.fordField(u, along, this.halfWidth(u));
     if (raw < 0) return raw;
     const bank = p.bankBase + p.bankAmp * Math.sin(p.bankW * u + p.bankP);
     raw -= bank * (1 - Math.exp(-raw / 1.6));

@@ -137,6 +137,44 @@ describe('monde : déterminisme et rivage', () => {
   }, 60_000);
 });
 
+describe('monde : gués ronds', () => {
+  function waterWidth(w: World, x: number, y: number, nx: number, ny: number): number {
+    let sum = 0;
+    for (const side of [1, -1]) {
+      let last = 0;
+      for (let t = 0; t <= 8; t += 0.01) {
+        if (w.shoreField(x + nx * t * side, y + ny * t * side) < 0) last = t;
+        else break;
+      }
+      sum += last;
+    }
+    return sum;
+  }
+
+  it('l’extrémité de l’eau est ronde : à une case de la pointe, la largeur dépasse 3 cases', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const w = new World(seed);
+      const eps = 0.05;
+      const px = w.river.x, py = w.river.y;
+      const gx = (w.shoreField(px + eps, py) - w.shoreField(px - eps, py)) / (2 * eps);
+      const gy = (w.shoreField(px, py + eps) - w.shoreField(px, py - eps)) / (2 * eps);
+      const gl = Math.hypot(gx, gy);
+      expect(gl).toBeGreaterThan(1e-3);
+      const nx = gx / gl, ny = gy / gl;
+      const ax = -ny, ay = nx;
+      const fx = w.firstFord.x, fy = w.firstFord.y;
+      let end = -1;
+      for (let d = 0; d <= 8; d += 0.01) {
+        if (w.shoreField(fx + ax * d, fy + ay * d) < 0) { end = d; break; }
+      }
+      expect(end).toBeGreaterThan(0);
+      const cx = fx + ax * (end + 1), cy = fy + ay * (end + 1);
+      expect(w.shoreField(cx, cy)).toBeLessThan(0);
+      expect(waterWidth(w, cx, cy, nx, ny)).toBeGreaterThanOrEqual(3);
+    }
+  }, 60_000);
+});
+
 describe('monde : eau, arbres, gisements', () => {
   it('une eau ne touche jamais la prairie, et rien de vivant ne pousse sur l’eau ou la berge', () => {
     for (const seed of SEEDS) {
