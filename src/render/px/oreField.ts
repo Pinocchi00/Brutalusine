@@ -84,10 +84,10 @@ export function oreVariant(count: number, h: number): number {
 }
 
 /** Le décalage d'un affleurement, en pixels : les rangées impaires partent du côté opposé. */
-export function oreOffset(cellX: number, cellY: number, h1: number, h2: number): { x: number; y: number } {
+export function oreOffset(cellY: number, h1: number, h2: number): { x: number; y: number } {
   const side = Math.abs(cellY) % 2 === 1 ? 6 : -6;
   return {
-    x: side + Math.round((h1 - 0.5) * 8),
-    y: Math.round((h2 - 0.5) * 6),
+    x: side + Math.round((h1 - 0.5) * 12),
+    y: Math.round((h2 - 0.5) * 18),
   };
 }

@@ -149,37 +149,37 @@ describe('oreVariant', () => {
 
 describe('oreOffset', () => {
   it('décale les rangées paires et impaires en sens opposé', () => {
-    expect(oreOffset(0, 0, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
-    expect(oreOffset(0, 1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
-    expect(oreOffset(0, 2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
-    expect(oreOffset(0, 3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(0, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
   });
 
   it('comprend les coordonnées négatives : -1 est impair, -2 est pair', () => {
-    expect(oreOffset(0, -1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
-    expect(oreOffset(0, -2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
-    expect(oreOffset(0, -3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(-1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(-2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(-3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
   });
 
   it('garde l’offset dans ses bornes pour h1 et h2 dans [0, 1[', () => {
     for (let i = 0; i <= 1000; i++) {
       const h = i / 1000;
       for (let cellY = -3; cellY <= 3; cellY++) {
-        const offset = oreOffset(0, cellY, h, h);
-        expect(offset.x).toBeGreaterThanOrEqual(-10);
-        expect(offset.x).toBeLessThanOrEqual(10);
-        expect(offset.y).toBeGreaterThanOrEqual(-4);
-        expect(offset.y).toBeLessThanOrEqual(4);
+        const offset = oreOffset(cellY, h, h);
+        expect(offset.x).toBeGreaterThanOrEqual(-12);
+        expect(offset.x).toBeLessThanOrEqual(12);
+        expect(offset.y).toBeGreaterThanOrEqual(-9);
+        expect(offset.y).toBeLessThanOrEqual(9);
         expect(Number.isInteger(offset.x)).toBe(true);
         expect(Number.isInteger(offset.y)).toBe(true);
       }
     }
   });
 
-  it('suit les tirages : x de -10 à -2 ou de 2 à 10, y de -3 à 3', () => {
-    expect(oreOffset(0, 0, 0, 0)).toEqual({ x: -10, y: -3 });
-    expect(oreOffset(0, 0, 0.999, 0.999)).toEqual({ x: -2, y: 3 });
-    expect(oreOffset(0, 1, 0, 0)).toEqual({ x: 2, y: -3 });
-    expect(oreOffset(0, 1, 0.999, 0.999)).toEqual({ x: 10, y: 3 });
+  it('suit les tirages : x de -12 à 0 ou de 0 à 12, y de -9 à 9', () => {
+    expect(oreOffset(0, 0, 0)).toEqual({ x: -12, y: -9 });
+    expect(oreOffset(0, 0.999, 0.999)).toEqual({ x: 0, y: 9 });
+    expect(oreOffset(1, 0, 0)).toEqual({ x: 0, y: -9 });
+    expect(oreOffset(1, 0.999, 0.999)).toEqual({ x: 12, y: 9 });
   });
 });

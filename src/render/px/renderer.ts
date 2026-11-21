@@ -284,7 +284,7 @@ export class PxRenderer {
     const kind = rockKind(cell.type as 1 | 2 | 3 | 4);
     const variant = oreVariant(cell.count, hash(cellX, cellY, g.seed + 217));
     const alt = Math.floor(hash(cellX, cellY, g.seed + 218) * OUTCROP_ALTS);
-    const offset = oreOffset(cellX, cellY, hash(cellX, cellY, g.seed + 219), hash(cellX, cellY, g.seed + 220));
+    const offset = oreOffset(cellY, hash(cellX, cellY, g.seed + 219), hash(cellX, cellY, g.seed + 220));
     const sprite = outcropSprite(kind, variant, alt);
     const X = Math.round(cell.centerX * TILE_PX - sprite.img.width / 2 + offset.x);
     const footPx = Math.round(cell.footY * TILE_PX) - 2 + offset.y;
