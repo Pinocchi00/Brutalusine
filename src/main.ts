@@ -5,7 +5,7 @@
 import './ui/style.css';
 import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_FER, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
 import type { Ent } from './sim/ent';
-import { GROUND_WATER } from './sim/world';
+import { CHUNK, GROUND_WATER } from './sim/world';
 import { serialize, deserialize, writeSave, readSave } from './sim/save';
 import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
@@ -713,6 +713,25 @@ class App {
     this.drain();
     const z = this.cam.zoom / this.dpr, hw = window.innerWidth / 2 / z, hh = window.innerHeight / 2 / z;
     g.world.ensureArea(Math.floor(this.cam.x - hw) - 3, Math.floor(this.cam.y - hh) - 3, Math.ceil(this.cam.x + hw) + 3, Math.ceil(this.cam.y + hh) + 3);   // le monde se génère devant soi
+    if (this.pixel) {
+      // prépare un bloc manquant par image dans une marge de 32 cases, le plus proche de la vue d'abord
+      const margin = 32;
+      const cx0 = Math.floor((this.cam.x - hw - margin) / CHUNK);
+      const cx1 = Math.floor((this.cam.x + hw + margin) / CHUNK);
+      const cy0 = Math.floor((this.cam.y - hh - margin) / CHUNK);
+      const cy1 = Math.floor((this.cam.y + hh + margin) / CHUNK);
+      let best = Infinity, bestCx = 0, bestCy = 0;
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
+          if (g.world.chunk(cx, cy, false)) continue;
+          const dx = cx * CHUNK + CHUNK / 2 - this.cam.x;
+          const dy = cy * CHUNK + CHUNK / 2 - this.cam.y;
+          const d = dx * dx + dy * dy;
+          if (d < best) { best = d; bestCx = cx; bestCy = cy; }
+        }
+      }
+      if (best < Infinity) g.world.chunk(bestCx, bestCy);
+    }
     this.renderer.render(g, this.cam, {
       time: this.time, frame: this.frame, dt, players: this.started ? this.players : [],
       selected: this.hud.selected, hover: this.hover, rings: this.rings, marker: this.started ? this.marker() : null,

@@ -16,7 +16,7 @@ import { hash } from './noise';
 import { pen, type Pen } from './pen';
 import { animTime } from './clock';
 import { PixelFx, type BurstKind } from './fx';
-import { GROUND_PX, GroundCache, chunkMostlyWater } from './ground';
+import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import {
@@ -104,7 +104,7 @@ function drawChute(P: Pen, e: Ent): void {
 export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly ground = new GroundCache();
+  private readonly ground = new GroundLayer();
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
   private readonly lit: LitBuilding[] = [];
@@ -128,6 +128,11 @@ export class PxRenderer {
     this.fx.reset();
     this.lit.length = 0;
     this.now = 0;
+  }
+
+  /** Le temps réel passé dans la mise à jour du sol à la dernière image. */
+  get groundMs(): number {
+    return this.ground.groundMs;
   }
 
   /** Lance une rafale de particules autour d'une case. */
@@ -167,8 +172,9 @@ export class PxRenderer {
     const fade = g.sun.day ? Math.min(1, g.sun.elev * 4) : 0;
     const frame: Frame = { g, opts, view, ctx, P: pen(ctx), now: this.now, fade, shown: [] };
     this.lit.length = 0;
-    this.ground.beginFrame();
+    this.ground.update(g.world, view, opts.frame);
     this.addGround(frame);
+    this.addLife(frame);
     this.addBelts(frame);
     if (fade > 0) this.queue.add('cast', () => { ctx.globalAlpha = fade; });
     this.addTrees(frame);
@@ -181,31 +187,14 @@ export class PxRenderer {
     this.blit(view);
   }
 
-  /** Ajoute les blocs de sol visibles à la file de dessin. */
+  /** Ajoute le sol visible à la file de dessin. */
   private addGround(f: Frame): void {
-    const { view, ctx, g } = f;
-    const cx0 = Math.floor(view.tileX0 / CHUNK);
-    const cx1 = Math.floor(view.tileX1 / CHUNK);
-    const cy0 = Math.floor(view.tileY0 / CHUNK);
-    const cy1 = Math.floor(view.tileY1 / CHUNK);
-    for (let cy = cy0; cy <= cy1; cy++) {
-      for (let cx = cx0; cx <= cx1; cx++) {
-        const chunk = g.world.chunk(cx, cy, false);
-        if (!chunk) continue;
-        const image = this.ground.get(chunk, g.world, f.opts.frame);
-        const X = cx * CHUNK * TILE_PX;
-        const Y = cy * CHUNK * TILE_PX;
-        if (image) {
-          this.queue.add('ground', () => ctx.drawImage(image, X, Y));
-        } else {
-          const fill = chunkMostlyWater(chunk) ? C.q4 : C.m2;
-          this.queue.add('ground', () => {
-            ctx.fillStyle = fill;
-            ctx.fillRect(X, Y, GROUND_PX, GROUND_PX);
-          });
-        }
-      }
-    }
+    this.queue.add('ground', () => this.ground.drawGround(f.ctx));
+  }
+
+  /** Ajoute la vie du sol, par-dessus le sol et sous les tapis. */
+  private addLife(f: Frame): void {
+    this.queue.add('flat', () => this.ground.drawLife(f.ctx, f.view, f.now));
   }
 
   /** Ajoute les tapis et les objets qui glissent dessus. */
