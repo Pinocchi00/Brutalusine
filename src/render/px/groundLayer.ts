@@ -21,6 +21,12 @@ const CODES = CHUNK + 2;
 /** Le nombre d'images sans être vu après lequel la vie d'un bloc est oubliée. */
 const LIFE_TTL = 120;
 
+/**
+ * Le budget de peinture par image, en millisecondes. Il laisse 0,5 ms de marge aux autres
+ * travaux du sol (tri des blocs, lecture des codes et vie du sol) dans le budget de 4 ms.
+ */
+const GROUND_BUDGET_MS = 3.5;
+
 /** Une entrée de vie du sol, avec la dernière image où son bloc a été vu. */
 interface LifeEntry {
   life: GroundLife;
@@ -67,7 +73,7 @@ export class GroundLayer {
         },
         now: () => performance.now(),
       },
-      { budgetMs: 4 },
+      { budgetMs: GROUND_BUDGET_MS },
     );
   }
 
