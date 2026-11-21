@@ -129,6 +129,115 @@ describe('peinture du sol', () => {
     }
   });
 
+  it('peint toute case dallée comme une dalle, même sur sable ou avec un coin dans l’eau', () => {
+    const slab = (tx: number, ty: number): boolean => tx >= 3 && tx <= 5 && ty >= 3 && ty <= 5;
+    const prairie: Scene = { shore: () => 6, slab, paths: [], loot: () => false };
+    const sable: Scene = { shore: () => 1.2, slab, paths: [], loot: () => false };
+    const coin: Scene = {
+      shore: (cx, cy) => (cx === 3 && cy === 3 ? -0.5 : 6),
+      slab,
+      paths: [],
+      loot: () => false,
+    };
+    const width = 6 * TILE_PX;
+    const paint = (scene: Scene): Uint8ClampedArray => {
+      const out = new Uint8ClampedArray(width * width * 4);
+      paintGroundCore(blockSource(scene, 0, 0), out, 0, 0, 6, 6);
+      return out;
+    };
+    const reference = paint(prairie);
+    for (const [name, scene] of [['sable', sable], ['coin négatif', coin]] as const) {
+      const got = paint(scene);
+      for (let ty = 3; ty <= 5; ty++) {
+        for (let tx = 3; tx <= 5; tx++) {
+          for (let py = 0; py < TILE_PX; py++) {
+            for (let px = 0; px < TILE_PX; px++) {
+              const x = tx * TILE_PX + px;
+              const y = ty * TILE_PX + py;
+              const o = (y * width + x) * 4;
+              for (let k = 0; k < 4; k++) {
+                if (got[o + k] !== reference[o + k]) {
+                  throw new Error(`dalle ${name} différente en (${x},${y})`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('ne pose aucun décor sur les dalles et préserve l’ombre m5 qui déborde', () => {
+    const scene: Scene = {
+      shore: () => 1.4,
+      slab: (tx, ty) => tx >= 8 && tx <= 16 && ty >= 8 && ty <= 16,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = 20 * TILE_PX;
+    const full = new Uint8ClampedArray(width * width * 4);
+    const core = new Uint8ClampedArray(width * width * 4);
+    paintTiles(src, full, 0, 0, 20, 20);
+    paintGroundCore(src, core, 0, 0, 20, 20);
+    for (let ty = 8; ty <= 16; ty++) {
+      for (let tx = 8; tx <= 16; tx++) {
+        for (let py = 0; py < TILE_PX; py++) {
+          for (let px = 0; px < TILE_PX; px++) {
+            const x = tx * TILE_PX + px;
+            const y = ty * TILE_PX + py;
+            const o = (y * width + x) * 4;
+            for (let k = 0; k < 4; k++) {
+              if (full[o + k] !== core[o + k]) {
+                throw new Error(`décor sur la dalle en (${x},${y})`);
+              }
+            }
+          }
+        }
+      }
+    }
+    const m5 = pack(C.m5);
+    for (let y = 0; y < width; y++) {
+      for (let x = 0; x < width; x++) {
+        const o = (y * width + x) * 4;
+        const coreColor = (core[o] << 16) | (core[o + 1] << 8) | core[o + 2];
+        if (coreColor !== m5) continue;
+        const fullColor = (full[o] << 16) | (full[o + 1] << 8) | full[o + 2];
+        if (fullColor !== m5) throw new Error(`ombre m5 écrasée en (${x},${y})`);
+      }
+    }
+  });
+
+  it('donne le même sous-rectangle que le bloc entier avec des dalles sur sable', () => {
+    const scene: Scene = {
+      shore: () => 1.4,
+      slab: (tx, ty) => tx >= 8 && tx <= 16 && ty >= 8 && ty <= 16,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const full = new Uint8ClampedArray(CHUNK * TILE_PX * CHUNK * TILE_PX * 4);
+    paintTiles(src, full, 0, 0, CHUNK, CHUNK);
+    const rects = [[7, 7, 15, 15], [9, 13, 22, 22], [16, 16, 18, 18]] as const;
+    for (const [x0, y0, x1, y1] of rects) {
+      const w = (x1 - x0) * TILE_PX;
+      const h = (y1 - y0) * TILE_PX;
+      const part = new Uint8ClampedArray(w * h * 4);
+      paintTiles(src, part, x0, y0, x1, y1);
+      for (let ry = 0; ry < h; ry++) {
+        for (let rx = 0; rx < w; rx++) {
+          const a = (ry * w + rx) * 4;
+          const b = (((y0 * TILE_PX + ry) * CHUNK * TILE_PX) + (x0 * TILE_PX + rx)) * 4;
+          for (let k = 0; k < 4; k++) {
+            if (part[a + k] !== full[b + k]) {
+              throw new Error(`pixel (${rx},${ry}) du rectangle ${x0},${y0},${x1},${y1} diffère`);
+            }
+          }
+        }
+      }
+    }
+  });
+
   it('garde l’écume et les galets dans leur case', () => {
     const foam: Scene = {
       shore: (cx, cy) => (cx >= 2 && cx <= 3 && cy >= 2 && cy <= 3 ? -0.5 : -5),
@@ -208,6 +317,32 @@ describe('peinture du sol', () => {
         throw new Error(`couleur d’argile inattendue : ${clayColor.toString(16)}`);
       }
     }
+  });
+
+  it('garde l’argile rare et groupée sur une longue rive', () => {
+    const scene: Scene = {
+      shore: () => 1.4,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = CHUNK * TILE_PX;
+    const full = new Uint8ClampedArray(width * width * 4);
+    const core = new Uint8ClampedArray(width * width * 4);
+    paintTiles(src, full, 0, 0, CHUNK, CHUNK);
+    paintGroundCore(src, core, 0, 0, CHUNK, CHUNK);
+    const clayTiles = new Set<number>();
+    for (let y = 0; y < width; y++) {
+      for (let x = 0; x < width; x++) {
+        const o = (y * width + x) * 4;
+        if (full[o] === core[o] && full[o + 1] === core[o + 1] && full[o + 2] === core[o + 2]) continue;
+        clayTiles.add(Math.floor(y / TILE_PX) * CHUNK + Math.floor(x / TILE_PX));
+      }
+    }
+    const ratio = clayTiles.size / (CHUNK * CHUNK);
+    expect(ratio).toBeGreaterThanOrEqual(0.02);
+    expect(ratio).toBeLessThanOrEqual(0.09);
   });
 
   it('garde la silhouette et les couleurs de la ferraille', () => {

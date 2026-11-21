@@ -4,7 +4,7 @@
  */
 import { CHUNK } from '../../sim/world';
 import { C } from './palette';
-import { hash, rng, smooth } from './noise';
+import { hash, rng, smooth, vnoise } from './noise';
 import { TILE_PX } from './view';
 
 /** Un segment de sentier, en cases du monde. */
@@ -138,8 +138,19 @@ function pixelWords(out: Uint8ClampedArray): Uint32Array | null {
   return new Uint32Array(out.buffer, out.byteOffset, out.length >>> 2);
 }
 
-/** Peint le socle du sol (eau, rivage, dalle, sentier, prairie), sans décor ni débris. */
-export function paintGroundCore(
+/** Le rectangle d'un appel en pixels du monde. */
+function tileBounds(tx0: number, ty0: number, tx1: number, ty1: number): Bounds {
+  return {
+    x0: tx0 * TILE_PX,
+    y0: ty0 * TILE_PX,
+    x1: tx1 * TILE_PX,
+    y1: ty1 * TILE_PX,
+    width: (tx1 - tx0) * TILE_PX,
+  };
+}
+
+/** Peint le socle brut (eau, rivage, dalle, prairie), sans sentier, décor ni débris. */
+function paintGroundBase(
   src: GroundSource,
   out: Uint8ClampedArray,
   tx0: number,
@@ -148,14 +159,7 @@ export function paintGroundCore(
   ty1: number,
 ): void {
   if (tx1 <= tx0 || ty1 <= ty0) return;
-  const bounds: Bounds = {
-    x0: tx0 * TILE_PX,
-    y0: ty0 * TILE_PX,
-    x1: tx1 * TILE_PX,
-    y1: ty1 * TILE_PX,
-    width: (tx1 - tx0) * TILE_PX,
-  };
-  const slabAt = slabLookup(src);
+  const bounds = tileBounds(tx0, ty0, tx1, ty1);
   const out32 = pixelWords(out);
   const waterNoise = makeNoiseGrid(bounds, 0.03, 0.022, 3);
   const grassNoise = makeNoiseGrid(bounds, 0.016, 0.016, 11);
@@ -187,6 +191,23 @@ export function paintGroundCore(
       const baseY = ty * TILE_PX;
       const localX = (tx - tx0) * TILE_PX;
       const localY = (ty - ty0) * TILE_PX;
+      if (isSlab) {
+        for (let py = 0; py < TILE_PX; py++) {
+          const rowBase = (localY + py) * bounds.width + localX;
+          for (let px = 0; px < TILE_PX; px++) {
+            const index = rowBase + px;
+            if (out32) out32[index] = RGB.c1;
+            else {
+              const o = index * 4;
+              out[o] = RGB.c1 & 255;
+              out[o + 1] = (RGB.c1 >>> 8) & 255;
+              out[o + 2] = (RGB.c1 >>> 16) & 255;
+              out[o + 3] = 255;
+            }
+          }
+        }
+        continue;
+      }
       for (let py = 0; py < TILE_PX; py++) {
         const fy = py / TILE_PX;
         const rowOffset = localY + py;
@@ -221,8 +242,6 @@ export function paintGroundCore(
             color = hash(wx, wy, 9) < 0.035 ? RGB.sd1 : RGB.sd0;
           } else if (dd > -38) {
             color = ((wx + wy) & 1) === 0 ? RGB.m1 : RGB.sd0;
-          } else if (isSlab) {
-            color = RGB.c1;
           } else {
             const ci = gnCol[cx];
             const u = gnColF[cx];
@@ -253,12 +272,25 @@ export function paintGroundCore(
       }
     }
   }
-
-  paintPaths(src, out, bounds, tx0, ty0, tx1, ty1);
-  paintSlabDetails(src, out, bounds, tx0, ty0, tx1, ty1, slabAt);
 }
 
-/** Peint le bloc entier : le socle, puis l'écume, les galets, le gué, l'argile et les débris. */
+/** Peint le socle du sol (eau, rivage, sentier, dalle), sans décor ni débris. */
+export function paintGroundCore(
+  src: GroundSource,
+  out: Uint8ClampedArray,
+  tx0: number,
+  ty0: number,
+  tx1: number,
+  ty1: number,
+): void {
+  if (tx1 <= tx0 || ty1 <= ty0) return;
+  paintGroundBase(src, out, tx0, ty0, tx1, ty1);
+  const bounds = tileBounds(tx0, ty0, tx1, ty1);
+  paintPaths(src, out, bounds, tx0, ty0, tx1, ty1);
+  paintSlabDetails(src, out, bounds, tx0, ty0, tx1, ty1, slabLookup(src));
+}
+
+/** Peint le bloc entier : socle, sentier, décor, détails de dalle, puis débris. */
 export function paintTiles(
   src: GroundSource,
   out: Uint8ClampedArray,
@@ -268,15 +300,11 @@ export function paintTiles(
   ty1: number,
 ): void {
   if (tx1 <= tx0 || ty1 <= ty0) return;
-  paintGroundCore(src, out, tx0, ty0, tx1, ty1);
-  const bounds: Bounds = {
-    x0: tx0 * TILE_PX,
-    y0: ty0 * TILE_PX,
-    x1: tx1 * TILE_PX,
-    y1: ty1 * TILE_PX,
-    width: (tx1 - tx0) * TILE_PX,
-  };
+  paintGroundBase(src, out, tx0, ty0, tx1, ty1);
+  const bounds = tileBounds(tx0, ty0, tx1, ty1);
+  paintPaths(src, out, bounds, tx0, ty0, tx1, ty1);
   paintDecor(src, out, bounds, tx0, ty0, tx1, ty1);
+  paintSlabDetails(src, out, bounds, tx0, ty0, tx1, ty1, slabLookup(src));
   paintDebris(src, out, bounds, tx0, ty0, tx1, ty1);
 }
 
@@ -566,8 +594,10 @@ function paintDecor(
   for (let ty = ty0; ty < ty1; ty++) {
     const ly = ty - src.originY;
     const cornerRow = ly * CORNER;
+    const slabRow = (ly + 1) * SLAB_SIDE;
     for (let tx = tx0; tx < tx1; tx++) {
       const lx = tx - src.originX;
+      if (src.slab[slabRow + lx + 1] !== 0) continue;
       const c00 = src.shore[cornerRow + lx];
       const c10 = src.shore[cornerRow + lx + 1];
       const c01 = src.shore[cornerRow + CORNER + lx];
@@ -698,7 +728,9 @@ function clayTile(
   c01: number,
   c11: number,
 ): void {
-  if (hash(tx, ty, seed + 111) >= 0.22) return;
+  const zone = vnoise(tx / 12, ty / 12, seed + 110);
+  if (zone < 0.72) return;
+  if (hash(tx, ty, seed + 111) >= 0.3) return;
   if (avg > 1.55) return;
   const cx = 5 + hash(tx, ty, seed + 112) * 14;
   const cy = 5 + hash(tx, ty, seed + 113) * 14;
