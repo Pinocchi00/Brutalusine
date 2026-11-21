@@ -199,6 +199,18 @@ button.big.ghost:hover { border-color: var(--signal); }
 .titlecard h1 { font-size: clamp(64px, 12vw, 156px); letter-spacing: 0.03em; margin: 6px 0 16px; }
 .titlecard p { font-size: 17px; margin: 0 0 24px; color: #d8d5cc; }
 .titlecard button.big { font-size: 28px; padding: 14px 36px; }
+#save-note {
+  max-width: 440px;
+  margin: 18px auto 20px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--signal);
+  background: rgba(240, 138, 36, 0.08);
+  color: #f2e9d8;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (max-width: 1500px) { #build { max-width: calc(100vw - 32px); bottom: 16px; } #alerts { bottom: 170px; } #sidebtns { bottom: 170px; } #quota { width: 300px; } }

@@ -3,6 +3,7 @@ import {
   TILE_PX,
   computeView,
   pickScale,
+  renderZoom,
   scaleBounds,
   screenToWorld,
   stepScale,
@@ -90,6 +91,15 @@ describe('échelles', () => {
       expect(stepScale(min, -1, w, h)).toBe(min);
       expect(stepScale(max, 1, w, h)).toBe(max);
     }
+  });
+});
+
+describe('échelle réelle du rendu', () => {
+  it('arrondit le zoom au multiple entier de case utilisé par le rendu', () => {
+    expect(renderZoom(24)).toBe(24);
+    expect(renderZoom(35)).toBe(24);
+    expect(renderZoom(36)).toBe(48);
+    expect(renderZoom(72)).toBe(72);
   });
 });
 

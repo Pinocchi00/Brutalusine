@@ -23,6 +23,7 @@ interface Blit {
 class FakeContext {
   fillStyle = '';
   imageSmoothingEnabled = true;
+  rects = 0;
 
   constructor(private readonly canvas: FakeCanvas) {}
 
@@ -30,7 +31,9 @@ class FakeContext {
     blits.push({ canvas: this.canvas, data: Uint8ClampedArray.from(image.data), x, y, w: image.width, h: image.height });
   }
 
-  fillRect(): void {}
+  fillRect(): void {
+    this.rects++;
+  }
 
   drawImage(): void {}
 }
@@ -246,6 +249,7 @@ describe('cases bloquées', () => {
     chunk.slab[i] = 0;
     chunk.deposit[i] = 0;
     chunk.canopy[i] = 0;
+    chunk.loot[i] = 0;
     expect(layer.blocked(5, 5)).toBe(false);
     chunk.canopy[i] = TREE_MIN - 1;
     expect(layer.blocked(5, 5)).toBe(false);
@@ -260,6 +264,27 @@ describe('cases bloquées', () => {
     chunk.slab[i] = 0;
     chunk.deposit[i] = 1;
     expect(layer.blocked(5, 5)).toBe(true);
+    chunk.deposit[i] = 0;
+    chunk.loot[i] = 1;
+    expect(layer.blocked(5, 5)).toBe(true);
+  });
+});
+
+describe('vie du sol', () => {
+  it('ne dessine pas la vie d’un bloc dont la surface a disparu du cache', () => {
+    const world = new World(11);
+    const view = viewOf(0, 0, 31, 31);
+    const layer = new GroundLayer();
+    settle(layer, world, view, 0);
+    const ctx = new FakeCanvas().ctx as unknown as CanvasRenderingContext2D;
+    const fake = ctx as unknown as FakeContext;
+    layer.drawLife(ctx, view, 0);
+    expect(fake.rects).toBeGreaterThan(0);
+    const internals = layer as unknown as { cache: { clear(): void } };
+    internals.cache.clear();
+    fake.rects = 0;
+    layer.drawLife(ctx, view, 0);
+    expect(fake.rects).toBe(0);
   });
 });
 

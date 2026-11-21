@@ -396,3 +396,47 @@ describe('performance', () => {
     expect((performance.now() - t0) / 300).toBeLessThan(4);
   });
 });
+
+describe('repousse des arbres', () => {
+  it('la phase de repousse ne dépend pas de l’ordre de génération des blocs', () => {
+    const first = new Game(2024);
+    const common: [number, number][] = [[-2, -2], [-1, 0], [0, 0], [1, 1]];
+    const candidates: [number, number][] = [];
+    for (let cy = 2; cy <= 5; cy++) {
+      for (let cx = 2; cx <= 5; cx++) candidates.push([cx, cy]);
+    }
+    let target: [number, number] | null = null;
+    for (const [cx, cy] of candidates) {
+      const c = first.world.chunk(cx, cy)!;
+      if (!target && c.cap.some((v) => v > 0)) target = [cx, cy];
+      common.push([cx, cy]);
+    }
+    expect(target).not.toBeNull();
+    const index = first.world.list.findIndex((c) => c.cx === target![0] && c.cy === target![1]);
+    // Un décalage de 80 - index fait passer ce bloc d'une visite de plus à une visite de moins en 2 000 pas.
+    const extras = 80 - index;
+    const second = new Game(2024);
+    for (let i = 0; i < extras; i++) {
+      const extra = second.world.chunk(40 + (i % 16), 40 + Math.floor(i / 16))!;
+      extra.canopy.fill(0);
+      extra.cap.fill(0);
+    }
+    for (const [cx, cy] of common.slice(4)) second.world.chunk(cx, cy);
+    for (const g of [first, second]) {
+      for (const [cx, cy] of common) {
+        const c = g.world.chunk(cx, cy)!;
+        for (let i = 0; i < c.cap.length; i++) if (c.cap[i] > 0) c.canopy[i] = 0;
+      }
+    }
+    for (let t = 0; t < 2000; t++) {
+      first.step();
+      second.step();
+    }
+    expect(second.atmo.co2).toBe(first.atmo.co2);
+    for (const [cx, cy] of common) {
+      const a = first.world.chunk(cx, cy)!;
+      const b = second.world.chunk(cx, cy)!;
+      expect(Array.from(b.canopy)).toEqual(Array.from(a.canopy));
+    }
+  });
+});

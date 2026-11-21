@@ -337,10 +337,11 @@ export class GroundCache<K, S> {
   }
 
   /** Libère le bloc le moins récemment vu avant cette image et range sa surface en réserve. */
-  private evictOne(visibleSet: Set<K>, frame: number): boolean {
+  private evictOne(visibleSet: Set<K>, frame: number, includeFresh = false): boolean {
     let oldest: Entry<K, S> | null = null;
     for (const entry of this.entries.values()) {
-      if (visibleSet.has(entry.chunk) || entry.used >= frame) continue;
+      if (visibleSet.has(entry.chunk)) continue;
+      if (!includeFresh && entry.used >= frame) continue;
       if (!oldest || entry.used < oldest.used) oldest = entry;
     }
     if (!oldest) return false;
@@ -350,10 +351,10 @@ export class GroundCache<K, S> {
     return true;
   }
 
-  /** Ramène le cache sous sa limite sans jamais libérer un bloc visible ni vu à cette image. */
+  /** Ramène le cache sous sa limite sans jamais libérer un bloc visible. */
   private evictToLimit(visibleSet: Set<K>, frame: number): void {
     while (this.entries.size > this.limit) {
-      if (!this.evictOne(visibleSet, frame)) return;
+      if (!this.evictOne(visibleSet, frame, true)) return;
     }
   }
 }

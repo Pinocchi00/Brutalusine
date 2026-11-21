@@ -2,7 +2,7 @@
  * La peinture du sol d'un bloc, fidèle à la maquette `heure-doree.html`.
  * Tout est pur : aucune API du navigateur, aucun état gardé entre deux appels.
  */
-import { CHUNK } from '../../sim/world';
+import { CHUNK, FORD_TILE } from '../../sim/world';
 import { C } from './palette';
 import { hash, rng, smooth, vnoise } from './noise';
 import { TILE_PX } from './view';
@@ -46,9 +46,6 @@ const DIRT_NOISE = 1.5;
 
 /** La distance d'un centre de case à un segment au-delà de laquelle aucune case ne peut être peinte. */
 const TILE_SEGMENT_REACH = TILE_PX * 0.75 + DIRT_REACH + DIRT_NOISE;
-
-/** Le gué au-delà duquel l'eau devient un aplat clair, sans bandes profondes. */
-const FORD_FULL = 0.6;
 
 /** Les tons du sol, empaquetés en RGBA 32 bits (octet rouge en premier), pour peindre vite. */
 const RGB = {
@@ -260,10 +257,10 @@ function paintGroundBase(
               const top = f00 + (f10 - f00) * fx;
               const bottom = f01 + (f11 - f01) * fx;
               const f = top + (bottom - top) * fy;
-              if (f > FORD_FULL) {
+              if (f >= FORD_TILE) {
                 color = RGB.q2;
               } else {
-                const depth = e * (1 - smooth(Math.min(1, f / FORD_FULL)));
+                const depth = e * (1 - smooth(Math.min(1, f / FORD_TILE)));
                 color = waterColor(depth);
               }
             }
@@ -303,8 +300,8 @@ function paintGroundBase(
           dd += ddStep;
         }
       }
-      if (hasFord && f00 + f10 + f01 + f11 > 4 * FORD_FULL && c00 + c10 + c01 + c11 < 0) {
-        waterDabsTile(out, bounds, tx, ty, src.seed);
+      if (hasFord && f00 + f10 + f01 + f11 >= 4 * FORD_TILE && c00 + c10 + c01 + c11 < 0) {
+        waterDabsTile(out, bounds, tx, ty, src.seed, c00, c10, c01, c11);
       }
     }
   }
@@ -650,7 +647,7 @@ function paintDecor(
       if (avg > 0.1 && avg < 1.2 && nearPath(src.paths, tx, ty)) {
         fordTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
       }
-      if (avg < 0 && ford >= 0.9) fordStonesTile(out, bounds, tx, ty, seed);
+      if (avg < 0 && ford >= FORD_TILE) fordStonesTile(out, bounds, tx, ty, seed);
     }
   }
 }
@@ -764,6 +761,10 @@ function waterDabsTile(
   tx: number,
   ty: number,
   seed: number,
+  c00: number,
+  c10: number,
+  c01: number,
+  c11: number,
 ): void {
   const count = 2 + (hash(tx, ty, seed + 131) < 0.5 ? 1 : 0);
   for (let k = 0; k < count; k++) {
@@ -773,7 +774,10 @@ function waterDabsTile(
     const y = 2 + k * 4 + Math.floor(hash(tx, ty, salt + 2) * 2);
     const X = tx * TILE_PX + x;
     const Y = ty * TILE_PX + y;
-    for (let i = 0; i < w; i++) putWorld(out, bounds, X + i, Y, RGB.q1);
+    for (let i = 0; i < w; i++) {
+      if (localDd(c00, c10, c01, c11, x + i, y) <= 3) continue;
+      putWorld(out, bounds, X + i, Y, RGB.q1);
+    }
   }
 }
 

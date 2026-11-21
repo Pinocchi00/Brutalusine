@@ -460,9 +460,10 @@ describe('peinture du sol', () => {
 
   it('trace deux ou trois traits de courant d’au plus 5 pixels par case de plein gué', () => {
     const tiles = 8;
+    const seed = 4242;
     const scene: Scene = {
       shore: () => -6,
-      ford: () => 0.7,
+      ford: () => 0.95,
       slab: () => false,
       paths: [],
       loot: () => false,
@@ -473,35 +474,75 @@ describe('peinture du sol', () => {
     const out = new Uint8ClampedArray(width * height * 4);
     paintTiles(src, out, 0, 0, tiles, tiles);
     const isQ1 = (x: number, y: number): boolean => pixelColor(out, y * width + x) === Q1;
-    const perTile = new Map<number, number>();
-    for (let y = 0; y < height; y++) {
-      let x = 0;
-      while (x < width) {
-        if (!isQ1(x, y)) {
-          x++;
-          continue;
+    for (let ty = 0; ty < tiles; ty++) {
+      for (let tx = 0; tx < tiles; tx++) {
+        const stone = hash(tx, ty, seed + 120) < 0.45;
+        let count = 0;
+        for (let py = 0; py < TILE_PX; py++) {
+          let px = 0;
+          while (px < TILE_PX) {
+            const x = tx * TILE_PX + px;
+            const y = ty * TILE_PX + py;
+            if (!isQ1(x, y)) {
+              px++;
+              continue;
+            }
+            let length = 0;
+            while (px + length < TILE_PX && isQ1(x + length, y)) length++;
+            // La pierre de gué, posée après, coupe ses propres traits et ceux qu’elle recouvre.
+            if (!stone) {
+              expect(length).toBeGreaterThanOrEqual(3);
+              expect(length).toBeLessThanOrEqual(5);
+              count++;
+            } else if (length === 6 || length === 7) {
+              throw new Error(`trait trop long en (${x},${y})`);
+            }
+            px += length;
+          }
         }
-        let length = 0;
-        while (x + length < width && isQ1(x + length, y)) length++;
-        expect(length).toBeGreaterThanOrEqual(3);
-        expect(length).toBeLessThanOrEqual(5);
-        const tile = Math.floor(y / TILE_PX) * tiles + Math.floor(x / TILE_PX);
-        perTile.set(tile, (perTile.get(tile) ?? 0) + 1);
-        x += length;
+        if (!stone) {
+          expect(count).toBeGreaterThanOrEqual(2);
+          expect(count).toBeLessThanOrEqual(3);
+        }
       }
     }
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!isQ1(x, y)) continue;
+        const tx = Math.floor(x / TILE_PX);
+        const ty = Math.floor(y / TILE_PX);
+        // La pierre de gué et ses traits peuvent former des voisinages verticaux : on les laisse.
+        if (hash(tx, ty, seed + 120) < 0.45) continue;
         if ((y > 0 && isQ1(x, y - 1)) || (y + 1 < height && isQ1(x, y + 1))) {
           throw new Error(`trait de courant sur plus d’une ligne en (${x},${y})`);
         }
       }
     }
-    for (let t = 0; t < tiles * tiles; t++) {
-      const count = perTile.get(t) ?? 0;
-      expect(count).toBeGreaterThanOrEqual(2);
-      expect(count).toBeLessThanOrEqual(3);
+  });
+
+  it('ne trace aucun courant sur le sable d’une rive diagonale', () => {
+    const seed = 4242;
+    let tileX = -1;
+    let tileY = -1;
+    for (let ty = 0; ty <= 16 && tileX < 0; ty++) {
+      const tx = 16 - ty;
+      if (hash(tx, ty, seed + 120) >= 0.45) {
+        tileX = tx;
+        tileY = ty;
+      }
+    }
+    expect(tileX).toBeGreaterThanOrEqual(0);
+    const scene: Scene = {
+      shore: (cx, cy) => (cx + cy - 18) * 0.06,
+      ford: () => 1,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const out = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintTiles(blockSource(scene, 0, 0), out, tileX, tileY, tileX + 1, tileY + 1);
+    for (let i = 0; i < TILE_PX * TILE_PX; i++) {
+      if (pixelColor(out, i) === Q1) throw new Error(`trait de courant sur le sable au pixel ${i}`);
     }
   });
 

@@ -7,6 +7,11 @@
 /** Le nombre de pixels de pixel art dans une case du monde. */
 export const TILE_PX = 24;
 
+/** L'échelle réelle du rendu pixel : un multiple entier de case, jamais nul. */
+export function renderZoom(zoom: number): number {
+  return Math.max(1, Math.round(zoom / TILE_PX)) * TILE_PX;
+}
+
 /** Le nombre de lignes monde que l'écran montre par défaut (le cadrage de la maquette). */
 const DEFAULT_WORLD_LINES = 360;
 

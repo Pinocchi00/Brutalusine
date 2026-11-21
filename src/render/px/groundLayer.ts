@@ -147,13 +147,14 @@ export class GroundLayer {
     const x1 = (view.tileX1 + 1) * TILE_PX;
     const y1 = (view.tileY1 + 1) * TILE_PX;
     for (const chunk of this.visible) {
+      if (!this.cache.get(chunk)) continue;
       const entry = this.life.get(chunk);
       if (!entry) continue;
       drawGroundLife(P, entry.life, anim, x0, y0, x1, y1, this.blocked);
     }
   }
 
-  /** Vrai si une case porte une entité, une dalle, un gisement ou un arbre. */
+  /** Vrai si une case porte une entité, une dalle, un gisement, un arbre ou des débris. */
   readonly blocked = (tx: number, ty: number): boolean => {
     const world = this.world;
     if (!world) return false;
@@ -164,6 +165,7 @@ export class GroundLayer {
       chunk.ent[i] !== 0 ||
       chunk.slab[i] !== 0 ||
       chunk.deposit[i] !== 0 ||
+      chunk.loot[i] !== 0 ||
       chunk.canopy[i] >= TREE_MIN
     );
   };
