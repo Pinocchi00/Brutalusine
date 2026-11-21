@@ -128,6 +128,30 @@ describe('budget', () => {
     expect(fake.paints.length).toBe(1);
   });
 
+  it('ne peint aucune rangée quand les retouches ont pris tout le budget', () => {
+    const fake = new Fake();
+    const a = fake.chunk('a', 4);
+    const b = fake.chunk('b');
+    const cache = fake.cache(4);
+    let frame = 0;
+    while (cache.get(a) === null) {
+      cache.update([a], [], frame++);
+      if (frame > 100) throw new Error('le bloc a ne finit pas');
+    }
+    setCode(a, 10, 10, 7);
+    const mark = fake.paints.length;
+    cache.update([a, b], [], frame++);
+    const fresh = after(fake, mark);
+    expect(fresh.some((call) => call.chunk === b)).toBe(false);
+    expect(fresh.some((call) => call.chunk === a)).toBe(true);
+    expect(cache.get(b)).toBeNull();
+    while (cache.get(b) === null) {
+      cache.update([a, b], [], frame++);
+      if (frame > 200) throw new Error('le bloc b ne finit pas');
+    }
+    expect(cache.get(b)).not.toBeNull();
+  });
+
   it('reste prudent quand le coût augmente puis baisse', () => {
     const fake = new Fake();
     const a = fake.chunk('a', 1);
@@ -256,6 +280,56 @@ describe('retouches', () => {
     expect(rects.length).toBe(1);
     expect(rects[0]).toMatchObject({ tx0: 9, ty0: 9, tx1: 12, ty1: 12 });
   });
+
+  it('rattrape un code revenu à son état initial pendant la peinture', () => {
+    const fake = new Fake();
+    const a = fake.chunk('a', 1);
+    const cache = fake.cache(1);
+    fake.onPaint = (call) => {
+      if (call.chunk !== a) return;
+      if (call.ty0 === 5) setCode(a, 10, 10, 5);
+      if (call.ty0 === 10) setCode(a, 10, 10, 0);
+    };
+    let frame = 0;
+    while (cache.get(a) === null) {
+      cache.update([a], [], frame++);
+      if (frame > 100) throw new Error('le bloc ne finit pas');
+    }
+    const mark = fake.paints.length;
+    cache.update([a], [], frame);
+    const rects = after(fake, mark);
+    const covered = rects.some(
+      (call) => call.tx0 <= 10 && 10 < call.tx1 && call.ty0 <= 10 && 10 < call.ty1,
+    );
+    expect(covered).toBe(true);
+  });
+});
+
+describe('fusion des retouches', () => {
+  it('ne fusionne pas un L de 32 cases en un grand rectangle', () => {
+    const fake = new Fake();
+    const a = fake.chunk('a');
+    const cache = fake.cache();
+    cache.update([a], [], 0);
+    const tiles: Array<[number, number]> = [];
+    for (let x = 0; x <= 21; x++) tiles.push([x, 10]);
+    for (let y = 11; y <= 20; y++) tiles.push([21, y]);
+    expect(tiles.length).toBe(32);
+    for (const [x, y] of tiles) setCode(a, x, y, 5);
+    const mark = fake.paints.length;
+    cache.update([a], [], 1);
+    const rects = after(fake, mark);
+    expect(rects.length).toBeGreaterThan(0);
+    for (const rect of rects) {
+      expect((rect.tx1 - rect.tx0) * (rect.ty1 - rect.ty0)).toBeLessThanOrEqual(32);
+    }
+    for (const [x, y] of tiles) {
+      const covered = rects.some(
+        (rect) => rect.tx0 <= x && x < rect.tx1 && rect.ty0 <= y && y < rect.ty1,
+      );
+      expect(covered).toBe(true);
+    }
+  });
 });
 
 describe('mémoire', () => {
@@ -284,7 +358,24 @@ describe('mémoire', () => {
     expect(cache.get(b)).not.toBeNull();
   });
 
-  it('libère les voisins les plus anciens sans toucher au visible', () => {
+  it('ne fait pas tourner les voisins quand la limite est atteinte', () => {
+    const fake = new Fake();
+    const a = fake.chunk('a');
+    const b = fake.chunk('b');
+    const c = fake.chunk('c');
+    const d = fake.chunk('d');
+    const e = fake.chunk('e');
+    const f = fake.chunk('f');
+    const cache = fake.cache(4, 4);
+    cache.update([a, b, c], [d, e, f], 0);
+    const mark = fake.paints.length;
+    for (let frame = 1; frame < 200; frame++) {
+      cache.update([a, b, c], [d, e, f], frame);
+    }
+    expect(after(fake, mark).length).toBe(0);
+  });
+
+  it('ne prépare qu’un voisin quand tous sont vus à la même image', () => {
     const fake = new Fake();
     const a = fake.chunk('a');
     const b = fake.chunk('b');
@@ -293,10 +384,10 @@ describe('mémoire', () => {
     const cache = fake.cache(4, 2);
     cache.update([a], [b, c, d], 0);
     expect(cache.get(a)).not.toBeNull();
-    expect(cache.get(b)).toBeNull();
+    expect(cache.get(b)).not.toBeNull();
     expect(cache.get(c)).toBeNull();
-    expect(cache.get(d)).not.toBeNull();
-    // A et B ouvrent deux surfaces ; C et D réutilisent celle de B.
+    expect(cache.get(d)).toBeNull();
+    // A et B ouvrent deux surfaces.
     expect(fake.created).toBe(2);
   });
 });

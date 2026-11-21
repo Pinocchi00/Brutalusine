@@ -19,6 +19,9 @@ const CODES = TILES + 2;
 /** Le nombre d'octets d'une rangée peinte. */
 const ROW_BYTES = BLOCK_PX * TILE_PX * 4;
 
+/** L'aire maximale, en cases, qu'une fusion de rectangles peut produire. */
+const MERGE_AREA = 32;
+
 /** Le nombre de coûts récents retenus pour estimer la tranche la plus lente. */
 const RECENT = 8;
 
@@ -74,26 +77,32 @@ interface JobState<K> {
   done: Set<K>;
 }
 
-/** Ajoute un rectangle en fusionnant ceux qui se chevauchent déjà. */
+/** Ajoute un rectangle en fusionnant ceux qui se chevauchent, tant que l'aire reste petite. */
 function addRect(list: Rect[], rect: Rect): void {
-  let merged = rect;
+  let result = rect;
   for (let i = 0; i < list.length; ) {
     const other = list[i];
-    const overlap = merged.x0 < other.x1 && other.x0 < merged.x1 && merged.y0 < other.y1 && other.y0 < merged.y1;
+    const overlap = result.x0 < other.x1 && other.x0 < result.x1 && result.y0 < other.y1 && other.y0 < result.y1;
     if (!overlap) {
       i++;
       continue;
     }
-    merged = {
-      x0: Math.min(merged.x0, other.x0),
-      y0: Math.min(merged.y0, other.y0),
-      x1: Math.max(merged.x1, other.x1),
-      y1: Math.max(merged.y1, other.y1),
+    const merged = {
+      x0: Math.min(result.x0, other.x0),
+      y0: Math.min(result.y0, other.y0),
+      x1: Math.max(result.x1, other.x1),
+      y1: Math.max(result.y1, other.y1),
     };
+    const area = (merged.x1 - merged.x0) * (merged.y1 - merged.y0);
+    if (area > MERGE_AREA) {
+      i++;
+      continue;
+    }
+    result = merged;
     list.splice(i, 1);
     i = 0;
   }
-  list.push(merged);
+  list.push(result);
 }
 
 /** Le cache des blocs de sol, peint par rangées et retouché case par case. */
@@ -106,7 +115,6 @@ export class GroundCache<K, S> {
   private readonly rowBuffer = new Uint8ClampedArray(ROW_BYTES);
   private readonly codeScratch = new Uint8Array(CODES * CODES);
   private readonly recent: number[] = [];
-  private rectBuffer: Uint8ClampedArray | null = null;
   private active: Entry<K, S> | null = null;
   private slowest = 0;
 
@@ -129,7 +137,7 @@ export class GroundCache<K, S> {
     this.retouchBlocks(visible, null, state);
     this.retouchBlocks(nearby, visibleSet, state);
     this.paintBlocks(visible, nearby, visibleSet, nearbySet, frame, state);
-    this.evictToLimit(visibleSet);
+    this.evictToLimit(visibleSet, frame);
   }
 
   /** La surface d'un bloc entièrement peint, sinon `null`. */
@@ -144,7 +152,6 @@ export class GroundCache<K, S> {
     this.entries.clear();
     this.pool.length = 0;
     this.active = null;
-    this.rectBuffer = null;
     this.recent.length = 0;
     this.slowest = 0;
   }
@@ -172,14 +179,14 @@ export class GroundCache<K, S> {
     this.slowest = slowest;
   }
 
-  /** Compare les codes et repeint les petits rectangles des blocs déjà peints. */
+  /** Compare les codes de chaque bloc vu, et repeint les retouches des blocs complets. */
   private retouchBlocks(list: readonly K[], skip: Set<K> | null, state: JobState<K>): void {
     for (const chunk of list) {
       if (skip && skip.has(chunk)) continue;
       const entry = this.entries.get(chunk);
-      if (!entry || !entry.complete) continue;
+      if (!entry) continue;
       this.syncCodes(entry);
-      this.flushRects(entry, state);
+      if (entry.complete) this.flushRects(entry, state);
     }
   }
 
@@ -218,11 +225,7 @@ export class GroundCache<K, S> {
     const w = (rect.x1 - rect.x0) * TILE_PX;
     const h = (rect.y1 - rect.y0) * TILE_PX;
     if (w <= 0 || h <= 0) return;
-    const size = w * h * 4;
-    if (!this.rectBuffer || this.rectBuffer.length !== size) {
-      this.rectBuffer = new Uint8ClampedArray(size);
-    }
-    const buffer = this.rectBuffer;
+    const buffer = this.rowBuffer.subarray(0, w * h * 4);
     const before = this.deps.now();
     this.deps.paint(entry.chunk, buffer, rect.x0, rect.y0, rect.x1, rect.y1);
     this.deps.blit(entry.surface, buffer, rect.x0 * TILE_PX, rect.y0 * TILE_PX, w, h);
@@ -255,7 +258,7 @@ export class GroundCache<K, S> {
     frame: number,
     state: JobState<K>,
   ): Entry<K, S> | null {
-    if (state.rows > 0 && !this.fits(state)) return null;
+    if (state.rows + state.retouched > 0 && !this.fits(state)) return null;
     if (this.active) {
       const key = this.active.chunk;
       const relevant = visibleSet.has(key) || nearbySet.has(key);
@@ -296,7 +299,7 @@ export class GroundCache<K, S> {
   /** Peint les rangées restantes d'un bloc ; rend vrai quand il est complet. */
   private paintRows(entry: Entry<K, S>, state: JobState<K>): boolean {
     while (entry.row < TILES) {
-      if (state.rows > 0 && !this.fits(state)) break;
+      if (state.rows + state.retouched > 0 && !this.fits(state)) break;
       const before = this.deps.now();
       this.deps.paint(entry.chunk, this.rowBuffer, 0, entry.row, TILES, entry.row + 1);
       this.deps.blit(entry.surface, this.rowBuffer, 0, entry.row * TILE_PX, BLOCK_PX, TILE_PX);
@@ -314,7 +317,7 @@ export class GroundCache<K, S> {
   /** Ouvre un bloc, en réutilisant une surface libérée quand il y en a une. */
   private createEntry(chunk: K, isVisible: boolean, visibleSet: Set<K>, frame: number): Entry<K, S> | null {
     if (!isVisible && this.entries.size >= this.limit) {
-      this.evictOne(visibleSet);
+      this.evictOne(visibleSet, frame);
       if (this.entries.size >= this.limit) return null;
     }
     const surface = this.pool.pop() ?? this.deps.createSurface();
@@ -333,11 +336,11 @@ export class GroundCache<K, S> {
     return entry;
   }
 
-  /** Libère le bloc non visible le moins récemment vu et range sa surface en réserve. */
-  private evictOne(visibleSet: Set<K>): boolean {
+  /** Libère le bloc le moins récemment vu avant cette image et range sa surface en réserve. */
+  private evictOne(visibleSet: Set<K>, frame: number): boolean {
     let oldest: Entry<K, S> | null = null;
     for (const entry of this.entries.values()) {
-      if (visibleSet.has(entry.chunk)) continue;
+      if (visibleSet.has(entry.chunk) || entry.used >= frame) continue;
       if (!oldest || entry.used < oldest.used) oldest = entry;
     }
     if (!oldest) return false;
@@ -347,10 +350,10 @@ export class GroundCache<K, S> {
     return true;
   }
 
-  /** Ramène le cache sous sa limite sans jamais libérer un bloc visible. */
-  private evictToLimit(visibleSet: Set<K>): void {
+  /** Ramène le cache sous sa limite sans jamais libérer un bloc visible ni vu à cette image. */
+  private evictToLimit(visibleSet: Set<K>, frame: number): void {
     while (this.entries.size > this.limit) {
-      if (!this.evictOne(visibleSet)) return;
+      if (!this.evictOne(visibleSet, frame)) return;
     }
   }
 }
