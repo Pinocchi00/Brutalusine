@@ -86,9 +86,9 @@ function fakePen(width: number, height: number): { pen: Pen; grid: Grid } {
 
 /** Les dimensions attendues de la surface de base, selon la variante. */
 const BASE_SIZES = [
-  { w: 8, h: 5 },
-  { w: 9, h: 6 },
   { w: 10, h: 7 },
+  { w: 12, h: 8 },
+  { w: 14, h: 9 },
 ] as const;
 
 /** Peint un affleurement sur une grille de sa taille de base. */

@@ -46,9 +46,9 @@ const ROCK: Record<RockKind, readonly [string, string, string, string, string]> 
 
 /** Les dimensions d'une case d'affleurement selon sa variante. */
 const SIZES: readonly { w: number; h: number }[] = [
-  { w: 8, h: 5 },
-  { w: 9, h: 6 },
   { w: 10, h: 7 },
+  { w: 12, h: 8 },
+  { w: 14, h: 9 },
 ];
 
 /** L'ordre des types, qui fixe la graine de chaque roche. */
@@ -100,7 +100,7 @@ export function rockKind(deposit: 1 | 2 | 3 | 4): RockKind {
 
 /** La variante 0 à OUTCROP_VARIANTS - 1 selon la case et la graine. */
 export function outcropVariantAt(tx: number, ty: number, seed: number): number {
-  return Math.floor(hash(tx, ty, seed) * OUTCROP_VARIANTS);
+  return Math.floor(hash(tx, ty, seed + 213) * OUTCROP_VARIANTS);
 }
 
 /** Dessine l'affleurement non fini et rend son plan. Toute la logique de dessin est ici. */
@@ -191,15 +191,14 @@ export function paintOutcrop(P: Pen, kind: RockKind, variant: number): OutcropPl
 
   const bx = Math.round(cx + w * 0.15);
   const by = Math.round(cy + h * 0.25);
-  const core = kind === 'fe' ? C.ir1 : kind === 'cu' ? C.ma2 : kind === 'qz' ? C.qz1 : pal[0];
+  const orePix = kind === 'fe' ? C.ir1 : kind === 'cu' ? C.ma2 : kind === 'qz' ? C.qz1 : pal[0];
   const shine = kind === 'cu' ? C.ma1 : kind === 'fe' ? C.ir0 : C.white;
   P.r(bx - 3, by - 1, 7, 4, pal[1]);
   P.r(bx - 2, by - 2, 5, 1, pal[1]);
   P.r(bx - 3, by + 3, 7, 1, pal[3]);
-  P.r(bx - 1, by, 3, 2, core);
+  P.r(bx - 1, by, 3, 2, orePix);
   P.p(bx - 1, by, shine);
 
-  const orePix = kind === 'fe' ? C.ir1 : kind === 'cu' ? C.ma2 : kind === 'qz' ? C.qz1 : pal[0];
   for (let k = 0; k < 5; k++) {
     const px = Math.round(cx - w * 1.1 + r() * w * 2.2);
     const py = Math.round(cy + h * 1.15 + r() * h * 0.3);
