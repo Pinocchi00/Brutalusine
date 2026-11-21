@@ -50,14 +50,14 @@ const TILE_SEGMENT_REACH = TILE_PX * 0.75 + DIRT_REACH + DIRT_NOISE;
 /** Le gué au-delà duquel l'eau devient une trame claire, sans bandes profondes. */
 const FORD_FULL = 0.6;
 
-/** Le gué à partir duquel l'eau s'éclaircit progressivement vers la trame. */
-const FORD_SOFT = 0.5;
-
 /** L'échelle du bruit de courant dans un gué, en cases. */
 const FORD_WEAVE = 0.045;
 
 /** Le seuil au-delà duquel la trame de gué prend le ton clair. */
-const FORD_WEAVE_LIGHT = 0.62;
+const FORD_WEAVE_LIGHT = 0.66;
+
+/** Le seuil à partir duquel le bord de la trame de gué est tramé en damier. */
+const FORD_WEAVE_DITHER = 0.58;
 
 /** Les tons du sol, empaquetés en RGBA 32 bits (octet rouge en premier), pour peindre vite. */
 const RGB = {
@@ -88,12 +88,6 @@ function waterColor(e: number): number {
   if (e > 27) return RGB.q4;
   if (e > 13) return RGB.q3;
   return RGB.q2;
-}
-
-/** L'effacement progressif de la profondeur à l'approche du plein gué, de 0 à 1. */
-function fordFade(f: number): number {
-  if (f <= FORD_SOFT) return 0;
-  return smooth(Math.min(1, (f - FORD_SOFT) / (FORD_FULL - FORD_SOFT)));
 }
 
 /** Un segment de sentier déjà converti en pixels du monde. */
@@ -277,9 +271,12 @@ function paintGroundBase(
               const f = top + (bottom - top) * fy;
               if (f > FORD_FULL) {
                 const flow = vnoise(wx * FORD_WEAVE, wy * FORD_WEAVE, 7);
-                color = flow > FORD_WEAVE_LIGHT ? RGB.q1 : RGB.q2;
+                if (flow > FORD_WEAVE_LIGHT) color = RGB.q1;
+                else if (flow > FORD_WEAVE_DITHER && ((wx + wy) & 1) === 0) color = RGB.q1;
+                else color = RGB.q2;
               } else {
-                color = waterColor(e * (1 - f) * (1 - fordFade(f)));
+                const depth = e * (1 - smooth(Math.min(1, f / FORD_FULL)));
+                color = waterColor(depth);
               }
             }
           } else if (dd > -6) {
@@ -662,7 +659,7 @@ function paintDecor(
       if (avg > 0.1 && avg < 1.2 && nearPath(src.paths, tx, ty)) {
         fordTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
       }
-      if (avg < 0 && ford >= 0.7) fordStonesTile(out, bounds, tx, ty, seed);
+      if (avg < 0 && ford >= 0.9) fordStonesTile(out, bounds, tx, ty, seed);
     }
   }
 }
@@ -769,7 +766,7 @@ function fordTile(
   }
 }
 
-/** Deux ou trois pierres plates posées dans l'eau claire d'un gué, avec leur reflet et leur courant. */
+/** Une ou deux pierres plates, sur une case de plein gué tirée au sort, avec leur reflet et leur courant. */
 function fordStonesTile(
   out: Uint8ClampedArray,
   bounds: Bounds,
@@ -777,7 +774,8 @@ function fordStonesTile(
   ty: number,
   seed: number,
 ): void {
-  const count = 2 + (hash(tx, ty, seed + 121) < 0.5 ? 1 : 0);
+  if (hash(tx, ty, seed + 120) >= 0.45) return;
+  const count = 1 + (hash(tx, ty, seed + 121) < 0.5 ? 1 : 0);
   for (let k = 0; k < count; k++) {
     const salt = seed + 122 + k * 7;
     const w = 5 + Math.floor(hash(tx, ty, salt) * 3);

@@ -151,7 +151,13 @@ function main(): void {
 
   cases.push(figure('Gué : rivière continue franchie à pied sec', paintBlock(blockSource({
     shore: right,
-    ford: (cx, cy) => Math.max(0, Math.min(1, 1 - Math.abs(cy - 16) / 2.2)),
+    ford: (cx, cy) => {
+      const du = Math.abs(cy - 16);
+      if (du <= 2) return 1;
+      if (du >= 3.5) return 0;
+      const u = (3.5 - du) / 1.5;
+      return u * u * (3 - 2 * u);
+    },
     slab: () => false,
     paths: [{ ax: 8, ay: 16, bx: 25, by: 16 }],
     loot: () => false,
