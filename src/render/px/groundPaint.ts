@@ -301,7 +301,7 @@ function paintGroundBase(
         }
       }
       if (hasFord && f00 + f10 + f01 + f11 >= 4 * FORD_TILE && c00 + c10 + c01 + c11 < 0) {
-        waterDabsTile(out, bounds, tx, ty, src.seed);
+        waterDabsTile(out, bounds, tx, ty, src.seed, c00, c10, c01, c11);
       }
     }
   }
@@ -761,6 +761,10 @@ function waterDabsTile(
   tx: number,
   ty: number,
   seed: number,
+  c00: number,
+  c10: number,
+  c01: number,
+  c11: number,
 ): void {
   const count = 2 + (hash(tx, ty, seed + 131) < 0.5 ? 1 : 0);
   for (let k = 0; k < count; k++) {
@@ -770,7 +774,10 @@ function waterDabsTile(
     const y = 2 + k * 4 + Math.floor(hash(tx, ty, salt + 2) * 2);
     const X = tx * TILE_PX + x;
     const Y = ty * TILE_PX + y;
-    for (let i = 0; i < w; i++) putWorld(out, bounds, X + i, Y, RGB.q1);
+    for (let i = 0; i < w; i++) {
+      if (localDd(c00, c10, c01, c11, x + i, y) <= 3) continue;
+      putWorld(out, bounds, X + i, Y, RGB.q1);
+    }
   }
 }
 

@@ -520,6 +520,33 @@ describe('peinture du sol', () => {
     }
   });
 
+
+  it('ne trace aucun courant sur le sable d’une rive diagonale', () => {
+    const seed = 4242;
+    let tileX = -1;
+    let tileY = -1;
+    for (let ty = 0; ty <= 16 && tileX < 0; ty++) {
+      const tx = 16 - ty;
+      if (hash(tx, ty, seed + 120) >= 0.45) {
+        tileX = tx;
+        tileY = ty;
+      }
+    }
+    expect(tileX).toBeGreaterThanOrEqual(0);
+    const scene: Scene = {
+      shore: (cx, cy) => (cx + cy - 18) * 0.06,
+      ford: () => 1,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const out = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintTiles(blockSource(scene, 0, 0), out, tileX, tileY, tileX + 1, tileY + 1);
+    for (let i = 0; i < TILE_PX * TILE_PX; i++) {
+      if (pixelColor(out, i) === Q1) throw new Error(`trait de courant sur le sable au pixel ${i}`);
+    }
+  });
+
   it('ne fait jamais sauter la bande de plus d’un cran le long de la rampe de gué', () => {
     const scene: Scene = {
       shore: () => -6,
