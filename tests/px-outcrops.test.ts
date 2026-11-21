@@ -1,0 +1,270 @@
+/**
+ * Vérification hors navigateur des affleurements : le plan, les repères et les animations,
+ * sur un faux crayon qui écrit les couleurs dans une grille. Aucun canevas.
+ */
+import { describe, expect, it } from 'vitest';
+import { DEPOSITS } from '../src/sim/data';
+import { C } from '../src/render/px/palette';
+import type { Pen } from '../src/render/px/pen';
+import {
+  OUTCROP_VARIANTS,
+  type OutcropPlan,
+  type RockKind,
+  drawOreLive,
+  drawRockHit,
+  outcropVariantAt,
+  paintOutcrop,
+  rockKind,
+  rockShake,
+} from '../src/render/px/outcrops';
+
+/** Une grille de couleurs et le compte des pixels qui auraient débordé. */
+interface Grid {
+  width: number;
+  height: number;
+  cells: string[];
+  outside: number;
+}
+
+/** Un faux crayon fidèle aux arrondis du crayon réel, qui note les débordements. */
+function fakePen(width: number, height: number): { pen: Pen; grid: Grid } {
+  const grid: Grid = { width, height, cells: new Array<string>(width * height).fill(''), outside: 0 };
+
+  const set = (a: number, b: number, col: string): void => {
+    if (a < 0 || b < 0 || a >= width || b >= height) {
+      grid.outside++;
+      return;
+    }
+    grid.cells[b * width + a] = col;
+  };
+
+  const r = (a: number, b: number, w: number, h: number, col: string): void => {
+    const x = Math.round(a), y = Math.round(b), rw = Math.round(w), rh = Math.round(h);
+    if (rw <= 0 || rh <= 0) return;
+    for (let j = 0; j < rh; j++) {
+      for (let i = 0; i < rw; i++) set(x + i, y + j, col);
+    }
+  };
+
+  const p = (a: number, b: number, col: string): void => r(a, b, 1, 1, col);
+
+  const line = (x0: number, y0: number, x1: number, y1: number, col: string, th = 1): void => {
+    let x = Math.round(x0), y = Math.round(y0);
+    const ex = Math.round(x1), ey = Math.round(y1);
+    const dx = Math.abs(ex - x), dy = -Math.abs(ey - y);
+    const sx = x < ex ? 1 : -1, sy = y < ey ? 1 : -1;
+    let e = dx + dy;
+    for (let g = 0; g < 800; g++) {
+      r(x, y, th, th, col);
+      if (x === ex && y === ey) break;
+      const e2 = 2 * e;
+      if (e2 >= dy) {
+        e += dy;
+        x += sx;
+      }
+      if (e2 <= dx) {
+        e += dx;
+        y += sy;
+      }
+    }
+  };
+
+  const ell = (cx: number, cy: number, rx: number, ry: number, col: string): void => {
+    for (let yy = Math.floor(cy - ry); yy < Math.ceil(cy + ry); yy++) {
+      const dy = (yy + 0.5 - cy) / ry;
+      if (Math.abs(dy) > 1) continue;
+      const hw = rx * Math.sqrt(1 - dy * dy);
+      const a = Math.round(cx - hw), b = Math.round(cx + hw);
+      for (let i = a; i < b; i++) set(i, yy, col);
+    }
+  };
+
+  const disc = (cx: number, cy: number, rad: number, col: string): void => ell(cx, cy, rad, rad, col);
+
+  return { pen: { r, p, line, ell, disc }, grid };
+}
+
+/** Les dimensions attendues de la surface de base, selon la variante. */
+const BASE_SIZES = [
+  { w: 8, h: 5 },
+  { w: 9, h: 6 },
+  { w: 10, h: 7 },
+] as const;
+
+/** Peint un affleurement sur une grille de sa taille de base. */
+function paint(kind: RockKind, variant: number): { plan: OutcropPlan; grid: Grid } {
+  const size = BASE_SIZES[variant];
+  const { pen, grid } = fakePen(size.w * 3 + 10, size.h * 3 + 14);
+  const plan = paintOutcrop(pen, kind, variant);
+  return { plan, grid };
+}
+
+/** Les coordonnées peintes d'une grille. */
+function drawn(grid: Grid): { x: number; y: number; col: string }[] {
+  const out: { x: number; y: number; col: string }[] = [];
+  grid.cells.forEach((col, i) => {
+    if (col) out.push({ x: i % grid.width, y: Math.floor(i / grid.width), col });
+  });
+  return out;
+}
+
+/** Les couleurs distinctes d'une grille. */
+function colors(grid: Grid): string[] {
+  return [...new Set(grid.cells.filter((col) => col))];
+}
+
+const KINDS: readonly RockKind[] = ['fe', 'st', 'qz', 'cu'];
+const VARIANTS = Array.from({ length: OUTCROP_VARIANTS }, (_, i) => i);
+const QZ = new Set<string>([C.qz0, C.qz1, C.qz2, C.qz3, C.qz4]);
+const IR = new Set<string>([C.ir0, C.ir1, C.ir2, C.ir3, C.irm, C.irk]);
+const MA = new Set<string>([C.ma0, C.ma1, C.ma2, C.ma3]);
+
+describe('gisements et variantes', () => {
+  it('suit l’ordre de DEPOSITS : fer, pierre, quartz, cuivre', () => {
+    const fromDeposits = DEPOSITS.slice(1).map((_, index) => rockKind((index + 1) as 1 | 2 | 3 | 4));
+    expect(fromDeposits).toEqual(['fe', 'st', 'qz', 'cu']);
+    for (let deposit = 1; deposit <= 4; deposit++) {
+      expect(rockKind(deposit as 1 | 2 | 3 | 4)).toBe(fromDeposits[deposit - 1]);
+    }
+  });
+
+  it('tire une variante déterministe et bornée pour chaque case et graine', () => {
+    for (const tx of [-40, -1, 0, 7, 128]) {
+      for (const ty of [-9, 0, 3, 77]) {
+        for (const seed of [0, 1, 424242]) {
+          const first = outcropVariantAt(tx, ty, seed);
+          expect(first).toBe(outcropVariantAt(tx, ty, seed));
+          expect(Number.isInteger(first)).toBe(true);
+          expect(first).toBeGreaterThanOrEqual(0);
+          expect(first).toBeLessThan(OUTCROP_VARIANTS);
+        }
+      }
+    }
+  });
+});
+
+describe('le plan écrit', () => {
+  it('donne la même grille à deux appels et change avec la variante', () => {
+    for (const kind of KINDS) {
+      const a = paint(kind, 0);
+      const b = paint(kind, 0);
+      expect(a.grid.cells).toEqual(b.grid.cells);
+      expect(a.plan).toEqual(b.plan);
+      const wide = paint(kind, 1);
+      expect(wide.grid.cells.join('|')).not.toBe(a.grid.cells.join('|'));
+    }
+  });
+
+  it('ne peint aucun pixel hors de width × height, pour tous les types et variantes', () => {
+    for (const kind of KINDS) {
+      for (const variant of VARIANTS) {
+        const { plan, grid } = paint(kind, variant);
+        expect(grid.outside, `${kind} ${variant}`).toBe(0);
+        expect(grid.width).toBe(plan.width);
+        expect(grid.height).toBe(plan.height);
+      }
+    }
+  });
+
+  it('garde marks, crack et foot dans le sprite fini', () => {
+    for (const kind of KINDS) {
+      for (const variant of VARIANTS) {
+        const { plan } = paint(kind, variant);
+        const width = plan.width + 2, height = plan.height + 2;
+        expect(plan.foot).toBeGreaterThanOrEqual(0);
+        expect(plan.foot).toBeLessThan(height);
+        expect(plan.crack.x).toBeGreaterThanOrEqual(0);
+        expect(plan.crack.x).toBeLessThan(width);
+        expect(plan.crack.y).toBeGreaterThanOrEqual(0);
+        expect(plan.crack.y).toBeLessThan(height);
+        for (const mark of plan.marks) {
+          expect(mark.x).toBeGreaterThanOrEqual(0);
+          expect(mark.x).toBeLessThan(width);
+          expect(mark.y).toBeGreaterThanOrEqual(0);
+          expect(mark.y).toBeLessThan(height);
+        }
+      }
+    }
+  });
+
+  it('ne montre ni quartz, ni fer, ni malachite dans la pierre, et aucun repère', () => {
+    for (const variant of VARIANTS) {
+      const { plan, grid } = paint('st', variant);
+      expect(plan.marks).toEqual([]);
+      for (const col of colors(grid)) {
+        expect(QZ.has(col), `quartz ${col}`).toBe(false);
+        expect(IR.has(col), `fer ${col}`).toBe(false);
+        expect(MA.has(col), `malachite ${col}`).toBe(false);
+      }
+    }
+  });
+
+  it('montre le minerai de chaque roche : ir1 pour le fer, ma2 pour le cuivre, qz0 pour le quartz', () => {
+    expect(colors(paint('fe', 0).grid)).toContain(C.ir1);
+    expect(colors(paint('cu', 0).grid)).toContain(C.ma2);
+    expect(colors(paint('qz', 0).grid)).toContain(C.qz0);
+  });
+});
+
+describe('la vie du minerai', () => {
+  it('ne dessine rien pour la pierre, quel que soit l’instant', () => {
+    const { plan } = paint('st', 0);
+    for (const now of [0, 0.05, 0.3, 1, 2, 4, 8]) {
+      const { pen, grid } = fakePen(plan.width + 2, plan.height + 2);
+      drawOreLive(pen, plan, 0, 0, now, 0);
+      expect(grid.cells.every((col) => col === '')).toBe(true);
+    }
+  });
+
+  it('garde la vie du fer, du cuivre et du quartz sur les repères', () => {
+    for (const [kind, now] of [['fe', 0], ['cu', 2], ['qz', 0]] as const) {
+      const { plan } = paint(kind, 0);
+      expect(plan.marks.length).toBeGreaterThan(0);
+      const { pen, grid } = fakePen(plan.width + 2, plan.height + 2);
+      drawOreLive(pen, plan, 0, 0, now, 0);
+      const points = drawn(grid);
+      expect(points.length).toBeGreaterThan(0);
+      for (const point of points) {
+        const near = plan.marks.some((mark) => Math.abs(mark.x - point.x) <= 1 && Math.abs(mark.y - point.y) <= 1);
+        expect(near, `${kind} (${point.x}, ${point.y})`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('le coup de pioche', () => {
+  it('ne trempe que de -1, 0 ou 1 et retombe à zéro dès 0,28 s', () => {
+    for (let i = 0; i <= 1000; i++) {
+      const shake = rockShake(i / 1000);
+      expect([-1, 0, 1]).toContain(shake);
+    }
+    for (const since of [0.28, 0.29, 0.5, 1, 2, 10]) {
+      expect(rockShake(since)).toBe(0);
+    }
+    expect(rockShake(0)).toBe(-1);
+    expect(rockShake(0.1)).toBe(1);
+  });
+
+  it('dessine un éclat de cinq pixels autour de la cassure, puis plus rien après 0,18 s', () => {
+    const { plan } = paint('fe', 0);
+    for (const since of [0, 0.05, 0.17]) {
+      const { pen, grid } = fakePen(plan.width + 2, plan.height + 2);
+      drawRockHit(pen, plan, 0, 0, since);
+      const points = drawn(grid);
+      expect(points).toHaveLength(5);
+      const center = points.find((point) => point.x === plan.crack.x && point.y === plan.crack.y);
+      expect(center?.col).toBe(C.white);
+      for (const point of points) {
+        if (point === center) continue;
+        expect(point.col).toBe('#dcc6b6');
+        const onCross = point.y === plan.crack.y || point.x === plan.crack.x;
+        expect(onCross).toBe(true);
+      }
+    }
+    for (const since of [0.18, 0.19, 0.5, 1]) {
+      const { pen, grid } = fakePen(plan.width + 2, plan.height + 2);
+      drawRockHit(pen, plan, 0, 0, since);
+      expect(grid.cells.every((col) => col === '')).toBe(true);
+    }
+  });
+});
