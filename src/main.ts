@@ -11,7 +11,7 @@ import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
 import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
 import { PxRenderer, coopScale } from './render/px/renderer';
-import { TILE_PX, pickScale, scaleBounds, stepScale } from './render/px/view';
+import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
@@ -711,7 +711,8 @@ class App {
     }
 
     this.drain();
-    const z = this.cam.zoom / this.dpr, hw = window.innerWidth / 2 / z, hh = window.innerHeight / 2 / z;
+    const zoom = this.pixel ? renderZoom(this.cam.zoom) : this.cam.zoom;
+    const z = zoom / this.dpr, hw = window.innerWidth / 2 / z, hh = window.innerHeight / 2 / z;
     g.world.ensureArea(Math.floor(this.cam.x - hw) - 3, Math.floor(this.cam.y - hh) - 3, Math.ceil(this.cam.x + hw) + 3, Math.ceil(this.cam.y + hh) + 3);   // le monde se génère devant soi
     if (this.pixel) {
       // prépare un bloc manquant par image dans une marge de 32 cases, le plus proche de la vue d'abord
