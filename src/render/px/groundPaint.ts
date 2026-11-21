@@ -2,7 +2,7 @@
  * La peinture du sol d'un bloc, fidèle à la maquette `heure-doree.html`.
  * Tout est pur : aucune API du navigateur, aucun état gardé entre deux appels.
  */
-import { CHUNK } from '../../sim/world';
+import { CHUNK, FORD_TILE } from '../../sim/world';
 import { C } from './palette';
 import { hash, rng, smooth, vnoise } from './noise';
 import { TILE_PX } from './view';
@@ -46,9 +46,6 @@ const DIRT_NOISE = 1.5;
 
 /** La distance d'un centre de case à un segment au-delà de laquelle aucune case ne peut être peinte. */
 const TILE_SEGMENT_REACH = TILE_PX * 0.75 + DIRT_REACH + DIRT_NOISE;
-
-/** Le gué au-delà duquel l'eau devient un aplat clair, sans bandes profondes. */
-const FORD_FULL = 0.6;
 
 /** Les tons du sol, empaquetés en RGBA 32 bits (octet rouge en premier), pour peindre vite. */
 const RGB = {
@@ -260,10 +257,10 @@ function paintGroundBase(
               const top = f00 + (f10 - f00) * fx;
               const bottom = f01 + (f11 - f01) * fx;
               const f = top + (bottom - top) * fy;
-              if (f > FORD_FULL) {
+              if (f >= FORD_TILE) {
                 color = RGB.q2;
               } else {
-                const depth = e * (1 - smooth(Math.min(1, f / FORD_FULL)));
+                const depth = e * (1 - smooth(Math.min(1, f / FORD_TILE)));
                 color = waterColor(depth);
               }
             }
@@ -303,7 +300,7 @@ function paintGroundBase(
           dd += ddStep;
         }
       }
-      if (hasFord && f00 + f10 + f01 + f11 > 4 * FORD_FULL && c00 + c10 + c01 + c11 < 0) {
+      if (hasFord && f00 + f10 + f01 + f11 >= 4 * FORD_TILE && c00 + c10 + c01 + c11 < 0) {
         waterDabsTile(out, bounds, tx, ty, src.seed);
       }
     }
