@@ -104,7 +104,13 @@ class App {
     });
     this.bind();
     this.resize();
-    void readSave('auto').then((s) => { if (s && s.v === 3) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
+    // Le toast vit hors du HUD pour rester visible sur l'écran titre, où le HUD est caché.
+    document.body.appendChild(document.getElementById('toast')!);
+    void readSave('auto').then((s) => {
+      if (!s) return;
+      if (s.v === 3) document.getElementById('btn-continue')!.hidden = false;
+      else this.hud.toast('Ta sauvegarde vient d’une ancienne version du monde et ne peut plus être chargée.', 9000);
+    }).catch(() => undefined);
     requestAnimationFrame(() => this.loop());
   }
 
