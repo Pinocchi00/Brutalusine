@@ -7,12 +7,12 @@ import { C } from '../render/px/palette';
 import { castShadow, type Sprite } from '../render/px/sprite';
 import {
   placeholderBuilder,
-  placeholderDeposit,
   placeholderItem,
   placeholderSprite,
-  placeholderTree,
   type DepositType,
 } from '../render/px/placeholders';
+import { TREE_VARIANTS, canopySprite, type TreeKind } from '../render/px/trees';
+import { OUTCROP_VARIANTS, outcropSprite, rockKind } from '../render/px/outcrops';
 
 declare global {
   interface Window {
@@ -107,15 +107,24 @@ for (const def of BUILDINGS) {
   if (figure(buildings, def.name, canvas, sprite !== null)) count++;
 }
 
-const trees = section('Arbres provisoires');
-for (const size of [1, 2, 3] as const) {
-  if (figure(trees, `Arbre ${size}`, spriteTile(placeholderTree(size)))) count++;
+const KIND_NAMES: Record<TreeKind, string> = { leafy: 'Feuillu', palm: 'Palmier', flower: 'Fleuri' };
+const trees = section('Houppiers des arbres');
+for (const kind of ['leafy', 'palm', 'flower'] as const) {
+  for (const size of [1, 2, 3] as const) {
+    for (let variant = 0; variant < TREE_VARIANTS; variant++) {
+      const img = canopySprite(kind, size, variant);
+      if (figure(trees, `${KIND_NAMES[kind]} ${size} · ${variant}`, imageTile(img))) count++;
+    }
+  }
 }
 
-const deposits = section('Gisements provisoires');
+const deposits = section('Affleurements');
 for (const type of [1, 2, 3, 4] as const) {
   const deposit = DEPOSITS[type as DepositType];
-  if (figure(deposits, deposit.name, spriteTile(placeholderDeposit(type)))) count++;
+  for (let variant = 0; variant < OUTCROP_VARIANTS; variant++) {
+    const sprite = outcropSprite(rockKind(type as 1 | 2 | 3 | 4), variant);
+    if (figure(deposits, `${deposit.name} · ${variant}`, imageTile(sprite.img))) count++;
+  }
 }
 
 const objects = section('Objets provisoires');

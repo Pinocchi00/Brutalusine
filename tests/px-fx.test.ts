@@ -47,6 +47,34 @@ describe('tremblement des arbres', () => {
     fx.hit(2.9, 7.1, 0);
     expect(fx.shake(2, 7, 0)).toBe(-1);
   });
+
+  it('donne le temps écoulé depuis le coup, puis null après 0,35 s', () => {
+    const fx = new PixelFx();
+    expect(fx.hitSince(1, 2, 5)).toBeNull();
+    fx.hit(1, 2, 5);
+    expect(fx.hitSince(1, 2, 5)).toBe(0);
+    expect(fx.hitSince(1, 2, 5.1)).toBeCloseTo(0.1, 12);
+    expect(fx.hitSince(1, 2, 5.349)).not.toBeNull();
+    expect(fx.hitSince(1, 2, 5.35)).toBeNull();
+    expect(fx.hitSince(1, 2, 6)).toBeNull();
+  });
+
+  it('ne donne aucun coup ni tremblement avant l’instant du coup', () => {
+    const fx = new PixelFx();
+    fx.hit(0, 0, 5);
+    expect(fx.hitSince(0, 0, 4.9)).toBeNull();
+    expect(fx.shake(0, 0, 4.9)).toBe(0);
+  });
+
+  it('laisse le tremblement inchangé : mêmes valeurs qu’avant le calcul du temps', () => {
+    const fx = new PixelFx();
+    fx.hit(3, 4, 10, 1);
+    expect(fx.shake(3, 4, 10)).toBe(-1);
+    expect(fx.shake(3, 4, 10.1)).toBe(1);
+    expect(fx.shake(3, 4, 10.2)).toBe(1);
+    expect(fx.shake(3, 4, 10.05)).toBe(-1);
+    expect(fx.shake(3, 4, 10.35)).toBe(0);
+  });
 });
 
 describe('particules', () => {

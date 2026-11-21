@@ -175,12 +175,21 @@ export class PixelFx {
     this.hits.set(`${Math.floor(tx)},${Math.floor(ty)}`, { at: now, power, age: 0 });
   }
 
+  /** Le temps écoulé depuis le coup porté à une case, en secondes ; `null` si aucun coup n'est actif. */
+  hitSince(tx: number, ty: number, now: number): number | null {
+    const hit = this.hits.get(`${Math.floor(tx)},${Math.floor(ty)}`);
+    if (!hit) return null;
+    const since = now - hit.at;
+    if (since < 0 || since >= SHAKE_TIME - 1e-9) return null;
+    return since;
+  }
+
   /** Le décalage horizontal entier, en pixels, de l'arbre frappé à cet instant. */
   shake(tx: number, ty: number, now: number): number {
+    const since = this.hitSince(tx, ty, now);
+    if (since === null) return 0;
     const hit = this.hits.get(`${Math.floor(tx)},${Math.floor(ty)}`);
     if (!hit) return 0;
-    const since = now - hit.at;
-    if (since < 0 || since >= SHAKE_TIME - 1e-9) return 0;
     const amplitude = hit.power > 1.5 ? 2 : 1;
     const sign = Math.floor(since * 16) % 2 ? 1 : -1;
     const decay = since < 0.18 ? 1 : 0.5;

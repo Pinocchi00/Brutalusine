@@ -9,7 +9,7 @@
  */
 import { C } from './palette';
 import { hash, rng } from './noise';
-import { finish } from './finish';
+import { finish, outline } from './finish';
 import { makeSurface } from './surface';
 import { pen } from './pen';
 import type { Pen } from './pen';
@@ -191,7 +191,7 @@ export function paintOutcrop(P: Pen, kind: RockKind, variant: number): OutcropPl
 
   const bx = Math.round(cx + w * 0.15);
   const by = Math.round(cy + h * 0.25);
-  const orePix = kind === 'fe' ? C.ir1 : kind === 'cu' ? C.ma2 : kind === 'qz' ? C.qz1 : pal[0];
+  const orePix = oreColor(kind, pal);
   const shine = kind === 'cu' ? C.ma1 : kind === 'fe' ? C.ir0 : C.white;
   P.r(bx - 3, by - 1, 7, 4, pal[1]);
   P.r(bx - 2, by - 2, 5, 1, pal[1]);
@@ -232,6 +232,50 @@ export function outcropSprite(kind: RockKind, variant: number): OutcropSprite {
   const sprite: OutcropSprite = { ...plan, img: finish(canvas) };
   SPRITES.set(key, sprite);
   return sprite;
+}
+
+/** La couleur du minerai qui affleure sur une roche, pour les cailloux tombés. */
+function oreColor(kind: RockKind, pal: readonly [string, string, string, string, string]): string {
+  if (kind === 'fe') return C.ir1;
+  if (kind === 'cu') return C.ma2;
+  if (kind === 'qz') return C.qz1;
+  return pal[0];
+}
+
+/** La surface des cailloux avant contour : largeur et hauteur du dessin. */
+const RUBBLE_W = 20;
+const RUBBLE_H = 14;
+
+/** Dessine trois ou quatre cailloux de 3 × 2 au pied d'un affleurement. Toute la logique est ici. */
+export function paintRubble(P: Pen, kind: RockKind, variant: number): void {
+  const pal = ROCK[kind];
+  const v = normalizeVariant(variant);
+  const r = rng(seedOf(kind, v) + 509);
+  const count = v % 2 === 0 ? 3 : 4;
+  const ore = oreColor(kind, pal);
+  for (let k = 0; k < count; k++) {
+    const px = 2 + Math.round((k / count) * 13 + r() * 1.5);
+    const py = 7 + Math.round(r() * 4);
+    P.r(px, py, 3, 2, pal[3]);
+    P.r(px, py, 2, 1, pal[1]);
+    if (k === 1) P.p(px + 1, py + 1, ore);
+  }
+}
+
+/** Le cache des cailloux finis, un par type et variante. */
+const RUBBLES = new Map<string, HTMLCanvasElement>();
+
+/** Les cailloux tombés au pied d'un affleurement, dans une surface de 20 × 14 avec leur contour. */
+export function rubbleSprite(kind: RockKind, variant: number): HTMLCanvasElement {
+  const v = normalizeVariant(variant);
+  const key = `${kind}:${v}`;
+  const cached = RUBBLES.get(key);
+  if (cached) return cached;
+  const { canvas, ctx } = makeSurface(RUBBLE_W, RUBBLE_H);
+  paintRubble(pen(ctx), kind, v);
+  const img = outline(canvas, C.ink);
+  RUBBLES.set(key, img);
+  return img;
 }
 
 /** L'indice d'un repère, ramené dans les bornes même pour un temps négatif. */

@@ -625,7 +625,7 @@ class App {
           if ((p.hitTimer -= dt) <= 0) {
             p.hitTimer = 0.29;
             if (t.kind === 'tree') { this.renderer.hit(t.x, t.y); this.renderer.burst('leaf', tx, ty - 0.3, PAL.leaf[3], 2); this.audio.cut(0.7, 0); }
-            else { this.renderer.burst('chip', tx, ty, DEPOSITS[w.deposit(t.x, t.y)]!.color, 3); this.audio.machine(0.8, 0); }
+            else { this.renderer.hit(t.x, t.y); this.renderer.burst('chip', tx, ty, DEPOSITS[w.deposit(t.x, t.y)]!.color, 3); this.audio.machine(0.8, 0); }
           }
           if (p.gprog >= 1) {
             p.gprog = 0;

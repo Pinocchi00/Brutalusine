@@ -14,6 +14,7 @@ import {
   drawRockHit,
   outcropVariantAt,
   paintOutcrop,
+  paintRubble,
   rockKind,
   rockShake,
 } from '../src/render/px/outcrops';
@@ -228,6 +229,36 @@ describe('la vie du minerai', () => {
         const near = plan.marks.some((mark) => Math.abs(mark.x - point.x) <= 1 && Math.abs(mark.y - point.y) <= 1);
         expect(near, `${kind} (${point.x}, ${point.y})`).toBe(true);
       }
+    }
+  });
+});
+
+describe('les cailloux au pied', () => {
+  it('peint trois ou quatre cailloux de pierre dans 20 × 14, avec un pixel de minerai', () => {
+    for (const variant of VARIANTS) {
+      const { pen, grid } = fakePen(20, 14);
+      paintRubble(pen, 'st', variant);
+      expect(grid.outside, `variante ${variant}`).toBe(0);
+      const count = variant % 2 === 0 ? 3 : 4;
+      const tops = grid.cells.filter((col) => col === C.st1);
+      const bases = grid.cells.filter((col) => col === C.st3);
+      const ore = grid.cells.filter((col) => col === C.st0);
+      expect(tops, `dessus ${variant}`).toHaveLength(count * 2);
+      expect(bases.length, `pieds ${variant}`).toBeGreaterThan(0);
+      expect(ore, `minerai ${variant}`).toHaveLength(1);
+    }
+  });
+
+  it('garde chaque type dans sa propre pierre et le minerai qui lui correspond', () => {
+    for (const kind of KINDS) {
+      const { pen, grid } = fakePen(20, 14);
+      paintRubble(pen, kind, 0);
+      expect(grid.outside, kind).toBe(0);
+      const painted = colors(grid);
+      expect(painted.length, kind).toBeGreaterThan(0);
+      if (kind === 'fe') expect(painted).toContain(C.ir1);
+      if (kind === 'cu') expect(painted).toContain(C.ma2);
+      if (kind === 'qz') expect(painted).toContain(C.qz1);
     }
   });
 });

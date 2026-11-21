@@ -19,14 +19,20 @@ import { PixelFx, type BurstKind } from './fx';
 import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
+import { placeholderBuilder, placeholderItem, placeholderSprite } from './placeholders';
+import { TREE_RADIUS, canopySprite, drawTree, treeKindAt, treeVariantAt } from './trees';
 import {
-  placeholderBuilder,
-  placeholderDeposit,
-  placeholderItem,
-  placeholderSprite,
-  placeholderTree,
-  type DepositType,
-} from './placeholders';
+  OUTCROP_VARIANTS,
+  drawOreLive,
+  drawRockHit,
+  outcropSprite,
+  rockKind,
+  rockShake,
+  rubbleSprite,
+  type OutcropSprite,
+  type RockKind,
+} from './outcrops';
+import { oreCell, oreVariant, type OreCell } from './oreField';
 import { castShadow, type Sprite } from './sprite';
 import {
   drawBrackets,
@@ -39,9 +45,6 @@ import {
   drawRoute,
 } from './overlays';
 import { chev } from './volumes';
-
-/** Le rayon du houppier d'un arbre provisoire, en pixels, selon sa taille. */
-const TREE_RADIUS: Record<1 | 2 | 3, number> = { 1: 10, 2: 14, 3: 18 };
 
 /** Une entité visible et son volume provisoire, retenus pour les bulles de cause. */
 interface Shown {
@@ -145,10 +148,13 @@ export class PxRenderer {
     this.fx.hit(x, y, this.now);
   }
 
-  /** Lance un arbre abattu avec l'image de son houppier. */
+  /** Lance un arbre abattu avec l'image du vrai houppier de cet arbre. */
   fell(g: Game, x: number, y: number, size: number): void {
-    const sprite = placeholderTree(treeSize(size));
-    this.fx.fell(x, y, size, this.now, sprite.img);
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    const kind = treeKindAt(tx, ty, g.seed);
+    const img = canopySprite(kind, treeSize(size), treeVariantAt(tx, ty, g.seed));
+    this.fx.fell(x, y, size, this.now, img);
     this.fx.burst('leaf', x, y - 0.2, C.g2, 10);
     this.fx.burst('dust', x, y + 0.1, C.c3, 4);
   }
@@ -226,40 +232,102 @@ export class PxRenderer {
             const canopy = chunk.canopy[i];
             if (canopy >= TREE_MIN) this.addTree(f, tx, ty, canopy);
             else if (canopy > 0) this.queue.add('flat', () => drawSapling(f.P, tx, ty, f.now));
-            const deposit = chunk.deposit[i];
-            if (deposit && !chunk.slab[i]) this.addDeposit(f, tx, ty, deposit as DepositType);
           }
         }
       }
     }
+    this.addOres(f);
   }
 
-  /** Ajoute un arbre adulte : son ombre au sol et son houppier trié par le pied. */
+  /** Ajoute un arbre adulte : son ombre au sol et son vrai houppier trié par le pied. */
   private addTree(f: Frame, tx: number, ty: number, canopy: number): void {
+    const kind = treeKindAt(tx, ty, f.g.seed);
+    const variant = treeVariantAt(tx, ty, f.g.seed);
     const size = treeSize(canopy);
-    const sprite = placeholderTree(size);
+    const img = canopySprite(kind, size, variant);
     const radius = TREE_RADIUS[size];
     const jitter = Math.round((hash(tx, ty, f.g.seed + 5) - 0.5) * 6);
-    const sway = Math.round(Math.sin(f.now * 1.05 + tx * 0.07 + ty * 0.11) * 0.7);
+    const x = Math.round((tx + 0.5) * TILE_PX + jitter);
+    const y = Math.round((ty + 0.9) * TILE_PX);
     const shake = this.fx.shake(tx, ty, f.now);
-    const base = (ty + 0.9) * TILE_PX;
-    const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + jitter + sway + shake);
-    const Y = Math.round(base - sprite.img.height);
-    const shadowX = (tx + 0.5) * TILE_PX + jitter;
-    if (f.fade > 0) this.queue.add('cast', () => f.P.ell(shadowX + radius * 1.15, base + 2, radius * 1.6, radius * 0.34, C.shade));
-    this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
+    const chop = this.fx.hitSince(tx, ty, f.now) !== null;
+    if (f.fade > 0) this.queue.add('cast', () => f.P.ell(x + radius * 1.15, y + 2, radius * 1.6, radius * 0.34, C.shade));
+    this.queue.addTall(y, x, () => drawTree(f.ctx, f.P, { x, y, kind, img, shake, chop }, f.now));
   }
 
-  /** Ajoute un gisement, une seule fois par case, avec une position légèrement variée. */
-  private addDeposit(f: Frame, tx: number, ty: number, type: DepositType): void {
-    const sprite = placeholderDeposit(type);
-    const hx = hash(tx, ty, f.g.seed + 7);
-    const hy = hash(tx, ty, f.g.seed + 8);
-    const base = (ty + 0.85) * TILE_PX;
-    const X = Math.round((tx + 0.5) * TILE_PX - sprite.img.width / 2 + (hx - 0.5) * 8);
-    const Y = Math.round(base - sprite.img.height + (hy - 0.5) * 4);
-    if (f.fade > 0) this.queue.add('cast', () => f.P.ell((tx + 0.5) * TILE_PX, base - 2, sprite.img.width * 0.55, 4, C.shadeL));
-    this.queue.addTall(base, X, () => f.ctx.drawImage(sprite.img, X, Y));
+  /** Parcourt les carrés 2 × 2 qui touchent la vue, avec deux cases de marge, et pose chaque affleurement une fois. */
+  private addOres(f: Frame): void {
+    const { g, view } = f;
+    const read = (tx: number, ty: number): number => {
+      const chunk = g.world.chunk(tx >> 5, ty >> 5, false);
+      if (!chunk) return 0;
+      const i = ((ty & 31) << 5) | (tx & 31);
+      if (chunk.slab[i] || chunk.ent[i]) return 0;
+      return chunk.deposit[i];
+    };
+    const cellX0 = Math.floor((view.tileX0 - 2) / 2);
+    const cellX1 = Math.floor((view.tileX1 + 2) / 2);
+    const cellY0 = Math.floor((view.tileY0 - 2) / 2);
+    const cellY1 = Math.floor((view.tileY1 + 2) / 2);
+    for (let cellY = cellY0; cellY <= cellY1; cellY++) {
+      for (let cellX = cellX0; cellX <= cellX1; cellX++) {
+        const cell = oreCell(read, cellX, cellY);
+        if (cell) this.addOre(f, cell, cellX, cellY);
+      }
+    }
+  }
+
+  /** Ajoute un affleurement : son ombre, son image triée par le pied et les cailloux des cases restantes. */
+  private addOre(f: Frame, cell: OreCell, cellX: number, cellY: number): void {
+    const { g } = f;
+    const kind = rockKind(cell.type as 1 | 2 | 3 | 4);
+    const sprite = outcropSprite(kind, oreVariant(cell.count));
+    const X = Math.round(cell.centerX * TILE_PX - sprite.img.width / 2);
+    const footPx = Math.round(cell.footY * TILE_PX) - 2;
+    const Y = footPx - sprite.foot;
+    if (f.fade > 0) {
+      this.queue.add('cast', () => {
+        f.P.ell(X + sprite.img.width * 0.9, footPx - 2, sprite.img.width * 0.6, 3, C.shadeL);
+      });
+    }
+    let since: number | null = null;
+    for (const tile of cell.tiles) {
+      const value = this.fx.hitSince(tile.x, tile.y, f.now);
+      if (value !== null && (since === null || value < since)) since = value;
+    }
+    const shifted = X + (since === null ? 0 : rockShake(since));
+    const phase = hash(cellX, cellY, g.seed + 214) * 8;
+    this.queue.addTall(footPx, X, () => this.drawOre(f, sprite, shifted, Y, phase, since));
+    this.addRubble(f, cell);
+  }
+
+  /** Dessine un affleurement, la vie de son minerai et l'éclat de la pioche. */
+  private drawOre(f: Frame, sprite: OutcropSprite, X: number, Y: number, phase: number, since: number | null): void {
+    f.ctx.drawImage(sprite.img, X, Y);
+    drawOreLive(f.P, sprite, X, Y, f.now, phase);
+    if (since !== null) drawRockHit(f.P, sprite, X, Y, since);
+  }
+
+  /** Pose des cailloux sur les cases restantes du carré, pour qu'aucune ne perde sa lisibilité. */
+  private addRubble(f: Frame, cell: OreCell): void {
+    if (cell.count < 4) {
+      for (let i = 0; i < cell.tiles.length - 1; i++) {
+        const tile = cell.tiles[i];
+        this.drawRubble(f, rockKind(cell.type as 1 | 2 | 3 | 4), tile.x, tile.y);
+      }
+    }
+    for (const other of cell.others) {
+      this.drawRubble(f, rockKind(other.type as 1 | 2 | 3 | 4), other.x, other.y);
+    }
+  }
+
+  /** Dessine un petit tas de cailloux au centre d'une case, en file plate. */
+  private drawRubble(f: Frame, kind: RockKind, tx: number, ty: number): void {
+    const variant = Math.floor(hash(tx, ty, f.g.seed + 216) * OUTCROP_VARIANTS);
+    const img = rubbleSprite(kind, variant);
+    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2);
+    const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2);
+    this.queue.add('flat', () => f.ctx.drawImage(img, x, y));
   }
 
   /** Ajoute les bâtiments visibles, leur ombre portée, leurs lumières et leur goulotte. */
