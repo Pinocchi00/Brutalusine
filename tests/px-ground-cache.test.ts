@@ -375,6 +375,23 @@ describe('mémoire', () => {
     expect(after(fake, mark).length).toBe(0);
   });
 
+  it('libère un voisin vu à cette image pour faire place aux visibles', () => {
+    const fake = new Fake();
+    const a = fake.chunk('a');
+    const b = fake.chunk('b');
+    const c = fake.chunk('c');
+    const d = fake.chunk('d');
+    const cache = fake.cache(4, 2);
+    cache.update([], [a, b], 0);
+    expect(cache.get(a)).not.toBeNull();
+    expect(cache.get(b)).not.toBeNull();
+    cache.update([c, d], [a, b], 1);
+    expect(cache.get(c)).not.toBeNull();
+    expect(cache.get(d)).not.toBeNull();
+    expect(cache.get(a)).toBeNull();
+    expect(cache.get(b)).toBeNull();
+  });
+
   it('ne prépare qu’un voisin quand tous sont vus à la même image', () => {
     const fake = new Fake();
     const a = fake.chunk('a');
