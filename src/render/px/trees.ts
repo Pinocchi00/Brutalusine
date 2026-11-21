@@ -16,7 +16,7 @@ export type TreeKind = 'leafy' | 'palm' | 'flower';
 export type TreeSize = 1 | 2 | 3;
 
 /** Le rayon du houppier pour chaque taille. */
-export const TREE_RADIUS: Readonly<Record<TreeSize, number>> = { 1: 10, 2: 14, 3: 18 };
+export const TREE_RADIUS: Readonly<Record<TreeSize, number>> = { 1: 13, 2: 16, 3: 20 };
 
 /** Le nombre de variantes de houppier par espèce et par taille. */
 export const TREE_VARIANTS = 4;
