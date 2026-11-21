@@ -152,13 +152,19 @@ export class PxRenderer {
     this.fx.hit(x, y, this.now);
   }
 
-  /** Lance un arbre abattu avec l'image du vrai houppier de cet arbre. */
+  /** Lance un arbre abattu depuis le vrai centre de son houppier debout. */
   fell(g: Game, x: number, y: number, size: number): void {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const kind = treeKindAt(tx, ty, g.seed);
     const img = canopySprite(kind, treeSize(size), treeVariantAt(tx, ty, g.seed));
-    this.fx.fell(x, y, size, this.now, img);
+    const jitter = Math.round((hash(tx, ty, g.seed + 5) - 0.5) * 6);
+    const footX = Math.round((tx + 0.5) * TILE_PX + jitter);
+    const footY = Math.round((ty + 0.9) * TILE_PX);
+    const top = footY - (kind === 'palm' ? 24 : 16);
+    const centerX = footX / TILE_PX;
+    const centerY = (top - img.height * 0.76 + img.height / 2) / TILE_PX;
+    this.fx.fell(centerX, centerY, size, this.now, img);
     this.fx.burst('leaf', x, y - 0.2, C.g2, 10);
     this.fx.burst('dust', x, y + 0.1, C.c3, 4);
   }
@@ -291,7 +297,7 @@ export class PxRenderer {
     const sprite = outcropSprite(kind, variant, alt);
     const X = Math.round(cell.centerX * TILE_PX - sprite.img.width / 2 + offset.x);
     const footPx = Math.round(cell.footY * TILE_PX) - 2 + offset.y;
-    const Y = footPx - sprite.foot;
+    const Y = footPx - sprite.foot - 1;
     if (f.fade > 0) {
       this.queue.add('cast', () => {
         f.P.ell(X + sprite.img.width * 0.9, footPx - 2, sprite.img.width * 0.6, 3, C.shadeL);
@@ -332,7 +338,8 @@ export class PxRenderer {
   private drawRubble(f: Frame, kind: RockKind, tx: number, ty: number): void {
     const variant = Math.floor(hash(tx, ty, f.g.seed + 216) * OUTCROP_VARIANTS);
     const img = rubbleSprite(kind, variant);
-    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2);
+    const since = this.fx.hitSince(tx, ty, f.now);
+    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + (since === null ? 0 : rockShake(since));
     const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2);
     this.queue.add('flat', () => f.ctx.drawImage(img, x, y));
   }

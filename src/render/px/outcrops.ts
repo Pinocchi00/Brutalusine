@@ -8,7 +8,7 @@
  * quels. `crack` est le centre du cœur de la cassure, décalé lui aussi du contour.
  */
 import { C } from './palette';
-import { hash, rng } from './noise';
+import { rng } from './noise';
 import { finish, outline } from './finish';
 import { makeSurface } from './surface';
 import { pen } from './pen';
@@ -104,11 +104,6 @@ function boulder(
 /** Le type de roche d'un gisement : 1 fer, 2 pierre, 3 quartz, 4 cuivre. */
 export function rockKind(deposit: 1 | 2 | 3 | 4): RockKind {
   return (['fe', 'st', 'qz', 'cu'] as const)[deposit - 1];
-}
-
-/** La variante 0 à OUTCROP_VARIANTS - 1 selon la case et la graine. */
-export function outcropVariantAt(tx: number, ty: number, seed: number): number {
-  return Math.floor(hash(tx, ty, seed + 213) * OUTCROP_VARIANTS);
 }
 
 /** Dessine l'affleurement non fini et rend son plan. Toute la logique de dessin est ici. */

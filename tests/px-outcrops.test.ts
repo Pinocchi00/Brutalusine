@@ -15,7 +15,6 @@ import {
   drawRockHit,
   outcropSprite,
   outcropSpriteKeys,
-  outcropVariantAt,
   paintOutcrop,
   paintRubble,
   rockKind,
@@ -146,19 +145,6 @@ describe('gisements et variantes', () => {
     }
   });
 
-  it('tire une variante déterministe et bornée pour chaque case et graine', () => {
-    for (const tx of [-40, -1, 0, 7, 128]) {
-      for (const ty of [-9, 0, 3, 77]) {
-        for (const seed of [0, 1, 424242]) {
-          const first = outcropVariantAt(tx, ty, seed);
-          expect(first).toBe(outcropVariantAt(tx, ty, seed));
-          expect(Number.isInteger(first)).toBe(true);
-          expect(first).toBeGreaterThanOrEqual(0);
-          expect(first).toBeLessThan(OUTCROP_VARIANTS);
-        }
-      }
-    }
-  });
 });
 
 describe('le plan écrit', () => {

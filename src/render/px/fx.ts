@@ -50,7 +50,7 @@ interface Falling {
   y: number;
   size: number;
   t0: number;
-  img: CanvasImageSource;
+  img: HTMLCanvasElement;
   dir: number;
 }
 
@@ -175,29 +175,33 @@ export class PixelFx {
     this.hits.set(`${Math.floor(tx)},${Math.floor(ty)}`, { at: now, power, age: 0 });
   }
 
-  /** Le temps écoulé depuis le coup porté à une case, en secondes ; `null` si aucun coup n'est actif. */
-  hitSince(tx: number, ty: number, now: number): number | null {
+  /** Le coup actif d'une case et son âge, ou `null` s'il n'y en a pas. */
+  private activeHit(tx: number, ty: number, now: number): { hit: Shake; since: number } | null {
     const hit = this.hits.get(`${Math.floor(tx)},${Math.floor(ty)}`);
     if (!hit) return null;
     const since = now - hit.at;
     if (since < 0 || since >= SHAKE_TIME - 1e-9) return null;
-    return since;
+    return { hit, since };
+  }
+
+  /** Le temps écoulé depuis le coup porté à une case, en secondes ; `null` si aucun coup n'est actif. */
+  hitSince(tx: number, ty: number, now: number): number | null {
+    const active = this.activeHit(tx, ty, now);
+    return active ? active.since : null;
   }
 
   /** Le décalage horizontal entier, en pixels, de l'arbre frappé à cet instant. */
   shake(tx: number, ty: number, now: number): number {
-    const since = this.hitSince(tx, ty, now);
-    if (since === null) return 0;
-    const hit = this.hits.get(`${Math.floor(tx)},${Math.floor(ty)}`);
-    if (!hit) return 0;
-    const amplitude = hit.power > 1.5 ? 2 : 1;
-    const sign = Math.floor(since * 16) % 2 ? 1 : -1;
-    const decay = since < 0.18 ? 1 : 0.5;
+    const active = this.activeHit(tx, ty, now);
+    if (!active) return 0;
+    const amplitude = active.hit.power > 1.5 ? 2 : 1;
+    const sign = Math.floor(active.since * 16) % 2 ? 1 : -1;
+    const decay = active.since < 0.18 ? 1 : 0.5;
     return Math.round(sign * amplitude * decay);
   }
 
   /** Lance un arbre abattu qui bascule et s'efface, dessiné avec l'image de son houppier. */
-  fell(x: number, y: number, size: number, now: number, img: CanvasImageSource): void {
+  fell(x: number, y: number, size: number, now: number, img: HTMLCanvasElement): void {
     this.falls.push({
       x,
       y,
@@ -261,14 +265,13 @@ export class PixelFx {
   /** Un arbre qui bascule : la translation et la rotation avancent par crans entiers. */
   private drawFall(ctx: CanvasRenderingContext2D, f: Falling, t: number): void {
     const e = t * t;
-    const r = 0.42 + 0.4 * (f.size / 255);
     const side = Math.cos(f.dir) >= 0 ? 1 : -1;
     const step = Math.PI / 24;
     const angle = Math.round((e * 1.1 * side) / step) * step;
     const cx = Math.round(f.x * T + Math.cos(f.dir) * e * 0.9 * T);
-    const cy = Math.round(f.y * T - r * 0.3 * (1 - e) * T + Math.sin(f.dir) * e * 0.5 * T);
-    const dw = Math.max(1, Math.round(r * 2.4 * T * (1 - e * 0.25)));
-    const dh = Math.max(1, Math.round(r * 2.4 * T * (1 - e * 0.5)));
+    const cy = Math.round(f.y * T + Math.sin(f.dir) * e * 0.5 * T);
+    const dw = Math.max(1, Math.round(f.img.width * (1 - e * 0.25)));
+    const dh = Math.max(1, Math.round(f.img.height * (1 - e * 0.5)));
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 1 - e;

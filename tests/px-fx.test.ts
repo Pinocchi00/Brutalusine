@@ -2,6 +2,45 @@ import { describe, expect, it } from 'vitest';
 import { PixelFx, softenColor } from '../src/render/px/fx';
 import { C } from '../src/render/px/palette';
 import { hexToRgb } from '../src/render/px/noise';
+import type { Pen } from '../src/render/px/pen';
+
+/** Un crayon sans effet, suffisant pour laisser la chute se dessiner. */
+function dummyPen(): Pen {
+  return { r: () => undefined, p: () => undefined, line: () => undefined, ell: () => undefined, disc: () => undefined };
+}
+
+/** Un contexte qui note les transformations et le dessin de la chute. */
+function fallCtx(): { ctx: CanvasRenderingContext2D; calls: { m: string; args: unknown[] }[] } {
+  const calls: { m: string; args: unknown[] }[] = [];
+  const ctx = {
+    imageSmoothingEnabled: true,
+    globalAlpha: 1,
+    save: (): void => { calls.push({ m: 'save', args: [] }); },
+    restore: (): void => { calls.push({ m: 'restore', args: [] }); },
+    translate: (x: number, y: number): void => { calls.push({ m: 'translate', args: [x, y] }); },
+    rotate: (angle: number): void => { calls.push({ m: 'rotate', args: [angle] }); },
+    drawImage: (_img: unknown, dx: number, dy: number, dw: number, dh: number): void => {
+      calls.push({ m: 'drawImage', args: [dx, dy, dw, dh] });
+    },
+  };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+}
+
+describe('chute d’un arbre', () => {
+  it('dessine le houppier à sa taille réelle, centré sur le point donné, à t = 0', () => {
+    const fx = new PixelFx();
+    const img = { width: 40, height: 50 } as unknown as HTMLCanvasElement;
+    fx.fell(3.25, 5.5, 100, 10, img);
+    const { ctx, calls } = fallCtx();
+    fx.draw(dummyPen(), ctx, 10);
+    const translate = calls.find((call) => call.m === 'translate');
+    const rotate = calls.find((call) => call.m === 'rotate');
+    const draw = calls.find((call) => call.m === 'drawImage');
+    expect(translate?.args).toEqual([Math.round(3.25 * 24), Math.round(5.5 * 24)]);
+    expect(rotate?.args).toEqual([0]);
+    expect(draw?.args).toEqual([-20, -25, 40, 50]);
+  });
+});
 
 describe('tremblement des arbres', () => {
   it('suit les instants clés d’une frappe normale', () => {
