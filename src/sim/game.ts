@@ -595,9 +595,8 @@ export class Game {
   // ============================================================ la jungle
   /** Les arbres repoussent là où ils étaient, le jour, sauf sous les dalles (un bloc toutes les 2 s). */
   private tickGrowth(): void {
-    const list = this.world.list;
-    const phase = this.tick % 120;
-    for (let i = phase; i < list.length; i += 120) this.growChunk(list[i]);
+    const blocks = this.world.phases[this.tick % 120];
+    for (const c of blocks) this.growChunk(c);
   }
 
   private growChunk(c: Chunk): void {

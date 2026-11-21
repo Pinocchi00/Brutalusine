@@ -61,9 +61,18 @@ interface Grove { x: number; y: number; r: number; }
 const TAU = Math.PI * 2;
 const key = (cx: number, cy: number) => (cx + 32768) * 65536 + (cy + 32768);
 
+/** Le nombre de phases de repousse : un bloc repousse une fois toutes les 120 pas. */
+export const GROWTH_PHASES = 120;
+
+/** La phase de repousse d'un bloc, tirée de ses coordonnées et jamais de son ordre de création. */
+export function growthPhase(cx: number, cy: number): number {
+  return (((cx * 31 + cy * 17) % GROWTH_PHASES) + GROWTH_PHASES) % GROWTH_PHASES;
+}
+
 export class World {
   chunks = new Map<number, Chunk>();
   list: Chunk[] = [];
+  readonly phases: Chunk[][] = Array.from({ length: GROWTH_PHASES }, () => []);
   blobs: Blob[] = [];          // gisements garantis près du départ
   river: { x: number; y: number };   // le point d'eau le plus proche du départ
   firstFord: { x: number; y: number };   // le premier gué, pour les sentiers
@@ -373,6 +382,20 @@ export class World {
   }
 
   // ------------------------------------------------------------ les blocs
+  /** Range un bloc dans sa liste de phase, triée par (cy, cx) et sans doublon. */
+  private placeInPhase(c: Chunk): void {
+    const phase = this.phases[growthPhase(c.cx, c.cy)];
+    let lo = 0;
+    let hi = phase.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const other = phase[mid];
+      if (other.cy < c.cy || (other.cy === c.cy && other.cx < c.cx)) lo = mid + 1;
+      else hi = mid;
+    }
+    phase.splice(lo, 0, c);
+  }
+
   chunk(cx: number, cy: number, create = true): Chunk | null {
     const l = this.last;
     if (l && l.cx === cx && l.cy === cy) return l;
@@ -382,6 +405,7 @@ export class World {
       c = new Chunk(cx, cy);
       this.chunks.set(k, c);
       this.list.push(c);
+      this.placeInPhase(c);
       this.generate(c);
     }
     if (c) this.last = c;
