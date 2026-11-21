@@ -20,13 +20,14 @@ import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem, placeholderSprite } from './placeholders';
-import { TREE_RADIUS, canopySprite, drawTree, treeKindAt, treeVariantAt } from './trees';
+import { TREE_RADIUS, canopySprite, drawTree, prepareTrees, treeKindAt, treeVariantAt } from './trees';
 import {
   OUTCROP_ALTS,
   OUTCROP_VARIANTS,
   drawOreLive,
   drawRockHit,
   outcropSprite,
+  prepareOutcrops,
   rockKind,
   rockShake,
   rubbleSprite,
@@ -123,6 +124,8 @@ export class PxRenderer {
     if (!ctx) throw new Error('Contexte 2D indisponible');
     this.canvas = canvas;
     this.ctx = ctx;
+    prepareTrees();
+    prepareOutcrops();
   }
 
   /** Oublie le sol peint, les particules et les chutes. */

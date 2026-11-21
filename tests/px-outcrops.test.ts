@@ -14,6 +14,7 @@ import {
   drawOreLive,
   drawRockHit,
   outcropSprite,
+  outcropSpriteKeys,
   outcropVariantAt,
   paintOutcrop,
   paintRubble,
@@ -220,6 +221,22 @@ describe('le plan écrit', () => {
     expect(colors(paint('fe', 0).grid)).toContain(C.ir1);
     expect(colors(paint('cu', 0).grid)).toContain(C.ma2);
     expect(colors(paint('qz', 0).grid)).toContain(C.qz0);
+  });
+});
+
+describe('clés des affleurements', () => {
+  it('couvre exactement les 36 combinaisons de type, variante et alternative, sans doublon', () => {
+    const keys = outcropSpriteKeys();
+    expect(keys).toHaveLength(36);
+    const seen = new Set(keys.map((key) => `${key.kind}:${key.variant}:${key.alt}`));
+    expect(seen.size).toBe(36);
+    for (const kind of KINDS) {
+      for (const variant of VARIANTS) {
+        for (let alt = 0; alt < OUTCROP_ALTS; alt++) {
+          expect(seen.has(`${kind}:${variant}:${alt}`), `${kind} ${variant} ${alt}`).toBe(true);
+        }
+      }
+    }
   });
 });
 

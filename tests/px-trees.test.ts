@@ -7,6 +7,7 @@ import {
   canopySize,
   paintCanopy,
   treeKindAt,
+  treeSpriteKeys,
   treeSway,
   treeVariantAt,
   type TreeKind,
@@ -210,6 +211,22 @@ describe('balancement', () => {
       const sway = treeSway(i * 0.13 - 10, i * 7 - 300);
       expect(sway).toBeGreaterThanOrEqual(-1);
       expect(sway).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('clés des houppiers', () => {
+  it('couvre exactement les 36 combinaisons d’espèce, taille et variante, sans doublon', () => {
+    const keys = treeSpriteKeys();
+    expect(keys).toHaveLength(36);
+    const seen = new Set(keys.map((key) => `${key.kind}:${key.size}:${key.variant}`));
+    expect(seen.size).toBe(36);
+    for (const kind of ['leafy', 'palm', 'flower'] as const) {
+      for (const size of [1, 2, 3] as const) {
+        for (let variant = 0; variant < TREE_VARIANTS; variant++) {
+          expect(seen.has(`${kind}:${size}:${variant}`), `${kind} ${size} ${variant}`).toBe(true);
+        }
+      }
     }
   });
 });

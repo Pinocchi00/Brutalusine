@@ -244,6 +244,25 @@ export function outcropSprite(kind: RockKind, variant: number, alt = 0): Outcrop
   return sprite;
 }
 
+/** Les types, variantes et alternatives possibles d'un affleurement. */
+export function outcropSpriteKeys(): readonly { kind: RockKind; variant: number; alt: number }[] {
+  const keys: { kind: RockKind; variant: number; alt: number }[] = [];
+  for (const kind of KIND_ORDER) {
+    for (let variant = 0; variant < OUTCROP_VARIANTS; variant++) {
+      for (let alt = 0; alt < OUTCROP_ALTS; alt++) keys.push({ kind, variant, alt });
+    }
+  }
+  return keys;
+}
+
+/** Prépare tous les affleurements et leurs cailloux à l'avance, pour ne rien dessiner en pleine partie. */
+export function prepareOutcrops(): void {
+  for (const key of outcropSpriteKeys()) outcropSprite(key.kind, key.variant, key.alt);
+  for (const kind of KIND_ORDER) {
+    for (let variant = 0; variant < OUTCROP_VARIANTS; variant++) rubbleSprite(kind, variant);
+  }
+}
+
 /** La couleur du minerai qui affleure sur une roche, pour les cailloux tombés. */
 function oreColor(kind: RockKind, pal: readonly [string, string, string, string, string]): string {
   if (kind === 'fe') return C.ir1;

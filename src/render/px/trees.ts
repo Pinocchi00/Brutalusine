@@ -127,6 +127,28 @@ export function paintCanopy(P: Pen, R: number, seed: number, kind: TreeKind): vo
   }
 }
 
+/** Les trois espèces, dans l'ordre de préparation des houppiers. */
+const TREE_KINDS: readonly TreeKind[] = ['leafy', 'palm', 'flower'];
+
+/** Les trois tailles, dans l'ordre de préparation des houppiers. */
+const TREE_SIZES: readonly TreeSize[] = [1, 2, 3];
+
+/** Les espèces, tailles et variantes possibles d'un houppier. */
+export function treeSpriteKeys(): readonly { kind: TreeKind; size: TreeSize; variant: number }[] {
+  const keys: { kind: TreeKind; size: TreeSize; variant: number }[] = [];
+  for (const kind of TREE_KINDS) {
+    for (const size of TREE_SIZES) {
+      for (let variant = 0; variant < TREE_VARIANTS; variant++) keys.push({ kind, size, variant });
+    }
+  }
+  return keys;
+}
+
+/** Prépare tous les houppiers à l'avance, pour ne rien dessiner en pleine partie. */
+export function prepareTrees(): void {
+  for (const key of treeSpriteKeys()) canopySprite(key.kind, key.size, key.variant);
+}
+
 /** La graine du houppier, dérivée de l'espèce, de la taille et de la variante. */
 function canopySeed(kind: TreeKind, size: TreeSize, variant: number): number {
   const h = hash(size * TREE_VARIANTS + variant, KIND_SALT[kind], 907);
