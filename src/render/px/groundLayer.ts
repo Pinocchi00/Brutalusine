@@ -147,6 +147,7 @@ export class GroundLayer {
     const x1 = (view.tileX1 + 1) * TILE_PX;
     const y1 = (view.tileY1 + 1) * TILE_PX;
     for (const chunk of this.visible) {
+      if (!this.cache.get(chunk)) continue;
       const entry = this.life.get(chunk);
       if (!entry) continue;
       drawGroundLife(P, entry.life, anim, x0, y0, x1, y1, this.blocked);
