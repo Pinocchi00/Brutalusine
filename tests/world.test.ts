@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  World, Chunk, CHUNK, GROUND_SOIL, GROUND_WATER, GROUND_BANK, GROUND_PATH, BANK_FIELD, PATH_TILE,
+  World, Chunk, CHUNK, GROUND_SOIL, GROUND_WATER, GROUND_BANK, GROUND_PATH, GROUND_FORD, BANK_FIELD, PATH_TILE,
   type PathSegment,
 } from '../src/sim/world';
 import { serialize, deserialize, type SaveData } from '../src/sim/save';
@@ -80,12 +80,17 @@ describe('monde : déterminisme et rivage', () => {
         expect(centre.shore[j * 33]).toBe(west.shore[j * 33 + CHUNK]);
         expect(centre.shore[CHUNK * 33 + j]).toBe(north.shore[j]);
         expect(centre.shore[j]).toBe(south.shore[CHUNK * 33 + j]);
+        expect(centre.ford[j * 33 + CHUNK]).toBe(east.ford[j * 33]);
+        expect(centre.ford[j * 33]).toBe(west.ford[j * 33 + CHUNK]);
+        expect(centre.ford[CHUNK * 33 + j]).toBe(north.ford[j]);
+        expect(centre.ford[j]).toBe(south.ford[CHUNK * 33 + j]);
       }
       for (const c of blocks) {
         for (let j = 0; j <= CHUNK; j++) {
           for (let i = 0; i <= CHUNK; i++) {
             const x = c.cx * CHUNK + i, y = c.cy * CHUNK + j;
             expect(c.shore[j * 33 + i]).toBeCloseTo(w.shoreField(x, y), 5);
+            expect(c.ford[j * 33 + i]).toBeCloseTo(w.fordField(x, y), 5);
             if (i > 0) expect(Math.abs(c.shore[j * 33 + i] - c.shore[j * 33 + i - 1])).toBeLessThanOrEqual(1.5);
             if (j > 0) expect(Math.abs(c.shore[j * 33 + i] - c.shore[(j - 1) * 33 + i])).toBeLessThanOrEqual(1.5);
           }
@@ -104,8 +109,10 @@ describe('monde : déterminisme et rivage', () => {
           for (let lx = 0; lx < CHUNK; lx++) {
             const x = cx * CHUNK + lx, y = cy * CHUNK + ly;
             const a = (c.shore[ly * 33 + lx] + c.shore[ly * 33 + lx + 1] + c.shore[(ly + 1) * 33 + lx] + c.shore[(ly + 1) * 33 + lx + 1]) / 4;
+            const ford = (c.ford[ly * 33 + lx] + c.ford[ly * 33 + lx + 1] + c.ford[(ly + 1) * 33 + lx] + c.ford[(ly + 1) * 33 + lx + 1]) / 4;
             const pd = paths.reduce((m, s) => Math.min(m, distanceToSegment(s, x + 0.5, y + 0.5)), Infinity);
-            const want = a < 0 ? GROUND_WATER : pd < PATH_TILE ? GROUND_PATH : a < BANK_FIELD ? GROUND_BANK : GROUND_SOIL;
+            const wet = ford >= 0.5 ? GROUND_FORD : GROUND_WATER;
+            const want = a < 0 ? wet : pd < PATH_TILE ? GROUND_PATH : a < BANK_FIELD ? GROUND_BANK : GROUND_SOIL;
             expect(c.ground[ly * 32 + lx]).toBe(want);
           }
         }
@@ -137,40 +144,149 @@ describe('monde : déterminisme et rivage', () => {
   }, 60_000);
 });
 
-describe('monde : gués ronds', () => {
-  function waterWidth(w: World, x: number, y: number, nx: number, ny: number): number {
-    let sum = 0;
-    for (const side of [1, -1]) {
-      let last = 0;
-      for (let t = 0; t <= 8; t += 0.01) {
-        if (w.shoreField(x + nx * t * side, y + ny * t * side) < 0) last = t;
-        else break;
+describe('monde : rivière continue', () => {
+  it('le long de l’axe, de u = -300 à 300, le rivage reste négatif : la rivière n’est jamais coupée', () => {
+    for (const seed of SEEDS) {
+      const w = new World(seed);
+      for (let u = -300; u <= 300; u++) {
+        const p = w.riverPoint(u);
+        expect(w.shoreField(p.x, p.y)).toBeLessThan(0);
       }
-      sum += last;
     }
-    return sum;
+  }, 60_000);
+});
+
+describe('monde : gués en eau peu profonde', () => {
+  function fordComponents(w: World, limit: number): { x: number; y: number }[][] {
+    const n = limit * 2 + 1;
+    const key = (x: number, y: number): number => (x + limit) * n + (y + limit);
+    const seen = new Set<number>();
+    const out: { x: number; y: number }[][] = [];
+    const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let y = -limit; y <= limit; y++) {
+      for (let x = -limit; x <= limit; x++) {
+        if (ground(w, x, y) !== GROUND_FORD || seen.has(key(x, y))) continue;
+        const comp: { x: number; y: number }[] = [];
+        const q: [number, number][] = [[x, y]];
+        seen.add(key(x, y));
+        for (let qi = 0; qi < q.length; qi++) {
+          const [cx, cy] = q[qi];
+          comp.push({ x: cx, y: cy });
+          for (const [dx, dy] of dirs) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < -limit || nx > limit || ny < -limit || ny > limit) continue;
+            if (seen.has(key(nx, ny)) || ground(w, nx, ny) !== GROUND_FORD) continue;
+            seen.add(key(nx, ny));
+            q.push([nx, ny]);
+          }
+        }
+        out.push(comp);
+      }
+    }
+    return out;
   }
 
-  it('l’extrémité de l’eau est ronde : à une case de la pointe, la largeur dépasse 3 cases', () => {
-    for (let seed = 1; seed <= 20; seed++) {
+  it('chaque gué proche offre un passage d’au moins 4 cases, sans eau, d’une rive à l’autre', () => {
+    const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const seed of SEEDS) {
       const w = new World(seed);
-      const eps = 0.05;
-      const px = w.river.x, py = w.river.y;
-      const gx = (w.shoreField(px + eps, py) - w.shoreField(px - eps, py)) / (2 * eps);
-      const gy = (w.shoreField(px, py + eps) - w.shoreField(px, py - eps)) / (2 * eps);
-      const gl = Math.hypot(gx, gy);
-      expect(gl).toBeGreaterThan(1e-3);
-      const nx = gx / gl, ny = gy / gl;
-      const ax = -ny, ay = nx;
-      const fx = w.firstFord.x, fy = w.firstFord.y;
-      let end = -1;
-      for (let d = 0; d <= 8; d += 0.01) {
-        if (w.shoreField(fx + ax * d, fy + ay * d) < 0) { end = d; break; }
+      const limit = 80;
+      w.ensureArea(-limit, -limit, limit, limit);
+      // on ignore les miettes de seuil et les gués coupés par le bord de la zone
+      const comps = fordComponents(w, limit)
+        .filter((c) => c.length >= 8)
+        .filter((c) => c.every((p) => Math.abs(p.x) < limit - 1 && Math.abs(p.y) < limit - 1));
+      expect(comps.length).toBeGreaterThan(0);
+      for (const comp of comps) {
+        const mx = comp.reduce((s, p) => s + p.x + 0.5, 0) / comp.length;
+        const my = comp.reduce((s, p) => s + p.y + 0.5, 0) / comp.length;
+        // l'axe de la rivière est la direction du gradient du champ de gué ; il est constant
+        let rx = 0, ry = 0;
+        search: for (let oy = -8; oy <= 8; oy += 0.5) {
+          for (let ox = -8; ox <= 8; ox += 0.5) {
+            const px = mx + ox, py = my + oy, f = w.fordField(px, py);
+            if (f <= 0.1 || f >= 0.9) continue;
+            const e = 0.01;
+            const gx = (w.fordField(px + e, py) - w.fordField(px - e, py)) / (2 * e);
+            const gy = (w.fordField(px, py + e) - w.fordField(px, py - e)) / (2 * e);
+            const gl = Math.hypot(gx, gy);
+            if (gl > 1e-3) { rx = gx / gl; ry = gy / gl; break search; }
+          }
+        }
+        expect(Math.hypot(rx, ry)).toBeCloseTo(1, 5);
+        const nx = -ry, ny = rx;   // la traversée
+        let minT = Infinity, maxT = -Infinity, minN = Infinity, maxN = -Infinity;
+        for (const p of comp) {
+          const px = p.x + 0.5, py = p.y + 0.5;
+          minT = Math.min(minT, px * rx + py * ry);
+          maxT = Math.max(maxT, px * rx + py * ry);
+          minN = Math.min(minN, px * nx + py * ny);
+          maxN = Math.max(maxN, px * nx + py * ny);
+        }
+        // largeur du passage, mesurée le long de la rivière
+        expect(maxT - minT).toBeGreaterThanOrEqual(4);
+        // le gué est d'un seul tenant et touche la terre sur les deux rives
+        for (const side of [minN, maxN]) {
+          const touches = comp.some((p) => {
+            const px = p.x + 0.5, py = p.y + 0.5;
+            const proj = px * nx + py * ny;
+            if (Math.abs(proj - side) > 1.5) return false;
+            return dirs.some(([dx, dy]) => {
+              const g = ground(w, p.x + dx, p.y + dy);
+              return g !== GROUND_WATER && g !== GROUND_FORD;
+            });
+          });
+          expect(touches).toBe(true);
+        }
       }
-      expect(end).toBeGreaterThan(0);
-      const cx = fx + ax * (end + 1), cy = fy + ay * (end + 1);
-      expect(w.shoreField(cx, cy)).toBeLessThan(0);
-      expect(waterWidth(w, cx, cy, nx, ny)).toBeGreaterThanOrEqual(3);
+    }
+  }, 60_000);
+
+  it('aucune case de gué ne porte d’arbre, de gisement ni de débris', () => {
+    for (const seed of SEEDS) {
+      const w = new World(seed);
+      const limit = 60;
+      w.ensureArea(-limit, -limit, limit, limit);
+      let fords = 0;
+      for (let y = -limit; y <= limit; y++) {
+        for (let x = -limit; x <= limit; x++) {
+          if (ground(w, x, y) !== GROUND_FORD) continue;
+          fords++;
+          expect(w.tree(x, y)).toBe(false);
+          expect(w.deposit(x, y)).toBe(0);
+          expect(w.loot(x, y)).toBe(0);
+        }
+      }
+      expect(fords).toBeGreaterThan(0);
+    }
+  }, 60_000);
+
+  it('un convoyeur se pose sur le gué et pas sur l’eau voisine', () => {
+    for (const seed of SEEDS) {
+      const g = new Game(seed);
+      const w = g.world;
+      const f = w.firstFord;
+      let ford: { x: number; y: number } | null = null;
+      for (let r = 0; r <= 4 && !ford; r++) {
+        for (let y = Math.floor(f.y) - r; y <= Math.floor(f.y) + r && !ford; y++) {
+          for (let x = Math.floor(f.x) - r; x <= Math.floor(f.x) + r; x++) {
+            if (ground(w, x, y) === GROUND_FORD) { ford = { x, y }; break; }
+          }
+        }
+      }
+      expect(ford).not.toBeNull();
+      const good = g.place('convoyeur', ford!.x, ford!.y, 0, { free: true });
+      expect(good.ok).toBe(true);
+      let water: { x: number; y: number } | null = null;
+      for (let y = ford!.y - 10; y <= ford!.y + 10 && !water; y++) {
+        for (let x = ford!.x - 10; x <= ford!.x + 10; x++) {
+          if (ground(w, x, y) === GROUND_WATER) { water = { x, y }; break; }
+        }
+      }
+      expect(water).not.toBeNull();
+      const bad = g.place('convoyeur', water!.x, water!.y, 0, { free: true });
+      expect(bad.ok).toBe(false);
+      expect(bad.reason).toBe('Impossible sur l’eau');
     }
   }, 60_000);
 });
@@ -187,7 +303,7 @@ describe('monde : eau, arbres, gisements', () => {
             const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
             for (const [dx, dy] of dirs) {
               const n = ground(w, x + dx, y + dy);
-              expect(n === GROUND_WATER || n === GROUND_BANK || n === GROUND_PATH).toBe(true);
+              expect(n === GROUND_WATER || n === GROUND_FORD || n === GROUND_BANK || n === GROUND_PATH).toBe(true);
             }
             expect(w.tree(x, y)).toBe(false);
             expect(w.deposit(x, y)).toBe(0);
@@ -243,7 +359,8 @@ describe('monde : eau, arbres, gisements', () => {
       for (let d = 1; d <= 30 && !far; d += 0.5) {
         const x = Math.round(w.river.x + ux * d), y = Math.round(w.river.y + uy * d);
         if (Math.abs(x) > limit || Math.abs(y) > limit) break;
-        if (ground(w, x, y) !== GROUND_WATER) far = { x, y };
+        const g = ground(w, x, y);
+        if (g !== GROUND_WATER && g !== GROUND_FORD) far = { x, y };
       }
       expect(far).not.toBeNull();
       expect(tileSeen(far!.x, far!.y)).toBe(true);
@@ -285,16 +402,19 @@ describe('monde : bosquets et sentiers', () => {
     }
   }, 60_000);
 
-  it('le chemin du camp atteint le bosquet, le premier gué et le gisement de fer', () => {
+  it('le chemin du camp atteint le bosquet et le fer, et traverse le premier gué tout droit', () => {
     for (const seed of SEEDS) {
       const w = new World(seed);
-      const targets = [w.grove, w.firstFord, w.blobs[0]];
-      for (const t of targets) {
+      for (const t of [w.grove, w.blobs[0]]) {
         const cx = Math.floor(t.x / CHUNK), cy = Math.floor(t.y / CHUNK);
         const paths = w.pathSegments(cx, cy);
         const ends = paths.some((s) => Math.hypot(s.bx - t.x, s.by - t.y) < 1e-6);
         expect(ends).toBe(true);
       }
+      const f = w.firstFord;
+      const paths = w.pathSegments(Math.floor(f.x / CHUNK), Math.floor(f.y / CHUNK));
+      const crosses = paths.some((s) => distanceToSegment(s, f.x, f.y) < 1e-6);
+      expect(crosses).toBe(true);
       expect(Math.hypot(w.firstFord.x, w.firstFord.y)).toBeLessThan(40);
     }
   }, 60_000);

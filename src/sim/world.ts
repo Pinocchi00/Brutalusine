@@ -9,6 +9,7 @@ export const GROUND_SOIL = 0;
 export const GROUND_WATER = 1;
 export const GROUND_BANK = 2;
 export const GROUND_PATH = 3;
+export const GROUND_FORD = 4;
 export const BANK_FIELD = 1.6;   // une case est de la berge si la moyenne de ses coins est dans [0, BANK_FIELD[
 export const PATH_TILE = 0.6;    // une case est un chemin si son centre est à moins de 0,6 case d'un segment
 export const SMOKE_RES = 8;      // 8×8 cellules de fumée par bloc (4 cases chacune)
@@ -27,6 +28,7 @@ export class Chunk {
   ent = new Int32Array(CHUNK * CHUNK);       // identifiant d'entité (0 = vide)
   region = new Uint16Array(CHUNK * CHUNK);   // réseau électrique
   shore = new Float32Array((CHUNK + 1) * (CHUNK + 1));   // le champ de rivage aux 33×33 coins
+  ford = new Float32Array((CHUNK + 1) * (CHUNK + 1));    // la profondeur du gué aux 33×33 coins
   smoke = new Float32Array(SMOKE_RES * SMOKE_RES);
   next: Float32Array | null = null;          // tampon de diffusion
   pending = false;
@@ -94,7 +96,7 @@ export class World {
     this.params.center0 = this.riverWave(0).v;
     const near = this.placeRiver();
     this.river = near;
-    this.firstFord = this.fordPoint(this.params.fordShift);
+    this.firstFord = this.riverPoint(this.params.fordShift);
     this.grove = this.chooseHomeGrove();
     this.makeBlobs(rnd);
     this.makeCampPaths(rnd);
@@ -133,17 +135,26 @@ export class World {
     return p.h0 + p.ha * Math.sin(p.hw * u + p.hp);
   }
 
-  /** Le demi-cercle de terre du gué à l'abscisse `u` : distance à son axe, ou `along - hw` loin du gué. */
-  private fordField(u: number, along: number, hw: number): number {
+  /** La distance en `u` au centre du gué le plus proche. */
+  private fordDistance(u: number): number {
     const p = this.params;
     const base = Math.floor((u - p.fordShift) / p.fordSpacing);
     let du = Infinity;
     for (let k = base - 1; k <= base + 1; k++) {
       du = Math.min(du, Math.abs(u - (p.fordShift + k * p.fordSpacing)));
     }
-    const L = 2;   // demi-longueur de terre du gué : le passage fait donc 4 cases de large
-    if (du < L + hw) return Math.hypot(L + hw - du, along) - hw;
-    return along - hw;
+    return du;
+  }
+
+  /** La profondeur du gué au point (x, y) : 1 au centre, 0 loin de lui, lissé entre les deux. */
+  fordField(x: number, y: number): number {
+    const p = this.params;
+    const u = x * p.rx + y * p.ry;
+    const du = this.fordDistance(u);
+    if (du <= 2) return 1;
+    if (du >= 3.5) return 0;
+    const t = (3.5 - du) / 1.5;
+    return t * t * (3 - 2 * t);
   }
 
   /** Distance signée du coin au rivage : négative dans l'eau, positive sur la terre. */
@@ -154,7 +165,7 @@ export class World {
     const wave = this.riverWave(u);
     const c = p.offset + wave.v - p.center0;
     const along = Math.abs(v - c) / Math.sqrt(1 + wave.d * wave.d);
-    let raw = this.fordField(u, along, this.halfWidth(u));
+    let raw = along - this.halfWidth(u);
     if (raw < 0) return raw;
     const bank = p.bankBase + p.bankAmp * Math.sin(p.bankW * u + p.bankP);
     raw -= bank * (1 - Math.exp(-raw / 1.6));
@@ -188,7 +199,8 @@ export class World {
     return { x: bx, y: by, dist: bd };
   }
 
-  private fordPoint(u: number): { x: number; y: number } {
+  /** Le point du centre de la rivière à l'abscisse `u`. */
+  riverPoint(u: number): { x: number; y: number } {
     const p = this.params, v = this.centerline(u);
     return { x: u * p.rx + v * p.nx, y: u * p.ry + v * p.ny };
   }
@@ -301,15 +313,30 @@ export class World {
   private makeCampPaths(rnd: () => number): void {
     const camp = { x: 0, y: 0 };
     const iron = this.blobs[0];
-    const targets = [
-      { x: this.grove.x, y: this.grove.y },
-      { x: this.firstFord.x, y: this.firstFord.y },
-      { x: iron.x, y: iron.y },
-    ];
-    for (const t of targets) {
+    for (const t of [{ x: this.grove.x, y: this.grove.y }, { x: iron.x, y: iron.y }]) {
       const bend = (rnd() - 0.5) * Math.hypot(t.x - camp.x, t.y - camp.y) * 0.22;
       this.campPaths.push(...this.bezier(camp, t, bend));
     }
+    this.makeFordPath(rnd);
+  }
+
+  /** Le sentier du camp au gué : il traverse le gué tout droit et finit 6 cases après la rive opposée. */
+  private makeFordPath(rnd: () => number): void {
+    const p = this.params, f = this.firstFord;
+    const d = this.bankDistance(f.x, f.y, p.nx, p.ny);
+    const near = { x: f.x - p.nx * d, y: f.y - p.ny * d };
+    const far = { x: f.x + p.nx * (d + 6), y: f.y + p.ny * (d + 6) };
+    const bend = (rnd() - 0.5) * Math.hypot(near.x, near.y) * 0.22;
+    this.campPaths.push(...this.bezier({ x: 0, y: 0 }, near, bend));
+    this.campPaths.push({ ax: near.x, ay: near.y, bx: far.x, by: far.y });
+  }
+
+  /** La distance entre le centre du gué et la rive, le long de la normale donnée. */
+  private bankDistance(x: number, y: number, nx: number, ny: number): number {
+    for (let d = 0; d <= 12; d += 0.05) {
+      if (this.shoreField(x + nx * d, y + ny * d) >= 0) return d;
+    }
+    return 12;
   }
 
   /** Les sentiers d'une région : ils ne dépendent que de la graine et de la cellule. */
@@ -437,20 +464,24 @@ export class World {
   private generate(c: Chunk): void {
     const n = CHUNK + 1, bx = c.cx * CHUNK, by = c.cy * CHUNK;
     for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) c.shore[j * n + i] = this.shoreField(bx + i, by + j);
+      for (let i = 0; i < n; i++) {
+        c.shore[j * n + i] = this.shoreField(bx + i, by + j);
+        c.ford[j * n + i] = this.fordField(bx + i, by + j);
+      }
     }
     const paths = this.pathSegments(c.cx, c.cy);
     for (let ly = 0; ly < CHUNK; ly++) {
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = bx + lx, y = by + ly, i = (ly << 5) | lx;
         const avg = (c.shore[ly * n + lx] + c.shore[ly * n + lx + 1] + c.shore[(ly + 1) * n + lx] + c.shore[(ly + 1) * n + lx + 1]) * 0.25;
+        const ford = (c.ford[ly * n + lx] + c.ford[ly * n + lx + 1] + c.ford[(ly + 1) * n + lx] + c.ford[(ly + 1) * n + lx + 1]) * 0.25;
         let g: number;
-        if (avg < 0) g = GROUND_WATER;
+        if (avg < 0) g = ford >= 0.5 ? GROUND_FORD : GROUND_WATER;
         else if (this.pathDistance(x + 0.5, y + 0.5, paths) < PATH_TILE) g = GROUND_PATH;
         else if (avg < BANK_FIELD) g = GROUND_BANK;
         else g = GROUND_SOIL;
         c.ground[i] = g;
-        if (g === GROUND_WATER) continue;
+        if (g === GROUND_WATER || g === GROUND_FORD) continue;
         const [type, amt] = this.depositAt(x, y);
         if (type) {
           c.deposit[i] = type;

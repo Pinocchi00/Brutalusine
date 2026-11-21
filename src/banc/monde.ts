@@ -2,7 +2,7 @@
  * Carte de développement : six mondes côte à côte, un pixel par case.
  * Hors build, sans dépendance. `?graine=` choisit la première graine, ou une liste séparée par des virgules.
  */
-import { World, GROUND_WATER, GROUND_BANK, GROUND_PATH } from '../sim/world';
+import { World, GROUND_WATER, GROUND_FORD, GROUND_BANK, GROUND_PATH } from '../sim/world';
 import { TREE_MIN } from '../sim/data';
 
 interface MondeStats {
@@ -26,6 +26,7 @@ const HALF = 128;
 
 const COLOR = {
   water: 0x4c8fa8,
+  ford: 0x9ed7e4,
   bank: 0xc9b47e,
   path: 0x9a7646,
   soil: 0x6f9350,
@@ -62,6 +63,7 @@ function paint(seed: number): { canvas: HTMLCanvasElement; stats: MondeStats } {
       const g = c.ground[i];
       let color: number = COLOR.soil;
       if (g === GROUND_WATER) color = COLOR.water;
+      else if (g === GROUND_FORD) color = COLOR.ford;
       else if (g === GROUND_PATH) color = COLOR.path;
       else if (g === GROUND_BANK) color = COLOR.bank;
       else if (c.deposit[i]) color = DEPOSIT_COLOR[c.deposit[i]] ?? COLOR.soil;
