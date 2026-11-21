@@ -647,7 +647,7 @@ function paintDecor(
       if (avg > 0.1 && avg < 1.2 && nearPath(src.paths, tx, ty)) {
         fordTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
       }
-      if (avg < 0 && ford >= 0.9) fordStonesTile(out, bounds, tx, ty, seed);
+      if (avg < 0 && ford >= FORD_TILE) fordStonesTile(out, bounds, tx, ty, seed);
     }
   }
 }
