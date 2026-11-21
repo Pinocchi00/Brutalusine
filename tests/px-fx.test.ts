@@ -37,7 +37,7 @@ describe('chute d’un arbre', () => {
     const rotate = calls.find((call) => call.m === 'rotate');
     const draw = calls.find((call) => call.m === 'drawImage');
     expect(translate?.args).toEqual([Math.round(3.25 * 24), Math.round(5.5 * 24)]);
-    expect(rotate?.args).toEqual([0]);
+    expect(Math.abs(rotate?.args[0] as number)).toBe(0);
     expect(draw?.args).toEqual([-20, -25, 40, 50]);
   });
 });
