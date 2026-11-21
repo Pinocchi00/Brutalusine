@@ -520,7 +520,6 @@ describe('peinture du sol', () => {
     }
   });
 
-
   it('ne trace aucun courant sur le sable d’une rive diagonale', () => {
     const seed = 4242;
     let tileX = -1;

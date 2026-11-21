@@ -397,7 +397,6 @@ describe('performance', () => {
   });
 });
 
-
 describe('repousse des arbres', () => {
   it('la phase de repousse ne dépend pas de l’ordre de génération des blocs', () => {
     const first = new Game(2024);
