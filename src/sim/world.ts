@@ -44,8 +44,10 @@ interface RiverParams {
   rx: number; ry: number;          // direction de la rivière
   nx: number; ny: number;          // sa normale, du côté de l'eau
   offset: number;                  // distance de la rive intérieure au départ
-  a1: number; w1: number; p1: number;
-  a2: number; w2: number; p2: number;
+  waves: { a: number; w: number; p: number }[];   // le bruit 1D du tracé, à plusieurs échelles
+  macro: { a: number; w: number; p: number };     // une longue inflexion, pour garantir le serpentement
+  noiseSeed: number;
+  center0: number;                 // le tracé brut au départ, pour que C(0) = offset
   h0: number; ha: number; hw: number; hp: number;
   bankBase: number; bankAmp: number; bankW: number; bankP: number;
   fordShift: number; fordSpacing: number; fordRise: number; fordReach: number;
@@ -77,28 +79,54 @@ export class World {
       rx: Math.cos(angle), ry: Math.sin(angle),
       nx: -Math.sin(angle), ny: Math.cos(angle),
       offset: 21,
-      a1: 4, w1: 0.025, p1: rnd() * TAU,
-      a2: 1, w2: 0.04, p2: rnd() * TAU,
+      waves: [
+        { a: 18, w: 1 / 200, p: rnd() * TAU },
+        { a: 9, w: 1 / 90, p: rnd() * TAU },
+        { a: 4.5, w: 1 / 42, p: rnd() * TAU },
+      ],
+      macro: { a: 45, w: TAU / 600, p: rnd() * TAU },
+      noiseSeed: (rnd() * 0x7fffffff) | 0,
+      center0: 0,
       h0: 2.75, ha: 0.5, hw: 0.05, hp: rnd() * TAU,
       bankBase: 0.5, bankAmp: 0.3, bankW: 0.08, bankP: rnd() * TAU,
       fordShift: 16 + rnd() * 6, fordSpacing: 40 + rnd() * 30, fordRise: 0.8, fordReach: 9.5,
     };
+    this.params.center0 = this.riverWave(0).v;
     const near = this.placeRiver();
     this.river = near;
     this.firstFord = this.fordPoint(this.params.fordShift);
     this.grove = this.chooseHomeGrove();
     this.makeBlobs(rnd);
-    this.makeScraps(rnd);
     this.makeCampPaths(rnd);
+    this.ensureArea(-12, -12, 12, 12);
+    this.makeScraps();
   }
 
   // ------------------------------------------------------------ la rivière
-  private centerline(u: number): number {
+  /** Le tracé brut et sa pente : un bruit 1D lissé, sommé sur trois échelles. */
+  private riverWave(u: number): { v: number; d: number } {
     const p = this.params;
-    return p.offset
-      + p.a1 * Math.sin(p.w1 * u + p.p1) - p.a1 * Math.sin(p.p1)
-      + p.a2 * Math.sin(p.w2 * u + p.p2) - p.a2 * Math.sin(p.p2);
+    const macro = p.macro;
+    let v = macro.a * Math.sin(macro.w * u + macro.p);
+    let d = macro.a * macro.w * Math.cos(macro.w * u + macro.p);
+    for (let i = 0; i < p.waves.length; i++) {
+      const w = p.waves[i];
+      const q = noise1(u * w.w + w.p, p.noiseSeed + i * 101);
+      v += w.a * q.v;
+      d += w.a * w.w * q.d;
+    }
+    return { v, d };
   }
+
+  private centerline(u: number): number {
+    return this.params.offset + this.riverWave(u).v - this.params.center0;
+  }
+
+  /** Le décalage latéral du centre de la rivière à l'abscisse `u`. */
+  riverCenter(u: number): number { return this.centerline(u); }
+
+  /** La pente latérale du centre de la rivière à l'abscisse `u`. */
+  riverSlope(u: number): number { return this.riverWave(u).d; }
 
   private halfWidth(u: number): number {
     const p = this.params;
@@ -122,10 +150,14 @@ export class World {
     const p = this.params;
     const u = x * p.rx + y * p.ry;
     const v = x * p.nx + y * p.ny;
-    const raw = Math.abs(v - this.centerline(u)) - this.halfWidth(u) + this.fordCut(u);
+    const wave = this.riverWave(u);
+    const c = p.offset + wave.v - p.center0;
+    const along = Math.abs(v - c) / Math.sqrt(1 + wave.d * wave.d);
+    let raw = along - this.halfWidth(u) + this.fordCut(u);
     if (raw < 0) return raw;
     const bank = p.bankBase + p.bankAmp * Math.sin(p.bankW * u + p.bankP);
-    return raw - bank * (1 - Math.exp(-raw / 1.6));
+    raw -= bank * (1 - Math.exp(-raw / 1.6));
+    return raw > 6 ? 6 + 6 * Math.tanh((raw - 6) / 6) : raw;
   }
 
   private waterAt(tx: number, ty: number): boolean {
@@ -136,7 +168,7 @@ export class World {
   /** Ajuste la rive pour que l'eau la plus proche du départ soit à bonne distance. */
   private placeRiver(): { x: number; y: number } {
     let best = this.nearWater();
-    for (let i = 0; i < 6 && (best.dist < 15 || best.dist > 24); i++) {
+    for (let i = 0; i < 12 && (best.dist < 15 || best.dist > 24); i++) {
       this.params.offset += 19.5 - best.dist;
       best = this.nearWater();
     }
@@ -180,12 +212,21 @@ export class World {
     }
   }
 
-  private makeScraps(rnd: () => number): void {
-    for (let i = 0; i < 12; i++) {
-      const a = rnd() * TAU + i * 0.52;
-      const d = 8 + rnd() * 2;
-      const x = Math.round(Math.cos(a) * d), y = Math.round(Math.sin(a) * d);
-      if (this.shoreField(x, y) > 0) this.scraps.add(key(x, y));
+  private makeScraps(): void {
+    const free: { x: number; y: number }[] = [];
+    for (let y = -11; y <= 11; y++) {
+      for (let x = -11; x <= 11; x++) {
+        const d = Math.hypot(x + 0.5, y + 0.5);
+        if (d < 7.5 || d >= 10.9) continue;
+        if (this.ground(x, y) !== GROUND_SOIL || this.deposit(x, y) || this.canopy(x, y) >= TREE_MIN) continue;
+        free.push({ x, y });
+      }
+    }
+    free.sort((a, b) => hash01(a.x, a.y, this.seed + 1201) - hash01(b.x, b.y, this.seed + 1201) || a.x - b.x || a.y - b.y);
+    for (const p of free.slice(0, 12)) {
+      this.scraps.add(key(p.x, p.y));
+      const c = this.at(p.x, p.y)!, i = ((p.y & 31) << 5) | (p.x & 31);
+      c.loot[i] = 1;
     }
   }
 
@@ -195,7 +236,7 @@ export class World {
     const base = Math.atan2(-p.ny, -p.nx);
     const a = base - 1.25 + (hash01(7, 9, this.seed) - 0.5) * 0.25;
     const d = 12.5;
-    return { x: Math.cos(a) * d, y: Math.sin(a) * d, r: 6 };
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d, r: 6.5 };
   }
 
   private regionalGrove(cx: number, cy: number): Grove | null {
@@ -203,10 +244,10 @@ export class World {
     const hit = this.groveCache.get(k);
     if (hit !== undefined) return hit;
     let g: Grove | null = null;
-    if (hash01(cx, cy, this.seed + 501) < 0.55) {
-      const x = cx * 48 + 8 + hash01(cx, cy, this.seed + 502) * 32;
-      const y = cy * 48 + 8 + hash01(cx, cy, this.seed + 503) * 32;
-      const r = 2.6 + hash01(cx, cy, this.seed + 504) * 2.2;
+    if (hash01(cx, cy, this.seed + 501) < 0.95) {
+      const x = cx * 28 + 3 + hash01(cx, cy, this.seed + 502) * 22;
+      const y = cy * 28 + 3 + hash01(cx, cy, this.seed + 503) * 22;
+      const r = 3.2 + hash01(cx, cy, this.seed + 504) * 2.4;
       if (Math.hypot(x, y) >= 28) g = { x, y, r };
     }
     this.groveCache.set(k, g);
@@ -215,15 +256,16 @@ export class World {
 
   private groveStrength(x: number, y: number): number {
     let s = 0;
-    const h = this.grove, dh = Math.hypot(x - h.x, y - h.y);
+    const edge = (fbm(x * 0.16, y * 0.16, this.seed + 701, 2) - 0.5) * 4;
+    const h = this.grove, dh = Math.hypot(x - h.x, y - h.y) + edge;
     if (dh < h.r) s = 1 - dh / h.r;
-    const cx0 = Math.floor((x - 6) / 48), cx1 = Math.floor((x + 6) / 48);
-    const cy0 = Math.floor((y - 6) / 48), cy1 = Math.floor((y + 6) / 48);
+    const cx0 = Math.floor((x - 8) / 28), cx1 = Math.floor((x + 8) / 28);
+    const cy0 = Math.floor((y - 8) / 28), cy1 = Math.floor((y + 8) / 28);
     for (let cy = cy0; cy <= cy1; cy++) {
       for (let cx = cx0; cx <= cx1; cx++) {
         const g = this.regionalGrove(cx, cy);
         if (!g) continue;
-        const d = Math.hypot(x - g.x, y - g.y);
+        const d = Math.hypot(x - g.x, y - g.y) + edge;
         if (d < g.r) s = Math.max(s, 1 - d / g.r);
       }
     }
@@ -232,8 +274,8 @@ export class World {
 
   /** Densité de forêt en un point (0 = prairie, 1 = bosquet plein). Sert aussi au rendu du sol. */
   density(x: number, y: number): number {
-    if (Math.hypot(x, y) < 6.5) return 0;
-    const iso = 0.04 + 0.07 * fbm(x * 0.03, y * 0.03, this.seed + 6, 2);
+    if (Math.hypot(x + 0.5, y + 0.5) < 6.5) return 0;
+    const iso = 0.015 + 0.035 * fbm(x * 0.03, y * 0.03, this.seed + 6, 2);
     return Math.max(this.groveStrength(x, y), iso);
   }
 
@@ -280,7 +322,7 @@ export class World {
       const p0 = { x: x0 + 16 + hash01(cx, cy, this.seed + 902) * 96, y: y0 + 16 + hash01(cx, cy, this.seed + 903) * 96 };
       const p1 = { x: x0 + 16 + hash01(cx, cy, this.seed + 904) * 96, y: y0 + 16 + hash01(cx, cy, this.seed + 905) * 96 };
       const bend = (hash01(cx, cy, this.seed + 906) - 0.5) * 44;
-      out = this.bezier(p0, p1, bend);
+      out = this.bezier(p0, p1, bend).filter((s) => this.shoreField(s.ax, s.ay) >= 0 && this.shoreField(s.bx, s.by) >= 0);
     }
     this.trailCache.set(k, out);
     return out;
@@ -375,8 +417,8 @@ export class World {
     const mins = [0, 30, 34, 38, 60];
     for (let t = 1; t <= 4; t++) {
       if (d < mins[t]) continue;
-      const n = fbm(x * 0.06, y * 0.06, this.seed + 40 + t * 13, 3);
-      const thr = 0.705 - Math.min(0.05, d / 6000);
+      const n = fbm(x * 0.05, y * 0.05, this.seed + 40 + t * 13, 3);
+      const thr = 0.8 - Math.min(0.03, d / 10000);
       if (n > thr) return [t, Math.round((400 + (n - thr) * 9000) * (1 + d / 120))];
     }
     return [0, 0];
@@ -418,9 +460,10 @@ export class World {
         const d = Math.hypot(x, y);
         if (this.scraps.has(key(x, y)) || (d > 26 && hash01(x, y, this.seed + 81) < 0.0022)) { c.loot[i] = 1; continue; }
         const dens = this.density(x, y);
-        if (dens < 0.12) continue;
-        const scaled = (dens - 0.08) / 0.92;
-        if (hash01(x, y, this.seed + 9) > 0.01 + 0.99 * Math.pow(scaled, 0.8)) continue;
+        if (dens < 0.001) continue;
+        if (dens < 0.06) {
+          if (hash01(x, y, this.seed + 9) > 0.006) continue;
+        } else if (hash01(x, y, this.seed + 9) > 0.2 + 0.78 * Math.min(1, (dens - 0.06) / 0.94)) continue;
         const size = Math.round(Math.min(255, (95 + 150 * hash01(x, y, this.seed + 10)) * (0.7 + 0.3 * Math.min(1, dens))));
         c.cap[i] = size; c.canopy[i] = size;
       }
@@ -465,4 +508,12 @@ function segmentsCross(ax: number, ay: number, bx: number, by: number, cx: numbe
 
 function cross(ax: number, ay: number, bx: number, by: number, px: number, py: number): number {
   return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+}
+
+/** Bruit 1D lissé : valeur dans [0,1] et sa dérivée. */
+function noise1(u: number, seed: number): { v: number; d: number } {
+  const i = Math.floor(u), f = u - i;
+  const s = f * f * (3 - 2 * f), ds = 6 * f * (1 - f);
+  const a = hash01(i, 0, seed), b = hash01(i + 1, 0, seed);
+  return { v: a + (b - a) * s, d: (b - a) * ds };
 }

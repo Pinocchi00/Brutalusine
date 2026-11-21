@@ -338,7 +338,9 @@ describe('contenu et progression', () => {
     const g = new Game(9);
     const b = g.world.blobs[0];
     expect(g.place('puits', b.x - 1, b.y - 1, 0).ok).toBe(true);
-    const reach = g.stock[I.fer] + g.world.scraps.size * LOOT_FER;
+    let debris = 0;
+    for (let y = -11; y <= 11; y++) for (let x = -11; x <= 11; x++) if (g.world.loot(x, y)) debris++;
+    const reach = g.stock[I.fer] + debris * LOOT_FER;
     expect(reach).toBeGreaterThan(Math.abs(b.x) + Math.abs(b.y) + 10);   // assez de fer pour les convoyeurs
   });
 

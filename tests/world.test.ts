@@ -5,6 +5,7 @@ import {
 } from '../src/sim/world';
 import { serialize, deserialize, type SaveData } from '../src/sim/save';
 import { Game } from '../src/sim/game';
+import { TREE_MIN } from '../src/sim/data';
 
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1);
 
@@ -280,4 +281,113 @@ describe('monde : sauvegarde et vitesse', () => {
     const average = (performance.now() - t0) / blocks.length;
     expect(average).toBeLessThan(8);
   });
+});
+
+
+describe('relecture : débris, gisements, arbres, rivière, sentes', () => {
+  it('exactement douze débris réels près du départ, et chaque scrap en porte un', () => {
+    for (let seed = 1; seed <= 300; seed++) {
+      const w = new World(seed);
+      expect(w.scraps.size).toBe(12);
+      for (const k of w.scraps) {
+        const x = Math.floor(k / 65536) - 32768;
+        const y = (k % 65536) - 32768;
+        expect(w.loot(x, y)).toBe(1);
+        expect(w.ground(x, y)).toBe(GROUND_SOIL);
+        expect(w.deposit(x, y)).toBe(0);
+        expect(w.tree(x, y)).toBe(false);
+      }
+      let real = 0;
+      for (let y = -11; y <= 11; y++) {
+        for (let x = -11; x <= 11; x++) {
+          if (Math.hypot(x + 0.5, y + 0.5) < 11 && w.loot(x, y)) real++;
+        }
+      }
+      expect(real).toBe(12);
+    }
+  }, 120_000);
+
+  it('les gisements hors blobs couvrent 4 à 8 % du monde', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const w = new World(seed);
+      w.ensureArea(-128, -128, 127, 127);
+      let deposits = 0;
+      for (let cy = -4; cy < 4; cy++) {
+        for (let cx = -4; cx < 4; cx++) {
+          for (const v of w.chunk(cx, cy)!.deposit) if (v) deposits++;
+        }
+      }
+      const coverage = deposits / (256 * 256);
+      expect(coverage).toBeGreaterThanOrEqual(0.04);
+      expect(coverage).toBeLessThanOrEqual(0.08);
+    }
+  }, 120_000);
+
+  it('les arbres couvrent 3 à 7 % du monde et restent groupés', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const w = new World(seed);
+      w.ensureArea(-128, -128, 127, 127);
+      const tree = new Uint8Array(256 * 256);
+      let trees = 0;
+      for (let cy = -4; cy < 4; cy++) {
+        for (let cx = -4; cx < 4; cx++) {
+          const c = w.chunk(cx, cy)!;
+          for (let ly = 0; ly < 32; ly++) {
+            for (let lx = 0; lx < 32; lx++) {
+              if (c.canopy[ly * 32 + lx] >= TREE_MIN) {
+                tree[((cy * 32 + ly) + 128) * 256 + ((cx * 32 + lx) + 128)] = 1;
+                trees++;
+              }
+            }
+          }
+        }
+      }
+      expect(trees / (256 * 256)).toBeGreaterThanOrEqual(0.03);
+      expect(trees / (256 * 256)).toBeLessThanOrEqual(0.07);
+      let grouped = 0;
+      for (let y = 0; y < 256; y++) {
+        for (let x = 0; x < 256; x++) {
+          if (!tree[y * 256 + x]) continue;
+          let near = false;
+          for (let dy = -2; dy <= 2 && !near; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < 256 && ny >= 0 && ny < 256 && tree[ny * 256 + nx]) { near = true; break; }
+            }
+          }
+          if (near) grouped++;
+        }
+      }
+      expect(grouped / trees).toBeGreaterThanOrEqual(0.7);
+    }
+  }, 120_000);
+
+  it('la rivière serpente vraiment, sans pente excessive', () => {
+    for (const seed of SEEDS) {
+      const w = new World(seed);
+      let min = Infinity, max = -Infinity;
+      for (let u = -128; u <= 128; u++) {
+        const c = w.riverCenter(u);
+        min = Math.min(min, c);
+        max = Math.max(max, c);
+        expect(Math.abs(w.riverSlope(u))).toBeLessThanOrEqual(1.2);
+      }
+      expect(max - min).toBeGreaterThanOrEqual(25);
+    }
+  }, 120_000);
+
+  it('les sentes régionales ne plongent pas dans la rivière', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const w = new World(seed);
+      for (let cy = -4; cy < 4; cy++) {
+        for (let cx = -4; cx < 4; cx++) {
+          for (const s of w.pathSegments(cx, cy)) {
+            expect(w.shoreField(s.ax, s.ay)).toBeGreaterThanOrEqual(0);
+            expect(w.shoreField(s.bx, s.by)).toBeGreaterThanOrEqual(0);
+          }
+        }
+      }
+    }
+  }, 120_000);
 });
