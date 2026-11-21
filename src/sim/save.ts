@@ -4,7 +4,7 @@ import { B, R, type Dir } from './data';
 import { Game } from './game';
 
 export interface SaveData {
-  v: 2; seed: number; tick: number; nextId: number;
+  v: 3; seed: number; tick: number; nextId: number;
   stock: Float64Array; delivered: Float64Array;
   quota: number; quotaStart: number; gathered: number;
   atmo: { co2: number };
@@ -59,7 +59,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     ents.push(s);
   }
   return {
-    v: 2, seed: g.seed, tick: g.tick, nextId: g.nextId,
+    v: 3, seed: g.seed, tick: g.tick, nextId: g.nextId,
     stock: g.stock.slice(), delivered: g.delivered.slice(),
     quota: g.quota, quotaStart: g.quotaStart, gathered: g.gathered,
     atmo: { ...g.atmo }, made: g.made.slice(), wind: g.wind, records: g.records.slice(),
@@ -69,7 +69,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
 }
 
 export function deserialize(d: SaveData): Game {
-  if (d.v !== 2) throw new Error('Sauvegarde d’une ancienne version');
+  if (d.v !== 3) throw new Error('Sauvegarde d’une ancienne version');
   const g = new Game(d.seed, false);
   g.loading = true;
   for (const cd of d.chunks) {

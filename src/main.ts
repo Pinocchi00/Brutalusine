@@ -65,6 +65,7 @@ class App {
   renderer: WorldRenderer;
   private readonly pixel: boolean;
   private scale = 0;
+  private loadMessage = 'Aucune sauvegarde';
   hud: Hud;
   audio = new AudioEngine();
   players: Player[] = [new Player(0, null)];
@@ -103,7 +104,7 @@ class App {
     });
     this.bind();
     this.resize();
-    void readSave('auto').then((s) => { if (s && s.v === 2) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
+    void readSave('auto').then((s) => { if (s && s.v === 3) document.getElementById('btn-continue')!.hidden = false; }).catch(() => undefined);
     requestAnimationFrame(() => this.loop());
   }
 
@@ -236,7 +237,7 @@ class App {
       case 'guide': this.hud.toggleMenu(false); this.paused = false; this.hud.showGuide(true); break;
       case 'atlas': this.hud.openCodex(); break;
       case 'save': void this.save().then(() => this.hud.toast('Partie sauvegardée')); break;
-      case 'load': void this.load().then((ok) => { this.hud.toast(ok ? 'Partie chargée' : 'Aucune sauvegarde'); if (ok) { this.hud.toggleMenu(false); this.paused = false; } }); break;
+      case 'load': void this.load().then((ok) => { this.hud.toast(ok ? 'Partie chargée' : this.loadMessage); if (ok) { this.hud.toggleMenu(false); this.paused = false; } }); break;
       case 'new':
         this.game = new Game((Math.random() * 1e9) | 0); this.resetWorld();
         for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; }
@@ -259,7 +260,8 @@ class App {
 
   async load(): Promise<boolean> {
     const d = await readSave('auto').catch(() => null);
-    if (!d || d.v !== 2) return false;
+    if (!d) { this.loadMessage = 'Aucune sauvegarde'; return false; }
+    if (d.v !== 3) { this.loadMessage = 'Sauvegarde d’une ancienne version : commence une nouvelle partie'; return false; }
     this.game = deserialize(d);
     this.resetWorld();
     const ex = d.extra as { players?: { x: number; y: number }[]; zoom?: number } | undefined;
@@ -280,7 +282,7 @@ class App {
 
   private placeOf(pl: Place): { x: number; y: number } | null {
     const w = this.game.world, p = this.players[0];
-    if (pl === 'eau') return w.lake;
+    if (pl === 'eau') return w.river;
     if (pl === 'debris') {
       let best: { x: number; y: number } | null = null, bd = 1e9;
       for (let y = -11; y <= 11; y++) for (let x = -11; x <= 11; x++) if (w.loot(x, y)) { const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y); if (d < bd) { bd = d; best = { x: x + 0.5, y: y + 0.5 }; } }

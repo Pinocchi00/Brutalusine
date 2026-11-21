@@ -203,9 +203,9 @@ describe('machines', () => {
 describe('récolte à la main', () => {
   it('déraciner un arbre donne son bois et compte pour le quota', () => {
     const g = new Game(4);
-    g.world.ensureArea(10, 10, 40, 40);
+    g.world.ensureArea(-60, -60, 60, 60);
     let tx = 0, ty = 0;
-    search: for (let y = 12; y < 40; y++) for (let x = 12; x < 40; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
+    search: for (let y = -60; y <= 60; y++) for (let x = -60; x <= 60; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
     const size = g.world.canopy(tx, ty);
     expect(size).toBeGreaterThanOrEqual(TREE_MIN);
     const carbon = g.ledger('C');
@@ -250,9 +250,9 @@ describe('récolte à la main', () => {
 
   it('poser un bâtiment sur des arbres les déracine', () => {
     const g = sandbox(4);
-    g.world.ensureArea(10, 10, 40, 40);
+    g.world.ensureArea(-60, -60, 60, 60);
     let tx = 0, ty = 0;
-    search: for (let y = 14; y < 40; y++) for (let x = 14; x < 40; x++) {
+    search: for (let y = -60; y <= 60; y++) for (let x = -60; x <= 60; x++) {
       if (g.world.tree(x, y) && !g.world.deposit(x + 1, y + 1) && g.world.ground(x + 1, y + 1) === 0 && g.world.ground(x, y + 1) === 0 && g.world.ground(x + 1, y) === 0) { tx = x; ty = y; break search; }
     }
     expect(g.place('charbonniere', tx, ty, 0, { free: true }).ok).toBe(true);
@@ -291,9 +291,9 @@ describe('lois de conservation', () => {
 
   it('un arbre coupé repousse à sa place, pas sous une dalle, et le carbone se conserve', () => {
     const g = sandbox(3);
-    g.world.ensureArea(40, 40, 90, 90);
+    g.world.ensureArea(-90, -90, 90, 90);
     const trees: [number, number][] = [];
-    for (let y = 44; y < 88 && trees.length < 2; y++) for (let x = 44; x < 88 && trees.length < 2; x++) if (g.world.tree(x, y) && !trees.some(([a, b]) => Math.abs(a - x) < 3 && Math.abs(b - y) < 3)) trees.push([x, y]);
+    for (let y = -90; y <= 90 && trees.length < 2; y++) for (let x = -90; x <= 90 && trees.length < 2; x++) if (g.world.tree(x, y) && !trees.some(([a, b]) => Math.abs(a - x) < 3 && Math.abs(b - y) < 3)) trees.push([x, y]);
     const [[ax, ay], [bx, by]] = trees;
     g.uproot(ax, ay); g.uproot(bx, by);
     g.place('dalle', bx, by, 0, { free: true });
@@ -338,7 +338,9 @@ describe('contenu et progression', () => {
     const g = new Game(9);
     const b = g.world.blobs[0];
     expect(g.place('puits', b.x - 1, b.y - 1, 0).ok).toBe(true);
-    const reach = g.stock[I.fer] + g.world.scraps.size * LOOT_FER;
+    let debris = 0;
+    for (let y = -11; y <= 11; y++) for (let x = -11; x <= 11; x++) if (g.world.loot(x, y)) debris++;
+    const reach = g.stock[I.fer] + debris * LOOT_FER;
     expect(reach).toBeGreaterThan(Math.abs(b.x) + Math.abs(b.y) + 10);   // assez de fer pour les convoyeurs
   });
 
