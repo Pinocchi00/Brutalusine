@@ -12,6 +12,7 @@ export const GROUND_PATH = 3;
 export const GROUND_FORD = 4;
 export const BANK_FIELD = 1.6;   // une case est de la berge si la moyenne de ses coins est dans [0, BANK_FIELD[
 export const PATH_TILE = 0.6;    // une case est un chemin si son centre est à moins de 0,6 case d'un segment
+export const FORD_TILE = 0.9;    // une case d'eau devient un gué si la moyenne de ses coins de gué atteint cette valeur
 export const SMOKE_RES = 8;      // 8×8 cellules de fumée par bloc (4 cases chacune)
 
 /** Un morceau de sentier, en cases du monde. */
@@ -152,8 +153,8 @@ export class World {
     const u = x * p.rx + y * p.ry;
     const du = this.fordDistance(u);
     if (du <= 2) return 1;
-    if (du >= 3.5) return 0;
-    const t = (3.5 - du) / 1.5;
+    if (du >= 7) return 0;
+    const t = (7 - du) / 5;
     return t * t * (3 - 2 * t);
   }
 
@@ -476,7 +477,7 @@ export class World {
         const avg = (c.shore[ly * n + lx] + c.shore[ly * n + lx + 1] + c.shore[(ly + 1) * n + lx] + c.shore[(ly + 1) * n + lx + 1]) * 0.25;
         const ford = (c.ford[ly * n + lx] + c.ford[ly * n + lx + 1] + c.ford[(ly + 1) * n + lx] + c.ford[(ly + 1) * n + lx + 1]) * 0.25;
         let g: number;
-        if (avg < 0) g = ford >= 0.5 ? GROUND_FORD : GROUND_WATER;
+        if (avg < 0) g = ford >= FORD_TILE ? GROUND_FORD : GROUND_WATER;
         else if (this.pathDistance(x + 0.5, y + 0.5, paths) < PATH_TILE) g = GROUND_PATH;
         else if (avg < BANK_FIELD) g = GROUND_BANK;
         else g = GROUND_SOIL;
