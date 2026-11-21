@@ -47,17 +47,8 @@ const DIRT_NOISE = 1.5;
 /** La distance d'un centre de case à un segment au-delà de laquelle aucune case ne peut être peinte. */
 const TILE_SEGMENT_REACH = TILE_PX * 0.75 + DIRT_REACH + DIRT_NOISE;
 
-/** Le gué au-delà duquel l'eau devient une trame claire, sans bandes profondes. */
+/** Le gué au-delà duquel l'eau devient un aplat clair, sans bandes profondes. */
 const FORD_FULL = 0.6;
-
-/** L'échelle du bruit de courant dans un gué, en cases. */
-const FORD_WEAVE = 0.045;
-
-/** Le seuil au-delà duquel la trame de gué prend le ton clair. */
-const FORD_WEAVE_LIGHT = 0.66;
-
-/** Le seuil à partir duquel le bord de la trame de gué est tramé en damier. */
-const FORD_WEAVE_DITHER = 0.58;
 
 /** Les tons du sol, empaquetés en RGBA 32 bits (octet rouge en premier), pour peindre vite. */
 const RGB = {
@@ -270,10 +261,7 @@ function paintGroundBase(
               const bottom = f01 + (f11 - f01) * fx;
               const f = top + (bottom - top) * fy;
               if (f > FORD_FULL) {
-                const flow = vnoise(wx * FORD_WEAVE, wy * FORD_WEAVE, 7);
-                if (flow > FORD_WEAVE_LIGHT) color = RGB.q1;
-                else if (flow > FORD_WEAVE_DITHER && ((wx + wy) & 1) === 0) color = RGB.q1;
-                else color = RGB.q2;
+                color = RGB.q2;
               } else {
                 const depth = e * (1 - smooth(Math.min(1, f / FORD_FULL)));
                 color = waterColor(depth);
@@ -314,6 +302,9 @@ function paintGroundBase(
           }
           dd += ddStep;
         }
+      }
+      if (hasFord && f00 + f10 + f01 + f11 > 4 * FORD_FULL && c00 + c10 + c01 + c11 < 0) {
+        waterDabsTile(out, bounds, tx, ty, src.seed);
       }
     }
   }
@@ -766,7 +757,27 @@ function fordTile(
   }
 }
 
-/** Une ou deux pierres plates, sur une case de plein gué tirée au sort, avec leur reflet et leur courant. */
+/** Deux ou trois traits de courant horizontaux, entièrement dans une case de plein gué. */
+function waterDabsTile(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+  seed: number,
+): void {
+  const count = 2 + (hash(tx, ty, seed + 131) < 0.5 ? 1 : 0);
+  for (let k = 0; k < count; k++) {
+    const salt = seed + 132 + k * 4;
+    const w = 3 + Math.floor(hash(tx, ty, salt) * 3);
+    const x = 1 + Math.floor(hash(tx, ty, salt + 1) * (TILE_PX - w - 2));
+    const y = 2 + k * 4 + Math.floor(hash(tx, ty, salt + 2) * 2);
+    const X = tx * TILE_PX + x;
+    const Y = ty * TILE_PX + y;
+    for (let i = 0; i < w; i++) putWorld(out, bounds, X + i, Y, RGB.q1);
+  }
+}
+
+/** Une pierre plate, sur une case de plein gué tirée au sort, avec son reflet et son courant. */
 function fordStonesTile(
   out: Uint8ClampedArray,
   bounds: Bounds,
@@ -775,25 +786,18 @@ function fordStonesTile(
   seed: number,
 ): void {
   if (hash(tx, ty, seed + 120) >= 0.45) return;
-  const count = 1 + (hash(tx, ty, seed + 121) < 0.5 ? 1 : 0);
-  for (let k = 0; k < count; k++) {
-    const salt = seed + 122 + k * 7;
-    const w = 5 + Math.floor(hash(tx, ty, salt) * 3);
-    const h = 3 + Math.floor(hash(tx, ty, salt + 1) * 2);
-    const x = Math.floor(hash(tx, ty, salt + 2) * (TILE_PX - w));
-    const y = 1 + Math.floor(hash(tx, ty, salt + 3) * (TILE_PX - h - 2));
-    const X = tx * TILE_PX + x;
-    const Y = ty * TILE_PX + y;
-    for (let j = 0; j < h; j++) {
-      for (let i = 0; i < w; i++) {
-        let color = RGB.st1;
-        if (j === 0 && i === 0) color = RGB.st0;
-        else if (j === h - 1) color = RGB.st3;
-        putWorld(out, bounds, X + i, Y + j, color);
-      }
-    }
-    for (let i = 0; i < w; i++) putWorld(out, bounds, X + i, Y + h, RGB.q1);
+  const offsetX = Math.round((hash(tx, ty, seed + 121) * 2 - 1) * 5);
+  const offsetY = Math.round((hash(tx, ty, seed + 122) * 2 - 1) * 5);
+  const x = Math.max(0, Math.min(TILE_PX - 8, 4 + offsetX));
+  const y = Math.max(1, Math.min(TILE_PX - 6, 5 + offsetY));
+  const X = tx * TILE_PX + x;
+  const Y = ty * TILE_PX + y;
+  for (let i = 1; i <= 6; i++) putWorld(out, bounds, X + i, Y, RGB.st0);
+  for (let j = 1; j <= 3; j++) {
+    for (let i = 0; i < 8; i++) putWorld(out, bounds, X + i, Y + j, RGB.st1);
   }
+  for (let i = 1; i <= 6; i++) putWorld(out, bounds, X + i, Y + 4, RGB.st3);
+  for (let i = 0; i < 8; i++) putWorld(out, bounds, X + i, Y + 5, RGB.q1);
 }
 
 /** Une tache d'argile rare et tramée sur le sable sec, qui annonce l'Argilière. */

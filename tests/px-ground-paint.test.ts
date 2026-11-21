@@ -458,6 +458,53 @@ describe('peinture du sol', () => {
     expect(q2).toBeGreaterThan(0);
   });
 
+  it('trace deux ou trois traits de courant d’au plus 5 pixels par case de plein gué', () => {
+    const tiles = 8;
+    const scene: Scene = {
+      shore: () => -6,
+      ford: () => 0.7,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = tiles * TILE_PX;
+    const height = tiles * TILE_PX;
+    const out = new Uint8ClampedArray(width * height * 4);
+    paintTiles(src, out, 0, 0, tiles, tiles);
+    const isQ1 = (x: number, y: number): boolean => pixelColor(out, y * width + x) === Q1;
+    const perTile = new Map<number, number>();
+    for (let y = 0; y < height; y++) {
+      let x = 0;
+      while (x < width) {
+        if (!isQ1(x, y)) {
+          x++;
+          continue;
+        }
+        let length = 0;
+        while (x + length < width && isQ1(x + length, y)) length++;
+        expect(length).toBeGreaterThanOrEqual(3);
+        expect(length).toBeLessThanOrEqual(5);
+        const tile = Math.floor(y / TILE_PX) * tiles + Math.floor(x / TILE_PX);
+        perTile.set(tile, (perTile.get(tile) ?? 0) + 1);
+        x += length;
+      }
+    }
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isQ1(x, y)) continue;
+        if ((y > 0 && isQ1(x, y - 1)) || (y + 1 < height && isQ1(x, y + 1))) {
+          throw new Error(`trait de courant sur plus d’une ligne en (${x},${y})`);
+        }
+      }
+    }
+    for (let t = 0; t < tiles * tiles; t++) {
+      const count = perTile.get(t) ?? 0;
+      expect(count).toBeGreaterThanOrEqual(2);
+      expect(count).toBeLessThanOrEqual(3);
+    }
+  });
+
   it('ne fait jamais sauter la bande de plus d’un cran le long de la rampe de gué', () => {
     const scene: Scene = {
       shore: () => -6,
@@ -493,14 +540,14 @@ describe('peinture du sol', () => {
     }
   });
 
-  it('pose une seule pierre de taille contenue dans une case autorisée, avec ses quatre tons', () => {
+  it('dessine une pierre de 8×5 aux coins coupés, avec sa ligne de courant', () => {
     const seed = 4242;
     let tileX = -1;
     let tileY = -1;
     for (let t = 0; t < CHUNK * CHUNK && tileX < 0; t++) {
       const x = t % CHUNK;
       const y = Math.floor(t / CHUNK);
-      if (hash(x, y, seed + 120) < 0.45 && hash(x, y, seed + 121) >= 0.5) {
+      if (hash(x, y, seed + 120) < 0.45) {
         tileX = x;
         tileY = y;
       }
@@ -519,8 +566,7 @@ describe('peinture du sol', () => {
     paintTiles(src, full, tileX, tileY, tileX + 1, tileY + 1);
     paintGroundCore(src, core, tileX, tileY, tileX + 1, tileY + 1);
     const diff = diffPixels(full, core);
-    expect(diff.length).toBeGreaterThan(0);
-    const seen = new Set<number>();
+    expect(diff.length).toBe(44);
     let minX = TILE_PX;
     let minY = TILE_PX;
     let maxX = -1;
@@ -529,30 +575,40 @@ describe('peinture du sol', () => {
       const x = p % TILE_PX;
       const y = Math.floor(p / TILE_PX);
       const color = pixelColor(full, p);
-      if (color !== ST0 && color !== ST1 && color !== ST3 && color !== Q1) {
-        throw new Error(`couleur de pierre inattendue : ${color.toString(16)}`);
+      if (color === ST0 || color === ST1 || color === ST3) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
       }
-      seen.add(color);
-      if (color === Q1) continue;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
     }
-    expect(seen).toEqual(new Set([ST0, ST1, ST3, Q1]));
-    expect(maxX - minX + 1).toBeGreaterThanOrEqual(5);
-    expect(maxX - minX + 1).toBeLessThanOrEqual(7);
-    expect(maxY - minY + 1).toBeGreaterThanOrEqual(3);
-    expect(maxY - minY + 1).toBeLessThanOrEqual(4);
-    expect(minX).toBeGreaterThanOrEqual(0);
-    expect(maxX).toBeLessThan(TILE_PX);
-    expect(minY).toBeGreaterThanOrEqual(0);
-    expect(maxY).toBeLessThan(TILE_PX);
+    expect(maxX - minX + 1).toBe(8);
+    expect(maxY - minY + 1).toBe(5);
+    for (let j = 0; j < 5; j++) {
+      for (let i = 0; i < 8; i++) {
+        const p = (minY + j) * TILE_PX + minX + i;
+        const cut = (j === 0 || j === 4) && (i === 0 || i === 7);
+        if (cut) {
+          expect(pixelColor(full, p)).toBe(pixelColor(core, p));
+          continue;
+        }
+        const expected = j === 0 ? ST0 : j === 4 ? ST3 : ST1;
+        expect(pixelColor(full, p)).toBe(expected);
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      const p = (minY + 5) * TILE_PX + minX + i;
+      expect(pixelColor(full, p)).toBe(Q1);
+    }
+    expect(minX + 4).toBeGreaterThanOrEqual(TILE_PX / 2 - 5);
+    expect(minX + 4).toBeLessThanOrEqual(TILE_PX / 2 + 5);
+    expect(minY + 2.5).toBeGreaterThanOrEqual(TILE_PX / 2 - 5);
+    expect(minY + 2.5).toBeLessThanOrEqual(TILE_PX / 2 + 5);
   });
 
-  it('ne pose qu’une ou deux pierres par case tirée, et aucune sous le seuil', () => {
+  it('pose exactement une pierre sur 30 à 60 % des cases de plein gué', () => {
     const seed = 4242;
-    const deep: Scene = {
+    const scene: Scene = {
       shore: () => -5,
       ford: () => 1,
       slab: () => false,
@@ -562,11 +618,13 @@ describe('peinture du sol', () => {
     const width = CHUNK * TILE_PX;
     const full = new Uint8ClampedArray(width * width * 4);
     const core = new Uint8ClampedArray(width * width * 4);
-    paintTiles(blockSource(deep, 0, 0), full, 0, 0, CHUNK, CHUNK);
-    paintGroundCore(blockSource(deep, 0, 0), core, 0, 0, CHUNK, CHUNK);
+    paintTiles(blockSource(scene, 0, 0), full, 0, 0, CHUNK, CHUNK);
+    paintGroundCore(blockSource(scene, 0, 0), core, 0, 0, CHUNK, CHUNK);
+    let gated = 0;
     for (let ty = 0; ty < CHUNK; ty++) {
       for (let tx = 0; tx < CHUNK; tx++) {
-        const gated = hash(tx, ty, seed + 120) < 0.45;
+        const allowed = hash(tx, ty, seed + 120) < 0.45;
+        if (allowed) gated++;
         let diff = 0;
         let highlights = 0;
         for (let py = 0; py < TILE_PX; py++) {
@@ -578,14 +636,17 @@ describe('peinture du sol', () => {
             if (color === ST0) highlights++;
           }
         }
-        if (gated) {
-          expect(diff).toBeGreaterThan(0);
-          expect(highlights).toBeLessThanOrEqual(2);
+        if (allowed) {
+          expect(diff).toBeGreaterThanOrEqual(36);
+          expect(highlights).toBe(6);
         } else {
           expect(diff).toBe(0);
         }
       }
     }
+    const ratio = gated / (CHUNK * CHUNK);
+    expect(ratio).toBeGreaterThanOrEqual(0.3);
+    expect(ratio).toBeLessThanOrEqual(0.6);
   });
 
   it('ne pose aucune pierre sur une dalle ni sous le seuil de gué', () => {
