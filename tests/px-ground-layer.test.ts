@@ -249,6 +249,7 @@ describe('cases bloquées', () => {
     chunk.slab[i] = 0;
     chunk.deposit[i] = 0;
     chunk.canopy[i] = 0;
+    chunk.loot[i] = 0;
     expect(layer.blocked(5, 5)).toBe(false);
     chunk.canopy[i] = TREE_MIN - 1;
     expect(layer.blocked(5, 5)).toBe(false);
@@ -262,6 +263,9 @@ describe('cases bloquées', () => {
     expect(layer.blocked(5, 5)).toBe(true);
     chunk.slab[i] = 0;
     chunk.deposit[i] = 1;
+    expect(layer.blocked(5, 5)).toBe(true);
+    chunk.deposit[i] = 0;
+    chunk.loot[i] = 1;
     expect(layer.blocked(5, 5)).toBe(true);
   });
 });

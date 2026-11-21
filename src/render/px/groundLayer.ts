@@ -154,7 +154,7 @@ export class GroundLayer {
     }
   }
 
-  /** Vrai si une case porte une entité, une dalle, un gisement ou un arbre. */
+  /** Vrai si une case porte une entité, une dalle, un gisement, un arbre ou des débris. */
   readonly blocked = (tx: number, ty: number): boolean => {
     const world = this.world;
     if (!world) return false;
@@ -165,6 +165,7 @@ export class GroundLayer {
       chunk.ent[i] !== 0 ||
       chunk.slab[i] !== 0 ||
       chunk.deposit[i] !== 0 ||
+      chunk.loot[i] !== 0 ||
       chunk.canopy[i] >= TREE_MIN
     );
   };
