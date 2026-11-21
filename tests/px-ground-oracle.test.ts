@@ -58,6 +58,7 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
     originX,
     originY,
     shore,
+    ford: new Float64Array(CORNER * CORNER),
     paths: scene.paths,
     slab,
     loot: new Uint8Array(CHUNK * CHUNK),

@@ -29,10 +29,39 @@ const SD2 = pack(C.sd2);
 const SD3 = pack(C.sd3);
 const M1 = pack(C.m1);
 const E2 = pack(C.e2);
+const Q1 = pack(C.q1);
+const Q2 = pack(C.q2);
+const Q3 = pack(C.q3);
+const Q4 = pack(C.q4);
+const Q5 = pack(C.q5);
+const Q6 = pack(C.q6);
+const Q7 = pack(C.q7);
+const ST0 = pack(C.st0);
+const ST1 = pack(C.st1);
+const ST3 = pack(C.st3);
+
+/** La couleur d'un pixel d'un tampon RGBA. */
+function pixelColor(buf: Uint8ClampedArray, index: number): number {
+  const o = index * 4;
+  return (buf[o] << 16) | (buf[o + 1] << 8) | buf[o + 2];
+}
+
+/** La bande d'eau d'une couleur, de 1 (q1) à 7 (q7), ou 0 hors de l'eau. */
+function waterBand(color: number): number {
+  if (color === Q1) return 1;
+  if (color === Q2) return 2;
+  if (color === Q3) return 3;
+  if (color === Q4) return 4;
+  if (color === Q5) return 5;
+  if (color === Q6) return 6;
+  if (color === Q7) return 7;
+  return 0;
+}
 
 /** Une scène synthétique, indépendante du découpage en blocs. */
 interface Scene {
   shore(cx: number, cy: number): number;
+  ford?(cx: number, cy: number): number;
   slab(tx: number, ty: number): boolean;
   paths: readonly GroundPathSegment[];
   loot(tx: number, ty: number): boolean;
@@ -43,6 +72,12 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
   const shore = new Float64Array(CORNER * CORNER);
   for (let j = 0; j < CORNER; j++) {
     for (let i = 0; i < CORNER; i++) shore[j * CORNER + i] = scene.shore(originX + i, originY + j);
+  }
+  const ford = new Float64Array(CORNER * CORNER);
+  if (scene.ford) {
+    for (let j = 0; j < CORNER; j++) {
+      for (let i = 0; i < CORNER; i++) ford[j * CORNER + i] = scene.ford(originX + i, originY + j);
+    }
   }
   const slab = new Uint8Array(SLAB_SIDE * SLAB_SIDE);
   for (let ly = -1; ly <= CHUNK; ly++) {
@@ -56,7 +91,7 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
       loot[ly * CHUNK + lx] = scene.loot(originX + lx, originY + ly) ? 1 : 0;
     }
   }
-  return { seed: 4242, originX, originY, shore, paths: scene.paths, slab, loot };
+  return { seed: 4242, originX, originY, shore, ford, paths: scene.paths, slab, loot };
 }
 
 /** Les indices des pixels dont le RGBA diffère entre deux tampons. */
@@ -371,6 +406,204 @@ describe('peinture du sol', () => {
       const color = (withLoot[o] << 16) | (withLoot[o + 1] << 8) | withLoot[o + 2];
       if (color !== S1 && color !== S3 && color !== INK) {
         throw new Error(`couleur de ferraille inattendue : ${color.toString(16)}`);
+      }
+    }
+  });
+
+  it('garde les bandes profondes quand le gué est nul', () => {
+    const scene: Scene = {
+      shore: () => -4,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = 6 * TILE_PX;
+    const out = new Uint8ClampedArray(width * width * 4);
+    paintTiles(src, out, 0, 0, 6, 6);
+    let deep = 0;
+    let light = 0;
+    for (let i = 0; i < width * width; i++) {
+      const color = pixelColor(out, i);
+      if (color === Q5 || color === Q6 || color === Q7) deep++;
+      if (color === Q1) light++;
+    }
+    expect(deep).toBeGreaterThan(0);
+    expect(light).toBe(0);
+  });
+
+  it('éclaircit le plein gué en q1 et q2, sans aucune bande profonde', () => {
+    const scene: Scene = {
+      shore: () => -6,
+      ford: () => 1,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = 8 * TILE_PX;
+    const out = new Uint8ClampedArray(width * width * 4);
+    paintTiles(src, out, 0, 0, 8, 8);
+    let q1 = 0;
+    let q2 = 0;
+    for (let i = 0; i < width * width; i++) {
+      const color = pixelColor(out, i);
+      const band = waterBand(color);
+      if (band > 2) throw new Error(`bande profonde ${band} au pixel ${i}`);
+      if (color === Q1) q1++;
+      if (color === Q2) q2++;
+    }
+    expect(q1).toBeGreaterThan(0);
+    expect(q2).toBeGreaterThan(0);
+  });
+
+  it('fait remonter les bandes en douceur quand le gué augmente', () => {
+    const tiles = 16;
+    const scene: Scene = {
+      shore: () => -6,
+      ford: (cx) => Math.max(0, Math.min(1, cx / 15)),
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = tiles * TILE_PX;
+    const height = 4 * TILE_PX;
+    const out = new Uint8ClampedArray(width * height * 4);
+    paintTiles(src, out, 0, 0, tiles, 4);
+    const deep = new Array<number>(tiles).fill(0);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (waterBand(pixelColor(out, y * width + x)) >= 3) {
+          deep[Math.floor(x / TILE_PX)]++;
+        }
+      }
+    }
+    expect(deep[0]).toBeGreaterThan(0);
+    expect(deep[tiles - 1]).toBe(0);
+    for (let t = 1; t < tiles; t++) {
+      expect(deep[t]).toBeLessThanOrEqual(deep[t - 1] + 4);
+    }
+  });
+
+  it('pose les pierres de passage dans leur case d’eau, avec leurs quatre tons', () => {
+    const scene: Scene = {
+      shore: () => -5,
+      ford: (cx, cy) => (cx >= 2 && cx <= 3 && cy >= 2 && cy <= 3 ? 1 : 0),
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const width = 6 * TILE_PX;
+    const full = new Uint8ClampedArray(width * width * 4);
+    const core = new Uint8ClampedArray(width * width * 4);
+    paintTiles(src, full, 0, 0, 6, 6);
+    paintGroundCore(src, core, 0, 0, 6, 6);
+    const diff = diffPixels(full, core);
+    expect(diff.length).toBeGreaterThan(0);
+    const seen = new Set<number>();
+    for (const p of diff) {
+      const x = p % width;
+      const y = Math.floor(p / width);
+      if (x < 2 * TILE_PX || x >= 3 * TILE_PX || y < 2 * TILE_PX || y >= 3 * TILE_PX) {
+        throw new Error(`pierre de passage hors de sa case au pixel (${x},${y})`);
+      }
+      const color = pixelColor(full, p);
+      if (color !== ST0 && color !== ST1 && color !== ST3 && color !== Q1) {
+        throw new Error(`couleur de pierre inattendue : ${color.toString(16)}`);
+      }
+      seen.add(color);
+    }
+    expect(seen).toEqual(new Set([ST0, ST1, ST3, Q1]));
+  });
+
+  it('ne pose aucune pierre sur une dalle ni sous le seuil de gué', () => {
+    const deep: Scene = {
+      shore: () => -5,
+      ford: () => 1,
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const width = 6 * TILE_PX;
+    const baseline = new Uint8ClampedArray(width * width * 4);
+    const baselineCore = new Uint8ClampedArray(width * width * 4);
+    paintTiles(blockSource(deep, 0, 0), baseline, 0, 0, 6, 6);
+    paintGroundCore(blockSource(deep, 0, 0), baselineCore, 0, 0, 6, 6);
+    expect(diffPixels(baseline, baselineCore).length).toBeGreaterThan(0);
+
+    const slabScene: Scene = { ...deep, slab: (tx, ty) => tx >= 2 && tx <= 3 && ty >= 2 && ty <= 3 };
+    const slabFull = new Uint8ClampedArray(width * width * 4);
+    const slabCore = new Uint8ClampedArray(width * width * 4);
+    paintTiles(blockSource(slabScene, 0, 0), slabFull, 0, 0, 6, 6);
+    paintGroundCore(blockSource(slabScene, 0, 0), slabCore, 0, 0, 6, 6);
+    for (let y = 2 * TILE_PX; y < 4 * TILE_PX; y++) {
+      for (let x = 2 * TILE_PX; x < 4 * TILE_PX; x++) {
+        const p = y * width + x;
+        expect(pixelColor(slabFull, p)).toBe(pixelColor(slabCore, p));
+      }
+    }
+
+    const lowScene: Scene = { ...deep, ford: () => 0.65 };
+    const lowFull = new Uint8ClampedArray(width * width * 4);
+    const lowCore = new Uint8ClampedArray(width * width * 4);
+    paintTiles(blockSource(lowScene, 0, 0), lowFull, 0, 0, 6, 6);
+    paintGroundCore(blockSource(lowScene, 0, 0), lowCore, 0, 0, 6, 6);
+    expect(diffPixels(lowFull, lowCore)).toEqual([]);
+  });
+
+  it('donne le même sous-rectangle que le bloc entier avec un gué', () => {
+    const scene: Scene = {
+      shore: (cx, cy) => (cx - 16) * 0.6 + Math.sin(cy * 0.25) * 1.2,
+      ford: (cx, cy) => Math.max(0, Math.min(1, 1 - Math.abs(cy - 16) / 6)),
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const src = blockSource(scene, 0, 0);
+    const full = new Uint8ClampedArray(CHUNK * TILE_PX * CHUNK * TILE_PX * 4);
+    paintTiles(src, full, 0, 0, CHUNK, CHUNK);
+    const rects = [[0, 0, 10, 10], [11, 8, 26, 23], [24, 24, 32, 32]] as const;
+    for (const [x0, y0, x1, y1] of rects) {
+      const w = (x1 - x0) * TILE_PX;
+      const h = (y1 - y0) * TILE_PX;
+      const part = new Uint8ClampedArray(w * h * 4);
+      paintTiles(src, part, x0, y0, x1, y1);
+      for (let ry = 0; ry < h; ry++) {
+        for (let rx = 0; rx < w; rx++) {
+          const a = (ry * w + rx) * 4;
+          const b = (((y0 * TILE_PX + ry) * CHUNK * TILE_PX) + (x0 * TILE_PX + rx)) * 4;
+          for (let k = 0; k < 4; k++) {
+            if (part[a + k] !== full[b + k]) {
+              throw new Error(`pixel (${rx},${ry}) du rectangle ${x0},${y0},${x1},${y1} diffère`);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('ne crée pas de couture de gué entre deux blocs voisins', () => {
+    const scene: Scene = {
+      shore: (cx, cy) => (cx - 40) * 0.55 + Math.sin(cy * 0.27) * 1.6,
+      ford: (cx, cy) => Math.max(0, Math.min(0.5, 0.5 - Math.abs(cy - 16) / 12)),
+      slab: () => false,
+      paths: [],
+      loot: () => false,
+    };
+    const left = blockSource(scene, 0, 0);
+    const right = blockSource(scene, CHUNK, 0);
+    const w = CHUNK * TILE_PX;
+    const a = new Uint8ClampedArray(w * w * 4);
+    const b = new Uint8ClampedArray(w * w * 4);
+    paintGroundCore(left, a, 0, 0, CHUNK, CHUNK);
+    paintGroundCore(right, b, CHUNK, 0, CHUNK * 2, CHUNK);
+    for (let y = 0; y < w; y++) {
+      const before = waterBand(pixelColor(a, y * w + (w - 1)));
+      const after = waterBand(pixelColor(b, y * w));
+      if (Math.abs(after - before) > 1) {
+        throw new Error(`couture de gué à la ligne ${y} : ${before} puis ${after}`);
       }
     }
   });

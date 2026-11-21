@@ -21,6 +21,7 @@ const BLOCK = CHUNK * PX;
 /** Une scène du monde, décrite par des fonctions pures. */
 interface Scene {
   shore(cx: number, cy: number): number;
+  ford?(cx: number, cy: number): number;
   slab(tx: number, ty: number): boolean;
   paths: readonly GroundPathSegment[];
   loot(tx: number, ty: number): boolean;
@@ -31,6 +32,12 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
   const shore = new Float32Array(CORNER * CORNER);
   for (let j = 0; j < CORNER; j++) {
     for (let i = 0; i < CORNER; i++) shore[j * CORNER + i] = scene.shore(originX + i, originY + j);
+  }
+  const ford = new Float32Array(CORNER * CORNER);
+  if (scene.ford) {
+    for (let j = 0; j < CORNER; j++) {
+      for (let i = 0; i < CORNER; i++) ford[j * CORNER + i] = scene.ford(originX + i, originY + j);
+    }
   }
   const slab = new Uint8Array(SLAB_SIDE * SLAB_SIDE);
   for (let ly = -1; ly <= CHUNK; ly++) {
@@ -44,7 +51,7 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
       loot[ly * CHUNK + lx] = scene.loot(originX + lx, originY + ly) ? 1 : 0;
     }
   }
-  return { seed: 7331, originX, originY, shore, paths: scene.paths, slab, loot };
+  return { seed: 7331, originX, originY, shore, ford, paths: scene.paths, slab, loot };
 }
 
 /** Peint un bloc entier dans un canevas neuf. */
@@ -142,10 +149,11 @@ function main(): void {
     loot: () => false,
   }, 0, 0))));
 
-  cases.push(figure('Gué : sentier qui touche l’eau', paintBlock(blockSource({
+  cases.push(figure('Gué : rivière continue franchie à pied sec', paintBlock(blockSource({
     shore: right,
+    ford: (cx, cy) => Math.max(0, Math.min(1, 1 - Math.abs(cy - 16) / 2.2)),
     slab: () => false,
-    paths: [{ ax: 8, ay: 15, bx: 25, by: 17 }],
+    paths: [{ ax: 8, ay: 16, bx: 25, by: 16 }],
     loot: () => false,
   }, 0, 0))));
 

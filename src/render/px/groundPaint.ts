@@ -23,6 +23,8 @@ export interface GroundSource {
   readonly originY: number;
   /** 33×33 coins, indice `j * 33 + i`. */
   readonly shore: ArrayLike<number>;
+  /** 33×33 coins de gué, indice `j * 33 + i`, de 0 (eau normale) à 1 (plein gué). */
+  readonly ford: ArrayLike<number>;
   readonly paths: readonly GroundPathSegment[];
   /** 34×34 cases (marge d'une case), indice `(ly + 1) * 34 + (lx + 1)`. */
   readonly slab: ArrayLike<number>;
@@ -45,6 +47,18 @@ const DIRT_NOISE = 1.5;
 /** La distance d'un centre de case à un segment au-delà de laquelle aucune case ne peut être peinte. */
 const TILE_SEGMENT_REACH = TILE_PX * 0.75 + DIRT_REACH + DIRT_NOISE;
 
+/** Le gué au-delà duquel l'eau devient une trame claire, sans bandes profondes. */
+const FORD_FULL = 0.6;
+
+/** Le gué à partir duquel l'eau s'éclaircit progressivement vers la trame. */
+const FORD_SOFT = 0.5;
+
+/** L'échelle du bruit de courant dans un gué, en cases. */
+const FORD_WEAVE = 0.045;
+
+/** Le seuil au-delà duquel la trame de gué prend le ton clair. */
+const FORD_WEAVE_LIGHT = 0.62;
+
 /** Les tons du sol, empaquetés en RGBA 32 bits (octet rouge en premier), pour peindre vite. */
 const RGB = {
   q1: pack(C.q1), q2: pack(C.q2), q3: pack(C.q3), q4: pack(C.q4), q5: pack(C.q5),
@@ -53,7 +67,7 @@ const RGB = {
   m1: pack(C.m1), m2: pack(C.m2), m3: pack(C.m3), m5: pack(C.m5),
   c0: pack(C.c0), c1: pack(C.c1), c2: pack(C.c2), c3: pack(C.c3), c4: pack(C.c4),
   e0: pack(C.e0), e1: pack(C.e1), e2: pack(C.e2),
-  st0: pack(C.st0), st1: pack(C.st1),
+  st0: pack(C.st0), st1: pack(C.st1), st3: pack(C.st3),
   s1: pack(C.s1), s3: pack(C.s3), ink: pack(C.ink),
 } as const;
 
@@ -64,6 +78,22 @@ function pack(hex: string): number {
   const g = (m >> 8) & 255;
   const b = m & 255;
   return (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+/** La couleur d'une eau de profondeur apparente `e`, du plus clair au plus profond. */
+function waterColor(e: number): number {
+  if (e > 76) return RGB.q7;
+  if (e > 58) return RGB.q6;
+  if (e > 42) return RGB.q5;
+  if (e > 27) return RGB.q4;
+  if (e > 13) return RGB.q3;
+  return RGB.q2;
+}
+
+/** L'effacement progressif de la profondeur à l'approche du plein gué, de 0 à 1. */
+function fordFade(f: number): number {
+  if (f <= FORD_SOFT) return 0;
+  return smooth(Math.min(1, (f - FORD_SOFT) / (FORD_FULL - FORD_SOFT)));
 }
 
 /** Un segment de sentier déjà converti en pixels du monde. */
@@ -186,6 +216,11 @@ function paintGroundBase(
       const c10 = src.shore[cornerRow + lx + 1];
       const c01 = src.shore[cornerRow + CORNER + lx];
       const c11 = src.shore[cornerRow + CORNER + lx + 1];
+      const f00 = src.ford[cornerRow + lx];
+      const f10 = src.ford[cornerRow + lx + 1];
+      const f01 = src.ford[cornerRow + CORNER + lx];
+      const f11 = src.ford[cornerRow + CORNER + lx + 1];
+      const hasFord = f00 !== 0 || f10 !== 0 || f01 !== 0 || f11 !== 0;
       const isSlab = src.slab[slabRow + lx + 1] !== 0;
       const baseX = tx * TILE_PX;
       const baseY = ty * TILE_PX;
@@ -233,7 +268,20 @@ function paintGroundBase(
             const d = wnValues[base + wnWidth + 1];
             const noise = a + (b - a) * u + (c - a) * wrf + (a - b - c + d) * u * wrf;
             const e = dd + (noise - 0.5) * 10;
-            color = e > 76 ? RGB.q7 : e > 58 ? RGB.q6 : e > 42 ? RGB.q5 : e > 27 ? RGB.q4 : e > 13 ? RGB.q3 : RGB.q2;
+            if (!hasFord) {
+              color = waterColor(e);
+            } else {
+              const fx = px / TILE_PX;
+              const top = f00 + (f10 - f00) * fx;
+              const bottom = f01 + (f11 - f01) * fx;
+              const f = top + (bottom - top) * fy;
+              if (f > FORD_FULL) {
+                const flow = vnoise(wx * FORD_WEAVE, wy * FORD_WEAVE, 7);
+                color = flow > FORD_WEAVE_LIGHT ? RGB.q1 : RGB.q2;
+              } else {
+                color = waterColor(e * (1 - f) * (1 - fordFade(f)));
+              }
+            }
           } else if (dd > -6) {
             color = RGB.sd2;
           } else if (dd > -8) {
@@ -602,6 +650,11 @@ function paintDecor(
       const c10 = src.shore[cornerRow + lx + 1];
       const c01 = src.shore[cornerRow + CORNER + lx];
       const c11 = src.shore[cornerRow + CORNER + lx + 1];
+      const f00 = src.ford[cornerRow + lx];
+      const f10 = src.ford[cornerRow + lx + 1];
+      const f01 = src.ford[cornerRow + CORNER + lx];
+      const f11 = src.ford[cornerRow + CORNER + lx + 1];
+      const ford = (f00 + f10 + f01 + f11) * 0.25;
       const avg = (c00 + c10 + c01 + c11) * 0.25;
       if (avg < -0.1 && avg > -1.3) foamTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
       if (avg > 0.1 && avg < 1.3) pebbleTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
@@ -609,6 +662,7 @@ function paintDecor(
       if (avg > 0.1 && avg < 1.2 && nearPath(src.paths, tx, ty)) {
         fordTile(out, bounds, tx, ty, seed, c00, c10, c01, c11);
       }
+      if (avg < 0 && ford >= 0.7) fordStonesTile(out, bounds, tx, ty, seed);
     }
   }
 }
@@ -712,6 +766,35 @@ function fordTile(
         putWorld(out, bounds, tx * TILE_PX + x + i, ty * TILE_PX + y + j, color);
       }
     }
+  }
+}
+
+/** Deux ou trois pierres plates posées dans l'eau claire d'un gué, avec leur reflet et leur courant. */
+function fordStonesTile(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+  seed: number,
+): void {
+  const count = 2 + (hash(tx, ty, seed + 121) < 0.5 ? 1 : 0);
+  for (let k = 0; k < count; k++) {
+    const salt = seed + 122 + k * 7;
+    const w = 5 + Math.floor(hash(tx, ty, salt) * 3);
+    const h = 3 + Math.floor(hash(tx, ty, salt + 1) * 2);
+    const x = Math.floor(hash(tx, ty, salt + 2) * (TILE_PX - w));
+    const y = 1 + Math.floor(hash(tx, ty, salt + 3) * (TILE_PX - h - 2));
+    const X = tx * TILE_PX + x;
+    const Y = ty * TILE_PX + y;
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        let color = RGB.st1;
+        if (j === 0 && i === 0) color = RGB.st0;
+        else if (j === h - 1) color = RGB.st3;
+        putWorld(out, bounds, X + i, Y + j, color);
+      }
+    }
+    for (let i = 0; i < w; i++) putWorld(out, bounds, X + i, Y + h, RGB.q1);
   }
 }
 
