@@ -2,22 +2,38 @@
  * Vérification hors navigateur des affleurements : le plan, les repères et les animations,
  * sur un faux crayon qui écrit les couleurs dans une grille. Aucun canevas.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEPOSITS } from '../src/sim/data';
 import { C } from '../src/render/px/palette';
 import type { Pen } from '../src/render/px/pen';
 import {
+  OUTCROP_ALTS,
   OUTCROP_VARIANTS,
   type OutcropPlan,
   type RockKind,
   drawOreLive,
   drawRockHit,
+  outcropSprite,
   outcropVariantAt,
   paintOutcrop,
   paintRubble,
   rockKind,
   rockShake,
 } from '../src/render/px/outcrops';
+
+vi.mock('../src/render/px/surface', () => ({
+  makeSurface: (w: number, h: number) => ({
+    canvas: { width: w, height: h },
+    ctx: { fillStyle: '', fillRect: () => undefined },
+  }),
+}));
+
+vi.mock('../src/render/px/finish', () => ({
+  finish: (canvas: { width: number; height: number }) => (
+    { width: canvas.width, height: canvas.height } as unknown as HTMLCanvasElement
+  ),
+  outline: (canvas: HTMLCanvasElement) => canvas,
+}));
 
 /** Une grille de couleurs et le compte des pixels qui auraient débordé. */
 interface Grid {
@@ -93,10 +109,10 @@ const BASE_SIZES = [
 ] as const;
 
 /** Peint un affleurement sur une grille de sa taille de base. */
-function paint(kind: RockKind, variant: number): { plan: OutcropPlan; grid: Grid } {
+function paint(kind: RockKind, variant: number, alt = 0): { plan: OutcropPlan; grid: Grid } {
   const size = BASE_SIZES[variant];
   const { pen, grid } = fakePen(size.w * 3 + 10, size.h * 3 + 14);
-  const plan = paintOutcrop(pen, kind, variant);
+  const plan = paintOutcrop(pen, kind, variant, alt);
   return { plan, grid };
 }
 
@@ -204,6 +220,37 @@ describe('le plan écrit', () => {
     expect(colors(paint('fe', 0).grid)).toContain(C.ir1);
     expect(colors(paint('cu', 0).grid)).toContain(C.ma2);
     expect(colors(paint('qz', 0).grid)).toContain(C.qz0);
+  });
+});
+
+describe('les alternatives de graine', () => {
+  it('change la grille sans toucher au type ni aux dimensions', () => {
+    for (const kind of KINDS) {
+      const base = paint(kind, 0, 0);
+      const same = paint(kind, 0, 0);
+      const other = paint(kind, 0, 1);
+      expect(same.grid.cells).toEqual(base.grid.cells);
+      expect(other.grid.cells.join('|')).not.toBe(base.grid.cells.join('|'));
+      expect(other.plan.width).toBe(base.plan.width);
+      expect(other.plan.height).toBe(base.plan.height);
+      expect(other.plan.kind).toBe(base.plan.kind);
+    }
+  });
+
+  it('garde un cache distinct par alternative et type', () => {
+    const a = outcropSprite('fe', 0, 0);
+    const again = outcropSprite('fe', 0, 0);
+    const alt = outcropSprite('fe', 0, 1);
+    expect(again).toBe(a);
+    expect(alt).not.toBe(a);
+    expect(alt.img).not.toBe(a.img);
+  });
+
+  it('ramène l’alternative dans ses bornes', () => {
+    const first = outcropSprite('fe', 0, 0);
+    expect(outcropSprite('fe', 0, OUTCROP_ALTS)).toBe(first);
+    expect(outcropSprite('fe', 0, -OUTCROP_ALTS)).toBe(first);
+    expect(outcropSprite('fe', 0, -1)).toBe(outcropSprite('fe', 0, OUTCROP_ALTS - 1));
   });
 });
 

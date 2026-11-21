@@ -22,6 +22,7 @@ import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem, placeholderSprite } from './placeholders';
 import { TREE_RADIUS, canopySprite, drawTree, treeKindAt, treeVariantAt } from './trees';
 import {
+  OUTCROP_ALTS,
   OUTCROP_VARIANTS,
   drawOreLive,
   drawRockHit,
@@ -32,7 +33,7 @@ import {
   type OutcropSprite,
   type RockKind,
 } from './outcrops';
-import { oreCell, oreVariant, type OreCell } from './oreField';
+import { oreCell, oreOffset, oreVariant, type OreCell } from './oreField';
 import { castShadow, type Sprite } from './sprite';
 import {
   drawBrackets,
@@ -281,9 +282,12 @@ export class PxRenderer {
   private addOre(f: Frame, cell: OreCell, cellX: number, cellY: number): void {
     const { g } = f;
     const kind = rockKind(cell.type as 1 | 2 | 3 | 4);
-    const sprite = outcropSprite(kind, oreVariant(cell.count));
-    const X = Math.round(cell.centerX * TILE_PX - sprite.img.width / 2);
-    const footPx = Math.round(cell.footY * TILE_PX) - 2;
+    const variant = oreVariant(cell.count, hash(cellX, cellY, g.seed + 217));
+    const alt = Math.floor(hash(cellX, cellY, g.seed + 218) * OUTCROP_ALTS);
+    const offset = oreOffset(cellX, cellY, hash(cellX, cellY, g.seed + 219), hash(cellX, cellY, g.seed + 220));
+    const sprite = outcropSprite(kind, variant, alt);
+    const X = Math.round(cell.centerX * TILE_PX - sprite.img.width / 2 + offset.x);
+    const footPx = Math.round(cell.footY * TILE_PX) - 2 + offset.y;
     const Y = footPx - sprite.foot;
     if (f.fade > 0) {
       this.queue.add('cast', () => {

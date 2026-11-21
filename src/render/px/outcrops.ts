@@ -20,6 +20,9 @@ export type RockKind = 'fe' | 'st' | 'qz' | 'cu';
 /** Le nombre de variantes d'un affleurement. */
 export const OUTCROP_VARIANTS = 3;
 
+/** Le nombre d'alternatives de graine d'un affleurement. */
+export const OUTCROP_ALTS = 3;
+
 /** Un point du sprite, en pixels, après finition (décalage du contour compris). */
 export interface RockMark { x: number; y: number; }
 
@@ -64,6 +67,11 @@ function normalizeVariant(variant: number): number {
   return ((Math.trunc(variant) % OUTCROP_VARIANTS) + OUTCROP_VARIANTS) % OUTCROP_VARIANTS;
 }
 
+/** Ramène une alternative de graine dans ses bornes. */
+function normalizeAlt(alt: number): number {
+  return ((Math.trunc(alt) % OUTCROP_ALTS) + OUTCROP_ALTS) % OUTCROP_ALTS;
+}
+
 /** Un rocher en volume : dessus éclairé, face avant dans l'ombre et facettes. */
 function boulder(
   P: Pen,
@@ -104,12 +112,13 @@ export function outcropVariantAt(tx: number, ty: number, seed: number): number {
 }
 
 /** Dessine l'affleurement non fini et rend son plan. Toute la logique de dessin est ici. */
-export function paintOutcrop(P: Pen, kind: RockKind, variant: number): OutcropPlan {
+export function paintOutcrop(P: Pen, kind: RockKind, variant: number, alt = 0): OutcropPlan {
   const v = normalizeVariant(variant);
+  const a = normalizeAlt(alt);
   const { w, h } = SIZES[v];
   const width = w * 3 + 10;
   const height = h * 3 + 14;
-  const r = rng(seedOf(kind, v));
+  const r = rng(seedOf(kind, v) + a * 101);
   const pal = ROCK[kind];
   const cx = w * 1.5 + 5;
   const cy = h * 1.4 + 6;
@@ -220,15 +229,16 @@ export function paintOutcrop(P: Pen, kind: RockKind, variant: number): OutcropPl
 /** Le cache des affleurements finis, un par type et variante. */
 const SPRITES = new Map<string, OutcropSprite>();
 
-/** L'affleurement fini (`finish`), en cache par type et variante. */
-export function outcropSprite(kind: RockKind, variant: number): OutcropSprite {
+/** L'affleurement fini (`finish`), en cache par type, variante et alternative. */
+export function outcropSprite(kind: RockKind, variant: number, alt = 0): OutcropSprite {
   const v = normalizeVariant(variant);
-  const key = `${kind}:${v}`;
+  const a = normalizeAlt(alt);
+  const key = `${kind}:${v}:${a}`;
   const cached = SPRITES.get(key);
   if (cached) return cached;
   const { w, h } = SIZES[v];
   const { canvas, ctx } = makeSurface(w * 3 + 10, h * 3 + 14);
-  const plan = paintOutcrop(pen(ctx), kind, v);
+  const plan = paintOutcrop(pen(ctx), kind, v, a);
   const sprite: OutcropSprite = { ...plan, img: finish(canvas) };
   SPRITES.set(key, sprite);
   return sprite;

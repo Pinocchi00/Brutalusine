@@ -3,7 +3,7 @@
  * et le carré reste décrit tant qu'il reste au moins une case.
  */
 import { describe, expect, it } from 'vitest';
-import { oreCell, oreVariant } from '../src/render/px/oreField';
+import { oreCell, oreOffset, oreVariant } from '../src/render/px/oreField';
 
 /** Une lecture de gisements depuis une table de cases. */
 function reader(cells: ReadonlyMap<string, number>): (tx: number, ty: number) => number {
@@ -84,6 +84,27 @@ describe('oreCell', () => {
     expect(cell?.others).toEqual([]);
   });
 
+  it('ne lit chaque case qu’une fois, et aucune pour un carré vide', () => {
+    const counts = new Map<string, number>();
+    const read = (tx: number, ty: number): number => {
+      const key = `${tx},${ty}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      return tx === 0 && ty === 0 ? 1 : 0;
+    };
+    oreCell(read, 0, 0);
+    expect(counts.size).toBe(4);
+    for (const value of counts.values()) expect(value).toBe(1);
+    const emptyCounts = new Map<string, number>();
+    const empty = (tx: number, ty: number): number => {
+      const key = `${tx},${ty}`;
+      emptyCounts.set(key, (emptyCounts.get(key) ?? 0) + 1);
+      return 0;
+    };
+    expect(oreCell(empty, 5, 5)).toBeNull();
+    expect(emptyCounts.size).toBe(4);
+    for (const value of emptyCounts.values()) expect(value).toBe(1);
+  });
+
   it('garde un sprite jusqu’à la dernière case retirée', () => {
     const remaining = [1, 2, 3, 4];
     const positions: readonly [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1]];
@@ -102,10 +123,63 @@ describe('oreCell', () => {
 });
 
 describe('oreVariant', () => {
-  it('suit le nombre de cases : 1 → 0, 2 ou 3 → 1, 4 → 2', () => {
-    expect(oreVariant(1)).toBe(0);
-    expect(oreVariant(2)).toBe(1);
-    expect(oreVariant(3)).toBe(1);
-    expect(oreVariant(4)).toBe(2);
+  it('donne toujours 0 pour une seule case', () => {
+    expect(oreVariant(1, 0)).toBe(0);
+    expect(oreVariant(1, 0.49)).toBe(0);
+    expect(oreVariant(1, 0.5)).toBe(0);
+    expect(oreVariant(1, 0.99)).toBe(0);
+  });
+
+  it('choisit 0 ou 1 pour deux ou trois cases selon le tirage', () => {
+    for (const count of [2, 3]) {
+      expect(oreVariant(count, 0)).toBe(0);
+      expect(oreVariant(count, 0.499)).toBe(0);
+      expect(oreVariant(count, 0.5)).toBe(1);
+      expect(oreVariant(count, 0.999)).toBe(1);
+    }
+  });
+
+  it('choisit 1 ou 2 pour quatre cases selon le tirage', () => {
+    expect(oreVariant(4, 0)).toBe(1);
+    expect(oreVariant(4, 0.499)).toBe(1);
+    expect(oreVariant(4, 0.5)).toBe(2);
+    expect(oreVariant(4, 0.999)).toBe(2);
+  });
+});
+
+describe('oreOffset', () => {
+  it('décale les rangées paires et impaires en sens opposé', () => {
+    expect(oreOffset(0, 0, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(0, 1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(0, 2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(0, 3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+  });
+
+  it('comprend les coordonnées négatives : -1 est impair, -2 est pair', () => {
+    expect(oreOffset(0, -1, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+    expect(oreOffset(0, -2, 0.5, 0.5)).toEqual({ x: -6, y: 0 });
+    expect(oreOffset(0, -3, 0.5, 0.5)).toEqual({ x: 6, y: 0 });
+  });
+
+  it('garde l’offset dans ses bornes pour h1 et h2 dans [0, 1[', () => {
+    for (let i = 0; i <= 1000; i++) {
+      const h = i / 1000;
+      for (let cellY = -3; cellY <= 3; cellY++) {
+        const offset = oreOffset(0, cellY, h, h);
+        expect(offset.x).toBeGreaterThanOrEqual(-10);
+        expect(offset.x).toBeLessThanOrEqual(10);
+        expect(offset.y).toBeGreaterThanOrEqual(-4);
+        expect(offset.y).toBeLessThanOrEqual(4);
+        expect(Number.isInteger(offset.x)).toBe(true);
+        expect(Number.isInteger(offset.y)).toBe(true);
+      }
+    }
+  });
+
+  it('suit les tirages : x de -10 à -2 ou de 2 à 10, y de -3 à 3', () => {
+    expect(oreOffset(0, 0, 0, 0)).toEqual({ x: -10, y: -3 });
+    expect(oreOffset(0, 0, 0.999, 0.999)).toEqual({ x: -2, y: 3 });
+    expect(oreOffset(0, 1, 0, 0)).toEqual({ x: 2, y: -3 });
+    expect(oreOffset(0, 1, 0.999, 0.999)).toEqual({ x: 10, y: 3 });
   });
 });
