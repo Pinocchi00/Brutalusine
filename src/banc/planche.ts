@@ -7,6 +7,8 @@ import { C } from '../render/px/palette';
 import { build, castShadow, type Sprite } from '../render/px/sprite';
 import { towerE1, towerE2 } from '../render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
+import { scierieE1 } from '../render/px/artFirst';
+import { fourE2 } from '../render/px/artStone';
 import {
   placeholderBuilder,
   placeholderItem,
@@ -122,6 +124,15 @@ for (const [label, footprint, up, draw] of [
 ] as const) {
   const sprite = build(footprint, footprint, up, draw);
   if (figure(ERAS, label, spriteTile(sprite))) count++;
+}
+
+const TEMOINS = section('Témoins');
+for (const [label, up, draw] of [
+  ['Scierie · Bois', 18, scierieE1],
+  ['Four · Pierre', 44, fourE2],
+] as const) {
+  const sprite = build(48, 48, up, draw);
+  if (figure(TEMOINS, label, spriteTile(sprite))) count++;
 }
 
 const KIND_NAMES: Record<TreeKind, string> = { leafy: 'Feuillu', palm: 'Palmier', flower: 'Fleuri' };
