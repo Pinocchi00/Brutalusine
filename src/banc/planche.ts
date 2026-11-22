@@ -15,7 +15,7 @@ import {
   scierieE1,
   scierieE2,
 } from '../render/px/artFirst';
-import { fourE2 } from '../render/px/artStone';
+import { fourE2, STONE_PREVIEWS, trieurE2 } from '../render/px/artStone';
 import {
   placeholderBuilder,
   placeholderItem,
@@ -142,6 +142,11 @@ for (const [label, footprint, up, draw] of [
   ['Répartiteur · Bois', 24, 6, aiguillageE1],
   ['Répartiteur · Pierre', 24, 6, aiguillageE2],
   ['Four · Pierre', 48, 44, fourE2],
+  ['Trieur · Pierre', 24, 8, trieurE2],
+  ['Piège · Pierre', 48, STONE_PREVIEWS.piege.up, STONE_PREVIEWS.piege.draw],
+  ['Argilière · Pierre', 48, STONE_PREVIEWS.argiliere.up, STONE_PREVIEWS.argiliere.draw],
+  ['Tannerie · Pierre', 48, STONE_PREVIEWS.tannerie.up, STONE_PREVIEWS.tannerie.draw],
+  ['Roue à eau · Pierre', 48, STONE_PREVIEWS.roue.up, STONE_PREVIEWS.roue.draw],
 ] as const) {
   const sprite = build(footprint, footprint, up, draw);
   if (figure(TEMOINS, label, spriteTile(sprite))) count++;

@@ -15,7 +15,15 @@ import {
   scierieE1,
   scierieE2,
 } from '../src/render/px/artFirst';
-import { fourE2 } from '../src/render/px/artStone';
+import {
+  argiliereE2,
+  fourE2,
+  piegeE2,
+  roueEauE2,
+  STONE_PREVIEWS,
+  tannerieE2,
+  trieurE2,
+} from '../src/render/px/artStone';
 import type { Pen } from '../src/render/px/pen';
 import type { Light } from '../src/render/px/sprite';
 
@@ -91,10 +99,26 @@ describe('eraArts', () => {
     expect(eraArts('bruleur')?.map((art) => art.up)).toEqual([10, 40]);
     expect(eraArts('aiguillage')?.map((art) => art.up)).toEqual([6, 6]);
     expect(eraArts('four')?.map((art) => art.up)).toEqual([44, 44]);
+    expect(eraArts('trieur')?.map((art) => art.up)).toEqual([8, 8]);
   });
 
   it('renvoie null pour un bâtiment sans dessin', () => {
-    expect(eraArts('trieur')).toBeNull();
+    expect(eraArts('convoyeur')).toBeNull();
+  });
+});
+
+describe('STONE_PREVIEWS', () => {
+  it('donne les hauteurs des quatre bâtiments à venir', () => {
+    expect(STONE_PREVIEWS.piege.up).toBe(16);
+    expect(STONE_PREVIEWS.argiliere.up).toBe(24);
+    expect(STONE_PREVIEWS.tannerie.up).toBe(20);
+    expect(STONE_PREVIEWS.roue.up).toBe(26);
+  });
+
+  it('ne les inscrit pas encore dans eraArts', () => {
+    for (const key of ['piege', 'argiliere', 'tannerie', 'roue']) {
+      expect(eraArts(key)).toBeNull();
+    }
   });
 });
 
@@ -139,6 +163,14 @@ describe('les lumières des dessins', () => {
 
   it('allume un seul feu dans la gueule du Four', () => {
     expect(lightKinds(fourE2)).toEqual(['fire']);
+  });
+
+  it('n’allume rien dans le Trieur, le Piège, l’Argilière, la Tannerie ni la Roue à eau', () => {
+    expect(lightKinds(trieurE2)).toEqual([]);
+    expect(lightKinds(piegeE2)).toEqual([]);
+    expect(lightKinds(argiliereE2)).toEqual([]);
+    expect(lightKinds(tannerieE2)).toEqual([]);
+    expect(lightKinds(roueEauE2)).toEqual([]);
   });
 });
 

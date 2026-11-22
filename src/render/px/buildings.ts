@@ -17,7 +17,7 @@ import {
   scierieE1,
   scierieE2,
 } from './artFirst';
-import { fourE2 } from './artStone';
+import { fourE2, trieurE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
 /** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
@@ -59,6 +59,10 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
   four: [
     { up: 44, draw: fourE2 },
     { up: 44, draw: fourE2 },
+  ],
+  trieur: [
+    { up: 8, draw: trieurE2 },
+    { up: 8, draw: trieurE2 },
   ],
 };
 
