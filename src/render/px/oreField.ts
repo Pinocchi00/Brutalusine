@@ -3,6 +3,7 @@
  * les sprites de 42 à 54 pixels ne s'empilent pas illisiblement sur des cases de 24.
  * Ce module est pur : aucun canevas, aucune dépendance à `src/sim/`.
  */
+import { TILE_PX } from './view';
 
 /** Une case de gisement, en coordonnées monde. */
 export interface OrePoint {
@@ -74,6 +75,49 @@ export function oreCell(read: (tx: number, ty: number) => number, cellX: number,
     tiles,
     others,
   };
+}
+
+/** Une roche posée dans le monde, avec son masque de pixels pleins. */
+export interface PlacedOre {
+  X: number;
+  Y: number;
+  width: number;
+  height: number;
+  footPx: number;
+  solid: ArrayLike<number>;
+  tiles: readonly OrePoint[];
+}
+
+/** Vrai si le pixel monde (px, py) tombe sur un pixel plein de cette roche. */
+export function oreSolidAt(rock: PlacedOre, px: number, py: number): boolean {
+  const x = Math.floor(px) - rock.X;
+  const y = Math.floor(py) - rock.Y;
+  if (x < 0 || y < 0 || x >= rock.width || y >= rock.height) return false;
+  return rock.solid[y * rock.width + x] !== 0;
+}
+
+/** La case de la roche visible sous ce pixel monde : la roche au pied le plus au sud gagne, puis sa case la plus proche du point. */
+export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number): OrePoint | null {
+  let best: PlacedOre | null = null;
+  for (const rock of rocks) {
+    if (!oreSolidAt(rock, px, py)) continue;
+    if (!best || rock.footPx > best.footPx || (rock.footPx === best.footPx && rock.X > best.X)) best = rock;
+  }
+  if (!best) return null;
+  const pointX = px / TILE_PX;
+  const pointY = py / TILE_PX;
+  let nearest: OrePoint | null = null;
+  let bestDistance = Infinity;
+  for (const tile of best.tiles) {
+    const dx = tile.x + 0.5 - pointX;
+    const dy = tile.y + 0.5 - pointY;
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      nearest = tile;
+    }
+  }
+  return nearest;
 }
 
 /** La variante d'affleurement selon le nombre de cases et un tirage `h` dans [0, 1[. */

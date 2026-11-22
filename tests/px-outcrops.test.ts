@@ -24,7 +24,14 @@ import {
 vi.mock('../src/render/px/surface', () => ({
   makeSurface: (w: number, h: number) => ({
     canvas: { width: w, height: h },
-    ctx: { fillStyle: '', fillRect: () => undefined },
+    ctx: {
+      fillStyle: '',
+      fillRect: () => undefined,
+      drawImage: () => undefined,
+      getImageData: (x: number, y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+    },
   }),
 }));
 

@@ -37,7 +37,11 @@ export interface OutcropPlan {
 }
 
 /** Un affleurement fini. */
-export interface OutcropSprite extends OutcropPlan { img: HTMLCanvasElement; }
+export interface OutcropSprite extends OutcropPlan {
+  img: HTMLCanvasElement;
+  /** Le masque des pixels pleins de l'image finie, indice `y * width + x`. */
+  solid: Uint8Array;
+}
 
 /** Chaque roche a sa pierre : arête, dessus clair, dessus, face, pied. */
 const ROCK: Record<RockKind, readonly [string, string, string, string, string]> = {
@@ -224,6 +228,16 @@ export function paintOutcrop(P: Pen, kind: RockKind, variant: number, alt = 0): 
 /** Le cache des affleurements finis, un par type et variante. */
 const SPRITES = new Map<string, OutcropSprite>();
 
+/** Le masque des pixels pleins d'une image finie. */
+function solidMask(img: HTMLCanvasElement): Uint8Array {
+  const { canvas, ctx } = makeSurface(img.width, img.height, { read: true });
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, img.width, img.height).data;
+  const solid = new Uint8Array(img.width * img.height);
+  for (let i = 0; i < solid.length; i++) solid[i] = data[i * 4 + 3] !== 0 ? 1 : 0;
+  return solid;
+}
+
 /** L'affleurement fini (`finish`), en cache par type, variante et alternative. */
 export function outcropSprite(kind: RockKind, variant: number, alt = 0): OutcropSprite {
   const v = normalizeVariant(variant);
@@ -234,7 +248,8 @@ export function outcropSprite(kind: RockKind, variant: number, alt = 0): Outcrop
   const { w, h } = SIZES[v];
   const { canvas, ctx } = makeSurface(w * 3 + 10, h * 3 + 14);
   const plan = paintOutcrop(pen(ctx), kind, v, a);
-  const sprite: OutcropSprite = { ...plan, img: finish(canvas) };
+  const img = finish(canvas);
+  const sprite: OutcropSprite = { ...plan, img, solid: solidMask(img) };
   SPRITES.set(key, sprite);
   return sprite;
 }

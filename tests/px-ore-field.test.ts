@@ -3,7 +3,14 @@
  * et le carré reste décrit tant qu'il reste au moins une case.
  */
 import { describe, expect, it } from 'vitest';
-import { oreCell, oreOffset, oreVariant } from '../src/render/px/oreField';
+import {
+  oreCell,
+  oreOffset,
+  oreSolidAt,
+  oreVariant,
+  pickOreTile,
+  type PlacedOre,
+} from '../src/render/px/oreField';
 
 /** Une lecture de gisements depuis une table de cases. */
 function reader(cells: ReadonlyMap<string, number>): (tx: number, ty: number) => number {
@@ -181,5 +188,91 @@ describe('oreOffset', () => {
     expect(oreOffset(0, 0.999, 0.999)).toEqual({ x: 0, y: 9 });
     expect(oreOffset(1, 0, 0)).toEqual({ x: 0, y: -9 });
     expect(oreOffset(1, 0.999, 0.999)).toEqual({ x: 12, y: 9 });
+  });
+});
+
+/** Une roche placée minimale, surchargée au besoin. */
+function rock(overrides: Partial<PlacedOre>): PlacedOre {
+  return {
+    X: 0,
+    Y: 0,
+    width: 2,
+    height: 2,
+    footPx: 0,
+    solid: [0, 0, 0, 0],
+    tiles: [{ x: 0, y: 0 }],
+    ...overrides,
+  };
+}
+
+describe('oreSolidAt', () => {
+  it('reconnaît un pixel plein et un pixel transparent', () => {
+    const ore = rock({ solid: [1, 0, 0, 1] });
+    expect(oreSolidAt(ore, 0, 0)).toBe(true);
+    expect(oreSolidAt(ore, 1, 0)).toBe(false);
+    expect(oreSolidAt(ore, 0, 1)).toBe(false);
+    expect(oreSolidAt(ore, 1, 1)).toBe(true);
+  });
+
+  it('refuse tout pixel hors du rectangle du sprite', () => {
+    const ore = rock({ X: 10, Y: 20, solid: [1, 1, 1, 1] });
+    expect(oreSolidAt(ore, 9, 20)).toBe(false);
+    expect(oreSolidAt(ore, 10, 19)).toBe(false);
+    expect(oreSolidAt(ore, 12, 20)).toBe(false);
+    expect(oreSolidAt(ore, 10, 22)).toBe(false);
+    expect(oreSolidAt(ore, 10, 20)).toBe(true);
+    expect(oreSolidAt(ore, 11, 21)).toBe(true);
+  });
+
+  it('gère les coordonnées négatives', () => {
+    const ore = rock({ X: -10, Y: -10, solid: [0, 1, 0, 0] });
+    expect(oreSolidAt(ore, -9, -10)).toBe(true);
+    expect(oreSolidAt(ore, -10, -10)).toBe(false);
+    expect(oreSolidAt(ore, -11, -10)).toBe(false);
+    expect(oreSolidAt(ore, -9, -11)).toBe(false);
+  });
+});
+
+describe('pickOreTile', () => {
+  const solid = [1, 1, 1, 1];
+
+  it('ne choisit rien sur un pixel transparent', () => {
+    expect(pickOreTile([rock({})], 0, 0)).toBeNull();
+    expect(pickOreTile([], 5, 5)).toBeNull();
+  });
+
+  it('prend la roche au pied le plus au sud', () => {
+    const north = rock({ X: 0, Y: 0, footPx: 10, solid, tiles: [{ x: 1, y: 1 }] });
+    const south = rock({ X: 0, Y: 0, footPx: 20, solid, tiles: [{ x: 2, y: 2 }] });
+    expect(pickOreTile([north, south], 0, 0)).toEqual({ x: 2, y: 2 });
+    expect(pickOreTile([south, north], 0, 0)).toEqual({ x: 2, y: 2 });
+  });
+
+  it('à pied égal, prend le plus grand X', () => {
+    const left = rock({ X: 0, Y: 0, footPx: 20, solid, tiles: [{ x: 1, y: 0 }] });
+    const right = rock({ X: 4, Y: 0, footPx: 20, solid, tiles: [{ x: 2, y: 0 }] });
+    expect(pickOreTile([left, right], 4, 0)).toEqual({ x: 2, y: 0 });
+    expect(pickOreTile([right, left], 4, 0)).toEqual({ x: 2, y: 0 });
+  });
+
+  it('prend la case la plus proche du point', () => {
+    const ore = rock({
+      width: 200,
+      height: 24,
+      solid: new Uint8Array(200 * 24).fill(1),
+      tiles: [{ x: 0, y: 0 }, { x: 5, y: 0 }],
+    });
+    expect(pickOreTile([ore], 12, 12)).toEqual({ x: 0, y: 0 });
+    expect(pickOreTile([ore], 130, 12)).toEqual({ x: 5, y: 0 });
+  });
+
+  it('à distance égale, prend la première case de la liste', () => {
+    const ore = rock({
+      width: 200,
+      height: 24,
+      solid: new Uint8Array(200 * 24).fill(1),
+      tiles: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+    });
+    expect(pickOreTile([ore], 24, 12)).toEqual({ x: 0, y: 0 });
   });
 });

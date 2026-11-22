@@ -25,6 +25,7 @@ interface WorldRenderer {
   burst(kind: 'leaf' | 'dust' | 'spark' | 'chip' | 'star', x: number, y: number, color: string, n: number): void;
   hit(x: number, y: number): void;
   fell(g: Game, x: number, y: number, size: number): void;
+  oreTileAt?(g: Game, x: number, y: number): { x: number; y: number } | null;
 }
 
 const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
@@ -359,6 +360,19 @@ class App {
     return null;
   }
 
+  /** Ce que le clic ou le bouton maintenu doit récolter : la case visée d'abord, sinon la roche visible sous le point. */
+  private harvestTarget(p: Player): { kind: Task['kind']; x: number; y: number } | null {
+    const direct = this.gatherable(p.cx, p.cy);
+    if (direct) return { kind: direct, x: p.cx, y: p.cy };
+    if (this.game.entAt(p.cx, p.cy)) return null;
+    const oreTileAt = this.renderer.oreTileAt?.bind(this.renderer);
+    if (!oreTileAt) return null;
+    const point = p.pad === null ? this.pick(this.mouse.x, this.mouse.y) : { x: p.x + p.aimX, y: p.y + p.aimY };
+    const tile = oreTileAt(this.game, point.x, point.y);
+    if (!tile || this.gatherable(tile.x, tile.y) !== 'ore') return null;
+    return { kind: 'ore', x: tile.x, y: tile.y };
+  }
+
   private primaryDown(p: Player): void {
     if (p.tool === 'demolir') { p.gesture = []; p.lastRemove = ''; this.removeAt(p); return; }
     if (p.tool) { p.gesture = []; p.dragLast = null; this.tryPlace(p, true); return; }
@@ -369,8 +383,8 @@ class App {
       return;
     }
     this.hud.select(null);
-    const kind = this.gatherable(p.cx, p.cy);
-    if (kind) { p.task = { kind, x: p.cx, y: p.cy, stuck: 0, best: 1e9 }; p.gprog = 0; }
+    const target = this.harvestTarget(p);
+    if (target) { p.task = { ...target, stuck: 0, best: 1e9 }; p.gprog = 0; }
     else p.task = { kind: 'walk', x: p.cx, y: p.cy, stuck: 0, best: 1e9 };       // clic dans le vide : on y va
   }
 
@@ -632,8 +646,8 @@ class App {
             if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.hud.toast(`+${n.toFixed(1).replace('.', ',')} Bois`); }
             else g.handMine(t.x, t.y);
             // bouton maintenu : on enchaîne sur ce que vise le curseur
-            const nk = hold ? this.gatherable(p.cx, p.cy) : null;
-            p.task = nk ? { kind: nk, x: p.cx, y: p.cy, stuck: 0, best: 1e9 } : t.kind === 'ore' && hold ? t : null;
+            const nk = hold ? this.harvestTarget(p) : null;
+            p.task = nk ? { ...nk, stuck: 0, best: 1e9 } : t.kind === 'ore' && hold ? t : null;
           }
         }
       }
@@ -778,10 +792,10 @@ class App {
       const st = this.hud.statusLine(g, this.hover);
       html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir${rotatable(this.hover.def) ? ' · R : pivoter' : ''}</span>`;
     } else {
-      const kind = this.gatherable(p.cx, p.cy);
-      if (kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_FER} Fer</span>`;
-      else if (kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(p.cx, p.cy) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
-      else if (kind === 'ore') { const d = DEPOSITS[w.deposit(p.cx, p.cy)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
+      const target = this.harvestTarget(p);
+      if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_FER} Fer</span>`;
+      else if (target?.kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(target.x, target.y) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
+      else if (target?.kind === 'ore') { const d = DEPOSITS[w.deposit(target.x, target.y)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
     }
     this.hud.tip(html, m.x, m.y);
   }
