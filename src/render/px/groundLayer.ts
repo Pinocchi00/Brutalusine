@@ -4,6 +4,7 @@
  */
 import { CHUNK, GROUND_WATER, type Chunk, type World } from '../../sim/world';
 import { TREE_MIN } from '../../sim/data';
+import type { Era } from './eras';
 import { C } from './palette';
 import { makeSurface } from './surface';
 import { TILE_PX, type PixelView } from './view';
@@ -147,6 +148,7 @@ export class GroundLayer {
   private readonly life = new Map<Chunk, LifeEntry>();
   private readonly slab = new Uint8Array(CODES * CODES);
   private readonly now: () => number;
+  private readonly slabEra?: Era;
   private readonly lifeRecent: number[] = [];
   private lifeEstimate = LIFE_DEFAULT_MS;
   private preparedEstimate = LIFE_DEFAULT_MS;
@@ -157,8 +159,9 @@ export class GroundLayer {
   /** Le temps réel passé dans la mise à jour du sol à la dernière image. */
   groundMs = 0;
 
-  constructor(options: { now?: () => number } = {}) {
+  constructor(options: { now?: () => number; slabEra?: Era } = {}) {
     this.now = options.now ?? (() => performance.now());
+    this.slabEra = options.slabEra;
     this.cache = new GroundCache<Chunk, HTMLCanvasElement>(
       {
         readCodes: (chunk, out) => {
@@ -195,7 +198,7 @@ export class GroundLayer {
 
   /** Peint et calcule une source synthétique pour chauffer le code hors partie. */
   prepare(): void {
-    const source = warmGroundSource();
+    const source: GroundSource = { ...warmGroundSource(), slabEra: this.slabEra };
     const row = new Uint8ClampedArray(BLOCK_PX * TILE_PX * 4);
     const recent: number[] = [];
     const measure = (run: () => void): void => {
@@ -348,6 +351,7 @@ export class GroundLayer {
       paths: this.pathsFor(world, chunk),
       slab: this.slab,
       loot: chunk.loot,
+      slabEra: this.slabEra,
     };
     paintTiles(source, out, bx + tx0, by + ty0, bx + tx1, by + ty1);
   }

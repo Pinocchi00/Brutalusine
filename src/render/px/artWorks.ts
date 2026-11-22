@@ -9,7 +9,7 @@ import { rng } from './noise';
 import { box, courses, crate, cyl, logEnds, moss } from './volumes';
 
 /** Ère 1 · un trou creusé à la main, un trépied de perches, un seau, une échelle. */
-export function puitsE1(P: Pen, U: number, L: Light[], chute = true): void {
+export function puitsE1(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
   const r = rng(61);
   P.ell(36, U + 46, 27, 18, C.e3);
   P.ell(36, U + 45, 25, 16, C.e2);
@@ -31,11 +31,13 @@ export function puitsE1(P: Pen, U: number, L: Light[], chute = true): void {
     P.r(54, U + 39, 16, 5, C.e3);
   }
   P.line(36, U - 6, 39, U + 34, C.e3, 2);
-  P.r(36, U - 3, 1, 34, C.c3);
-  P.r(32, U + 30, 8, 6, C.e2);
-  P.r(32, U + 30, 8, 1, C.e1);
-  P.r(32, U + 33, 8, 1, C.s3);
-  P.r(33, U + 29, 6, 1, C.ir1);
+  if (!moving) {
+    P.r(36, U - 3, 1, 34, C.c3);
+    P.r(32, U + 30, 8, 6, C.e2);
+    P.r(32, U + 30, 8, 1, C.e1);
+    P.r(32, U + 33, 8, 1, C.s3);
+    P.r(33, U + 29, 6, 1, C.ir1);
+  }
   P.line(46, U + 52, 50, U + 30, C.e2);
   P.line(51, U + 52, 55, U + 30, C.e2);
   for (let k = 0; k < 6; k++) {
@@ -55,7 +57,7 @@ export function puitsE1(P: Pen, U: number, L: Light[], chute = true): void {
 }
 
 /** Ère 2 · un anneau de pierres sèches, un chevalement de bois, une grande roue. */
-export function puitsE2(P: Pen, U: number, L: Light[], chute = true): void {
+export function puitsE2(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
   P.ell(36, U + 44, 30, 20, C.st4);
   P.ell(36, U + 44, 22, 13, C.e4);
   P.ell(36, U + 45, 18, 10, C.ink2);
@@ -79,11 +81,13 @@ export function puitsE2(P: Pen, U: number, L: Light[], chute = true): void {
   P.line(52, U + 30, 41, U - 20, C.e3, 2);
   P.line(20, U + 28, 52, U + 28, C.e3, 2);
   P.line(24, U + 8, 48, U + 8, C.e3, 2);
-  P.r(46, U - 26, 1, 52, C.c3);
-  P.r(42, U + 24, 9, 7, C.e2);
-  P.r(42, U + 24, 9, 1, C.e1);
-  P.r(42, U + 27, 9, 1, C.s3);
-  P.r(43, U + 23, 7, 1, C.ir1);
+  if (!moving) {
+    P.r(46, U - 26, 1, 52, C.c3);
+    P.r(42, U + 24, 9, 7, C.e2);
+    P.r(42, U + 24, 9, 1, C.e1);
+    P.r(42, U + 27, 9, 1, C.s3);
+    P.r(43, U + 23, 7, 1, C.ir1);
+  }
   P.line(14, U + 56, 30, U - 20, C.e2, 2);
   P.line(13, U + 56, 29, U - 20, C.e1);
   P.line(58, U + 56, 42, U - 20, C.e2, 2);
@@ -94,12 +98,14 @@ export function puitsE2(P: Pen, U: number, L: Light[], chute = true): void {
       P.p(36 + Math.cos(a) * rr, U - 28 + Math.sin(a) * rr, rr === 11 ? C.e3 : C.e1);
     }
   }
-  for (let k = 0; k < 8; k++) {
-    const a = k * Math.PI / 4 + 0.2;
-    P.line(36, U - 28, 36 + Math.cos(a) * 10, U - 28 + Math.sin(a) * 10, C.e2);
+  if (!moving) {
+    for (let k = 0; k < 8; k++) {
+      const a = k * Math.PI / 4 + 0.2;
+      P.line(36, U - 28, 36 + Math.cos(a) * 10, U - 28 + Math.sin(a) * 10, C.e2);
+    }
+    P.disc(36, U - 28, 2.5, C.s3);
+    P.p(35, U - 29, C.s1);
   }
-  P.disc(36, U - 28, 2.5, C.s3);
-  P.p(35, U - 29, C.s1);
   P.r(8, U + 24, 2, 32, C.e3);
   P.r(6, U + 20, 5, 5, C.s3);
   L.push({ k: 'ember', x: 7, y: U + 22, w: 3, h: 2 });

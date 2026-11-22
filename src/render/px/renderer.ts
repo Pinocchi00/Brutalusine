@@ -21,6 +21,7 @@ import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem } from './placeholders';
 import { buildingSprite, prepareBuildings } from './buildings';
+import { drawPuitsMotion, smokeVent } from './buildingAnims';
 import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -163,7 +164,7 @@ export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly era: Era;
-  private readonly ground = new GroundLayer();
+  private readonly ground: GroundLayer;
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
   private readonly lit: LitBuilding[] = [];
@@ -180,6 +181,7 @@ export class PxRenderer {
     this.canvas = canvas;
     this.ctx = ctx;
     this.era = readEra(window.location.search);
+    this.ground = new GroundLayer({ slabEra: this.era });
     prepareTrees();
     prepareOutcrops();
     prepareBuildings(this.era);
@@ -275,7 +277,7 @@ export class PxRenderer {
   /** Ajoute les tapis et les objets qui glissent dessus. */
   private addBelts(f: Frame): void {
     const { g, view, ctx } = f;
-    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem));
+    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem, this.era));
   }
 
   /** Ajoute les arbres, les pousses et les gisements visibles. */
@@ -614,8 +616,18 @@ export class PxRenderer {
       const foot = (e.y + e.h) * TILE_PX;
       if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
+      const vent = smokeVent(e.def.key, this.era, sprite.up);
+      // Un générateur ne remplit jamais `working` : c'est son statut qui dit qu'il brûle.
+      const burning = e.working || (e.def.kind === 'generator' && e.status === Status.Working);
+      if (vent && burning && Math.random() < f.opts.dt * 4) {
+        const color = vent.color === 'dark' ? C.s3 : C.c2;
+        this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
+      }
       this.queue.addTall(foot, X, () => {
         ctx.drawImage(sprite.img, X, Y);
+        if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {
+          drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, e.progress);
+        }
         drawLights(P, sprite.lights, X + 1, Y + 1, now);
         if (outputPorts(e).length) drawChute(P, e);
       });
@@ -693,7 +705,15 @@ export class PxRenderer {
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;
-        this.queue.add('fx', () => drawGhost(ctx, sprite, X, Y, p.ok));
+        this.queue.add('fx', () => {
+          drawGhost(ctx, sprite, X, Y, p.ok);
+          if (def.key === 'puits' && fw === def.w && fh === def.h) {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, 0);
+            ctx.restore();
+          }
+        });
       } else if (def.kind === 'slab') {
         this.queue.add('fx', () => this.drawSlabGhost(f, p, fw, fh));
       }
