@@ -19,7 +19,9 @@ import { PixelFx, type BurstKind } from './fx';
 import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
-import { placeholderBuilder, placeholderItem, placeholderSprite } from './placeholders';
+import { placeholderBuilder, placeholderItem } from './placeholders';
+import { buildingSprite, prepareBuildings } from './buildings';
+import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
   canopySolid,
@@ -160,6 +162,7 @@ function drawChute(P: Pen, e: Ent): void {
 export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly era: Era;
   private readonly ground = new GroundLayer();
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
@@ -176,8 +179,10 @@ export class PxRenderer {
     if (!ctx) throw new Error('Contexte 2D indisponible');
     this.canvas = canvas;
     this.ctx = ctx;
+    this.era = readEra(window.location.search);
     prepareTrees();
     prepareOutcrops();
+    prepareBuildings(this.era);
     this.ground.prepare();
   }
 
@@ -433,7 +438,7 @@ export class PxRenderer {
     }
     for (const e of g.tickers) {
       if (e.x - 4 > x || e.x + e.w + 4 < x || e.y - 4 > y || e.y + e.h + 4 < y) continue;
-      const sprite = placeholderSprite(e.def, e.w, e.h);
+      const sprite = buildingSprite(e.def, e.w, e.h, this.era);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
@@ -602,7 +607,7 @@ export class PxRenderer {
     const { g, ctx, P, now, view } = f;
     for (const e of g.tickers) {
       if (!this.visible(view, e)) continue;
-      const sprite = placeholderSprite(e.def, e.w, e.h);
+      const sprite = buildingSprite(e.def, e.w, e.h, this.era);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
@@ -684,7 +689,7 @@ export class PxRenderer {
         continue;
       }
       const [fw, fh] = g.footprint(def, p.rot);
-      const sprite = placeholderSprite(def, fw, fh);
+      const sprite = buildingSprite(def, fw, fh, this.era);
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;
