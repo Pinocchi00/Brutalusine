@@ -213,7 +213,7 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
       else if (!logs && d >= 18) col = C.s3;
       else {
         const th = Math.atan2(vx * XX[0] + vy * XX[1], vx * E[0] + vy * E[1]);
-        const s = Math.floor(th * 12);
+        const s = Math.min(23, Math.floor(th * 48 / Math.PI));
         if (logs) {
           const r = ((s % 6) + 6) % 6;
           col = r === 5 ? C.ink2 : r === 0 ? C.e1 : r === 4 ? C.e3 : C.e2;
