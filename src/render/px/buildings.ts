@@ -23,8 +23,11 @@ import { eraFor, type Era } from './eras';
 /** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
 export interface EraArt {
   up: number;
-  draw(P: Pen, U: number, L: Light[]): void;
+  draw(P: Pen, U: number, L: Light[], lit?: boolean): void;
 }
+
+/** Les bâtiments dont le foyer peut s'éteindre. */
+const EXTINGUISHABLE = new Set(['bruleur', 'four', 'charbonniere']);
 
 /** Les dessins de la maquette, Bois puis Pierre, par clé de bâtiment. */
 const ARTS: Record<string, readonly [EraArt, EraArt]> = {
@@ -75,23 +78,43 @@ export function eraArts(key: string): readonly [EraArt, EraArt] | null {
 const sprites = new Map<string, Sprite>();
 
 /** Le sprite d'un bâtiment à cette ère : son vrai dessin, sinon son volume provisoire. */
-export function buildingSprite(def: BuildingDef, w: number, h: number, era: Era): Sprite | null {
+export function buildingSprite(def: BuildingDef, w: number, h: number, era: Era, lit = true): Sprite | null {
   const arts = eraArts(def.key);
   if (!arts || w !== def.w || h !== def.h) return placeholderSprite(def, w, h);
   const version = eraFor(era, 1);
-  const key = `${def.key}#${version}`;
+  const off = !lit && EXTINGUISHABLE.has(def.key);
+  const key = `${def.key}#${version}${off ? '#off' : ''}`;
   const cached = sprites.get(key);
   if (cached) return cached;
   const art = arts[version - 1];
-  const sprite = build(def.w * 24, def.h * 24, art.up, art.draw);
+  const sprite = build(def.w * 24, def.h * 24, art.up, (P, U, L) => art.draw(P, U, off ? [] : L, !off));
   sprites.set(key, sprite);
   return sprite;
 }
 
-/** Dessine à l'avance tous les bâtiments de cette ère. */
+/** Le dessin complet d'un bâtiment pour son ombre et son aperçu : le Puits y garde sa corde et son seau. */
+export function buildingSilhouette(def: BuildingDef, w: number, h: number, era: Era): Sprite | null {
+  if (def.key !== 'puits' || w !== def.w || h !== def.h) return buildingSprite(def, w, h, era);
+  const version = eraFor(era, 1);
+  const key = `puits#${version}#silhouette`;
+  const cached = sprites.get(key);
+  if (cached) return cached;
+  const arts = eraArts(def.key);
+  if (!arts) return buildingSprite(def, w, h, era);
+  const art = arts[version - 1];
+  const draw = version === 1
+    ? (P: Pen, U: number, L: Light[]): void => puitsE1(P, U, L, false, false)
+    : (P: Pen, U: number, L: Light[]): void => puitsE2(P, U, L, false, false);
+  const sprite = build(def.w * 24, def.h * 24, art.up, draw);
+  sprites.set(key, sprite);
+  return sprite;
+}
+
+/** Dessine à l'avance tous les bâtiments de cette ère, allumés et éteints. */
 export function prepareBuildings(era: Era): void {
   for (const def of BUILDINGS) {
     if (!eraArts(def.key)) continue;
     buildingSprite(def, def.w, def.h, era);
+    buildingSprite(def, def.w, def.h, era, false);
   }
 }

@@ -3,9 +3,14 @@
  * Un faux crayon enregistre les rectangles et les traits, sans aucune API du navigateur.
  */
 import { describe, expect, it } from 'vitest';
-import { bucketDrop, drawPuitsMotion, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
+import { bucketDrop, drawPuitsMotion, isBurning, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
 import { puitsE1, puitsE2 } from '../src/render/px/artWorks';
+import { bruleurE1, bruleurE2 } from '../src/render/px/artFirst';
+import { fourE2 } from '../src/render/px/artStone';
+import { B } from '../src/sim/data';
+import { Ent, Status } from '../src/sim/ent';
 import type { Pen } from '../src/render/px/pen';
+import type { Light } from '../src/render/px/sprite';
 
 /** Un rectangle enregistré par le faux crayon. */
 interface Rect {
@@ -43,6 +48,42 @@ function fakePen(): { P: Pen; rects: Rect[]; lines: Line[] } {
 function hasRect(rects: readonly Rect[], a: number, b: number, w: number, h: number): boolean {
   return rects.some((rect) => rect.a === a && rect.b === b && rect.w === w && rect.h === h);
 }
+
+describe('isBurning', () => {
+  it('suit le statut d’une machine, même en fin de cycle', () => {
+    const machine = new Ent(1, B.charbonniere, 0, 0, 0, 2, 2);
+    machine.status = Status.Working;
+    machine.working = false;
+    expect(isBurning(machine)).toBe(true);
+    for (const status of [Status.NoInput, Status.Blocked, Status.NoPower]) {
+      machine.status = status;
+      machine.working = true;
+      expect(isBurning(machine)).toBe(false);
+    }
+  });
+
+  it('suit le statut d’un générateur', () => {
+    const generator = new Ent(2, B.bruleur, 0, 0, 0, 2, 2);
+    generator.status = Status.Working;
+    expect(isBurning(generator)).toBe(true);
+    generator.status = Status.NoInput;
+    expect(isBurning(generator)).toBe(false);
+  });
+});
+
+describe('les foyers éteints', () => {
+  it('n’émettent aucune lumière, et un seul feu allumés', () => {
+    for (const draw of [bruleurE1, bruleurE2, fourE2]) {
+      const off: Light[] = [];
+      draw(fakePen().P, 0, off, false);
+      expect(off).toHaveLength(0);
+      const on: Light[] = [];
+      draw(fakePen().P, 0, on, true);
+      expect(on).toHaveLength(1);
+      expect(on[0].k).toBe('fire');
+    }
+  });
+});
 
 describe('bucketDrop', () => {
   it('part en haut, descend à fond au milieu et revient en haut', () => {
@@ -100,8 +141,18 @@ describe('drawPuitsMotion', () => {
   it('tourne les huit rayons de la roue de Pierre', () => {
     const two = fakePen();
     drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
-    expect(two.lines).toHaveLength(8);
-    expect(hasRect(two.rects, 46, 16, 1, 62)).toBe(true);
+    expect(two.lines).toHaveLength(9);
+    expect(hasRect(two.rects, 46, 23, 1, 52)).toBe(true);
+  });
+
+  it('redessine les montants par-dessus la corde et le seau', () => {
+    const one = fakePen();
+    drawPuitsMotion(one.P, 1, 0, 0, 10, 30);
+    expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 15, y1: 68 });
+    expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 59, y1: 66 });
+    const two = fakePen();
+    drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
+    expect(two.lines).toContainEqual({ x0: 58, y0: 98, x1: 42, y1: 22 });
   });
 });
 

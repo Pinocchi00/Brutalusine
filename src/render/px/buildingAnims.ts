@@ -2,12 +2,19 @@
  * Les animations propres aux bâtiments : le seau du Puits et les évents de fumée.
  * Tout est pur et ne dépend que de la progression de la simulation, jamais du temps.
  */
+import type { Ent } from '../../sim/ent';
+import { Status } from '../../sim/ent';
 import type { Era } from './eras';
 import { C } from './palette';
 import type { Pen } from './pen';
 
 /** Le tour complet d'un cycle, en radians. */
 const TAU = Math.PI * 2;
+
+/** Vrai si la machine brûle : son statut est `Working`, y compris quand `working` retombe en fin de cycle. */
+export function isBurning(e: Ent): boolean {
+  return e.status === Status.Working;
+}
 
 /** Le nombre de pas d'un minerai, la durée d'un cycle du Puits. */
 const CYCLE = 60;
@@ -55,11 +62,14 @@ export function drawPuitsMotion(P: Pen, era: Era, X: number, Y: number, up: numb
     const drop = bucketDrop(progress, 8);
     P.r(X + 36, Y + up - 3, 1, 34 + drop, C.c3);
     bucketE1(P, X, Y + up, drop);
+    P.line(X + 36, Y + up - 6, X + 15, Y + up + 58, C.e2, 2);
+    P.line(X + 36, Y + up - 6, X + 59, Y + up + 56, C.e2, 2);
     return;
   }
   const drop = bucketDrop(progress, 10);
-  P.r(X + 46, Y + up - 26, 1, 52 + drop, C.c3);
+  P.r(X + 46, Y + up - 19, 1, 42 + drop, C.c3);
   bucketE2(P, X, Y + up, drop);
+  P.line(X + 58, Y + up + 56, X + 42, Y + up - 20, C.e2, 2);
   const cx = X + 36;
   const cy = Y + up - 28;
   const angle = wheelAngle(progress);

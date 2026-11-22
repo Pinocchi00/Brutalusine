@@ -142,7 +142,7 @@ export function scierieE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 1 · un foyer au creux d'un cercle de bûches, un lit de braises et de courtes flammes. */
-export function bruleurE1(P: Pen, U: number, L: Light[]): void {
+export function bruleurE1(P: Pen, U: number, L: Light[], lit = true): void {
   const r = rng(101);
 
   // des bûches empilées au nord, en arrière-plan
@@ -168,28 +168,37 @@ export function bruleurE1(P: Pen, U: number, L: Light[]): void {
     logEnds(P, [[x - tx, y - ty], [x + tx, y + ty]]);
   }
 
-  // le creux : cendre et braises
+  // le creux : cendre froide quand le foyer est éteint, braises sinon
   P.ell(24, U + 26, 14, 9, C.ink2);
-  P.ell(24, U + 26, 12, 7, C.st4);
-  for (let k = 0; k < 34; k++) {
-    const a = r() * Math.PI * 2, d = Math.sqrt(r());
-    P.p(24 + Math.cos(a) * 11 * d, U + 26 + Math.sin(a) * 6 * d, r() < 0.5 ? C.o4 : r() < 0.7 ? C.o3 : C.o2);
-  }
-  P.ell(24, U + 27, 7, 3, C.o4);
+  if (!lit) {
+    for (let k = 0; k < 16; k++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r());
+      P.p(24 + Math.cos(a) * 11 * d, U + 26 + Math.sin(a) * 6 * d, C.st3);
+    }
+  } else {
+    P.ell(24, U + 26, 12, 7, C.st4);
+    for (let k = 0; k < 34; k++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r());
+      P.p(24 + Math.cos(a) * 11 * d, U + 26 + Math.sin(a) * 6 * d, r() < 0.5 ? C.o4 : r() < 0.7 ? C.o3 : C.o2);
+    }
+    P.ell(24, U + 27, 7, 3, C.o4);
 
-  // les flammes basses
-  for (const [x, h, w] of [[19, 6, 3], [23, 9, 4], [27, 7, 3], [31, 5, 2]] as const) {
-    P.line(x, U + 27, x, U + 27 - h, C.o4, w);
-    P.line(x, U + 27, x, U + 27 - h + 2, C.o3, Math.max(1, w - 1));
-    P.line(x, U + 26, x, U + 27 - h + 3, C.o2, 1);
+    // les flammes basses
+    for (const [x, h, w] of [[19, 6, 3], [23, 9, 4], [27, 7, 3], [31, 5, 2]] as const) {
+      P.line(x, U + 27, x, U + 27 - h, C.o4, w);
+      P.line(x, U + 27, x, U + 27 - h + 2, C.o3, Math.max(1, w - 1));
+      P.line(x, U + 26, x, U + 27 - h + 3, C.o2, 1);
+    }
+    P.ell(24, U + 25, 3, 2, C.o1);
+    P.p(24, U + 25, C.o0);
+    L.push({ k: 'fire', x: 18, y: U + 21, w: 12 });
   }
-  P.ell(24, U + 25, 3, 2, C.o1);
-  P.p(24, U + 25, C.o0);
-  L.push({ k: 'fire', x: 18, y: U + 21, w: 12 });
 }
 
 /** Ère 2 · un poêle voûté de pierre, une porte à feu sous un arc, une cheminée de pierre. */
-export function bruleurE2(P: Pen, U: number, L: Light[]): void {
+export function bruleurE2(P: Pen, U: number, L: Light[], lit = true): void {
   // la cheminée de pierre, en arrière-plan
   P.r(31, U - 38, 10, 52, C.st2);
   P.r(31, U - 38, 2, 52, C.st1);
@@ -223,12 +232,18 @@ export function bruleurE2(P: Pen, U: number, L: Light[]): void {
   P.ell(24, U + 31, 9, 5, C.st0);
   P.r(16, U + 31, 16, 14, C.ink2);
   P.ell(24, U + 32, 8, 4, C.ink2);
-  P.r(18, U + 37, 12, 8, C.o4);
-  P.r(19, U + 38, 10, 7, C.o3);
-  P.r(20, U + 40, 8, 5, C.o2);
-  P.r(22, U + 42, 4, 3, C.o1);
-  P.p(23, U + 43, C.o0);
-  L.push({ k: 'fire', x: 18, y: U + 39, w: 12 });
+  if (!lit) {
+    for (const [x, y] of [[19, U + 42], [22, U + 39], [25, U + 43], [28, U + 40], [30, U + 44]]) {
+      P.p(x, y, C.st3);
+    }
+  } else {
+    P.r(18, U + 37, 12, 8, C.o4);
+    P.r(19, U + 38, 10, 7, C.o3);
+    P.r(20, U + 40, 8, 5, C.o2);
+    P.r(22, U + 42, 4, 3, C.o1);
+    P.p(23, U + 43, C.o0);
+    L.push({ k: 'fire', x: 18, y: U + 39, w: 12 });
+  }
 
   // l'âtre déborde un peu au pied
   P.r(13, U + 45, 22, 3, C.st4);

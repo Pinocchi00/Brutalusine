@@ -20,8 +20,8 @@ import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem } from './placeholders';
-import { buildingSprite, prepareBuildings } from './buildings';
-import { drawPuitsMotion, smokeVent } from './buildingAnims';
+import { buildingSilhouette, buildingSprite, prepareBuildings } from './buildings';
+import { drawPuitsMotion, isBurning, smokeVent } from './buildingAnims';
 import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -174,6 +174,7 @@ export class PxRenderer {
   private bufW = 0;
   private bufH = 0;
   private now = 0;
+  private lastSmokeTick = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -440,7 +441,7 @@ export class PxRenderer {
     }
     for (const e of g.tickers) {
       if (e.x - 4 > x || e.x + e.w + 4 < x || e.y - 4 > y || e.y + e.h + 4 < y) continue;
-      const sprite = buildingSprite(e.def, e.w, e.h, this.era);
+      const sprite = buildingSilhouette(e.def, e.w, e.h, this.era);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
@@ -609,17 +610,17 @@ export class PxRenderer {
     const { g, ctx, P, now, view } = f;
     for (const e of g.tickers) {
       if (!this.visible(view, e)) continue;
-      const sprite = buildingSprite(e.def, e.w, e.h, this.era);
+      const burning = isBurning(e);
+      const sprite = buildingSprite(e.def, e.w, e.h, this.era, burning);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
       const foot = (e.y + e.h) * TILE_PX;
-      if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
+      const silhouette = buildingSilhouette(e.def, e.w, e.h, this.era) ?? sprite;
+      if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, silhouette, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       const vent = smokeVent(e.def.key, this.era, sprite.up);
-      // Un générateur ne remplit jamais `working` : c'est son statut qui dit qu'il brûle.
-      const burning = e.working || (e.def.kind === 'generator' && e.status === Status.Working);
-      if (vent && burning && Math.random() < f.opts.dt * 4) {
+      if (vent && burning && g.tick !== this.lastSmokeTick && Math.random() < f.opts.dt * 4) {
         const color = vent.color === 'dark' ? C.s3 : C.c2;
         this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
       }
@@ -633,6 +634,7 @@ export class PxRenderer {
       });
       f.shown.push({ e, sprite });
     }
+    this.lastSmokeTick = g.tick;
   }
 
   /** Ajoute les bâtisseurs, triés avec le reste par leur pied. */
@@ -701,19 +703,11 @@ export class PxRenderer {
         continue;
       }
       const [fw, fh] = g.footprint(def, p.rot);
-      const sprite = buildingSprite(def, fw, fh, this.era);
+      const sprite = buildingSilhouette(def, fw, fh, this.era);
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;
-        this.queue.add('fx', () => {
-          drawGhost(ctx, sprite, X, Y, p.ok);
-          if (def.key === 'puits' && fw === def.w && fh === def.h) {
-            ctx.save();
-            ctx.globalAlpha = 0.5;
-            drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, 0);
-            ctx.restore();
-          }
-        });
+        this.queue.add('fx', () => drawGhost(ctx, sprite, X, Y, p.ok));
       } else if (def.kind === 'slab') {
         this.queue.add('fx', () => this.drawSlabGhost(f, p, fw, fh));
       }

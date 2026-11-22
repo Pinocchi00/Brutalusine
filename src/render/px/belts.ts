@@ -171,6 +171,7 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
   const logs = era === 1;
   const ph = logs ? logPhase(off) : leatherPhase(off);
   const forward = outD === 0 || outD === 1;
+  const spin = logs && !forward ? (5 - ph) % 5 : ph;
   if (inD === outD) {
     const horiz = outD % 2 === 0;
     for (let j = 0; j < T; j++) {
@@ -183,7 +184,7 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
         else if (logs && (a === 18 || a === 19)) col = C.e3;
         else if (!logs && (a === 4 || a === 5)) col = C.s1;
         else if (!logs && (a === 18 || a === 19)) col = C.s3;
-        else if (a > 5 && a < 18) col = logs ? logColor(a, b, ph) : leatherColor(forward ? b - ph : b + ph);
+        else if (a > 5 && a < 18) col = logs ? logColor(a, b, spin) : leatherColor(forward ? b - ph : b + ph);
         if (col) P.p(X + i, Y + j, col);
         if (!logs && (a === 7 || a === 16)) {
           const s = forward ? b - ph : b + ph;
@@ -212,7 +213,7 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
       else if (!logs && d >= 18) col = C.s3;
       else {
         const th = Math.atan2(vx * XX[0] + vy * XX[1], vx * E[0] + vy * E[1]);
-        const s = Math.floor(th * 12);
+        const s = Math.min(23, Math.floor(th * 48 / Math.PI));
         if (logs) {
           const r = ((s % 6) + 6) % 6;
           col = r === 5 ? C.ink2 : r === 0 ? C.e1 : r === 4 ? C.e3 : C.e2;
