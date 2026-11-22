@@ -163,7 +163,7 @@ export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly era: Era;
-  private readonly ground = new GroundLayer();
+  private readonly ground: GroundLayer;
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
   private readonly lit: LitBuilding[] = [];
@@ -180,6 +180,7 @@ export class PxRenderer {
     this.canvas = canvas;
     this.ctx = ctx;
     this.era = readEra(window.location.search);
+    this.ground = new GroundLayer({ slabEra: this.era });
     prepareTrees();
     prepareOutcrops();
     prepareBuildings(this.era);
@@ -275,7 +276,7 @@ export class PxRenderer {
   /** Ajoute les tapis et les objets qui glissent dessus. */
   private addBelts(f: Frame): void {
     const { g, view, ctx } = f;
-    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem));
+    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem, this.era));
   }
 
   /** Ajoute les arbres, les pousses et les gisements visibles. */
