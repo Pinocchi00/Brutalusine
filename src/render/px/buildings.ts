@@ -9,7 +9,14 @@ import { build, type Light, type Sprite } from './sprite';
 import { placeholderSprite } from './placeholders';
 import { towerE1, towerE2 } from './artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from './artWorks';
-import { bruleurE1, bruleurE2, scierieE1, scierieE2 } from './artFirst';
+import {
+  aiguillageE1,
+  aiguillageE2,
+  bruleurE1,
+  bruleurE2,
+  scierieE1,
+  scierieE2,
+} from './artFirst';
 import { fourE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
@@ -44,6 +51,10 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
   bruleur: [
     { up: 10, draw: bruleurE1 },
     { up: 40, draw: bruleurE2 },
+  ],
+  aiguillage: [
+    { up: 6, draw: aiguillageE1 },
+    { up: 6, draw: aiguillageE2 },
   ],
   four: [
     { up: 44, draw: fourE2 },

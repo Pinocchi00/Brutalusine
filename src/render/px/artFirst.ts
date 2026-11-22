@@ -235,3 +235,57 @@ export function bruleurE2(P: Pen, U: number, L: Light[]): void {
   P.r(13, U + 45, 22, 1, C.st3);
 }
 
+/** Ère 1 · un tourniquet de trois planches à plat sur un plateau, autour de son pivot. */
+export function aiguillageE1(P: Pen, U: number, L: Light[]): void {
+  // le plateau de bois au sol
+  P.ell(12, U + 17, 10, 5, C.e3);
+  P.ell(12, U + 16, 10, 5, C.e2);
+  P.ell(11, U + 15, 7, 3, C.e1);
+
+  // les trois bras de planches, posés à plat
+  const arms: [number, number][] = [[12, U + 2], [3, U + 17], [21, U + 17]];
+  for (const [x, y] of arms) stroke(P, x, y, 12, U + 11, 3, C.e3);
+  for (const [x, y] of arms) {
+    stroke(P, x, y - 0.5, 12, U + 10.5, 2, C.e1);
+    P.r(x - 1, y - 1, 3, 2, C.e4);
+  }
+
+  // le pivot : une courte tige et son boulon
+  P.r(10, U + 7, 4, 7, C.e2);
+  P.r(10, U + 7, 1, 7, C.e1);
+  P.r(13, U + 7, 1, 7, C.e3);
+  P.disc(12, U + 10, 3, C.s3);
+  P.disc(12, U + 10, 2, C.s2);
+  P.p(12, U + 9, C.s0);
+  P.ell(12, U + 6, 3, 2, C.s3);
+  P.p(11, U + 6, C.s1);
+}
+
+/** Ère 2 · un socle de pierre et un volet de bois qui bascule sur son axe. */
+export function aiguillageE2(P: Pen, U: number, L: Light[]): void {
+  // le socle de pierre
+  box(P, 1, U + 14, 22, 4, 6, STONE, false);
+  courses(P, 1, U + 18, 22, 6, 71, STONE_F);
+  P.r(1, U + 14, 22, 1, C.st0);
+  P.r(1, U + 14, 1, 4, C.st0);
+  P.r(22, U + 15, 1, 3, C.st3);
+
+  // le volet : un panneau de planches qui bascule
+  for (let i = 0; i < 14; i++) {
+    const x = 5 + i;
+    const y = U + 15 - Math.round(i * 0.55);
+    P.r(x, y - 11, 1, 12, i % 4 === 0 ? C.e2 : C.e1);
+    P.r(x, y - 11, 1, 1, C.e0);
+    P.r(x, y, 1, 1, C.e3);
+  }
+  P.line(5, U + 4, 18, U - 4, C.e0);
+  P.line(5, U + 16, 18, U + 8, C.e4);
+
+  // le montant de pierre et l'axe du volet
+  P.r(17, U - 1, 4, 15, C.st3);
+  P.r(17, U - 1, 1, 15, C.st2);
+  P.r(16, U - 3, 6, 2, C.s3);
+  P.p(17, U - 3, C.s1);
+  P.r(14, U - 1, 8, 2, C.s3);
+  P.r(17, U + 6, 2, 2, C.s1);
+}
