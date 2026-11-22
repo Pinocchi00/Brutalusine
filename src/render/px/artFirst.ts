@@ -237,28 +237,31 @@ export function bruleurE2(P: Pen, U: number, L: Light[]): void {
 
 /** Ère 1 · un tourniquet de trois planches à plat sur un plateau, autour de son pivot. */
 export function aiguillageE1(P: Pen, U: number, L: Light[]): void {
-  // le plateau de bois au sol
-  P.ell(12, U + 17, 10, 5, C.e3);
-  P.ell(12, U + 16, 10, 5, C.e2);
-  P.ell(11, U + 15, 7, 3, C.e1);
-
-  // les trois bras de planches, posés à plat
-  const arms: [number, number][] = [[12, U + 2], [3, U + 17], [21, U + 17]];
-  for (const [x, y] of arms) stroke(P, x, y, 12, U + 11, 3, C.e3);
-  for (const [x, y] of arms) {
-    stroke(P, x, y - 0.5, 12, U + 10.5, 2, C.e1);
-    P.r(x - 1, y - 1, 3, 2, C.e4);
+  // le socle rond, bas, en terre battue
+  P.ell(12, U + 15, 10, 8, C.e4);
+  P.ell(12, U + 13, 10, 8, C.e3);
+  P.ell(11, U + 12, 8, 6, C.sd3);
+  P.ell(10, U + 11, 4, 2, C.sd2);
+  for (const [x, y] of [[5, U + 10], [18, U + 12], [8, U + 19], [16, U + 20], [21, U + 15]]) {
+    P.p(x, y, C.e4);
   }
 
-  // le pivot : une courte tige et son boulon
-  P.r(10, U + 7, 4, 7, C.e2);
-  P.r(10, U + 7, 1, 7, C.e1);
-  P.r(13, U + 7, 1, 7, C.e3);
-  P.disc(12, U + 10, 3, C.s3);
-  P.disc(12, U + 10, 2, C.s2);
-  P.p(12, U + 9, C.s0);
-  P.ell(12, U + 6, 3, 2, C.s3);
-  P.p(11, U + 6, C.s1);
+  // trois planches à 120 degrés, posées à plat
+  const arms: [number, number][] = [[12, U + 4], [19.8, U + 17.5], [4.2, U + 17.5]];
+  const cols = [C.ink2, C.e0, C.e1, C.e1, C.e1, C.e3, C.ink2];
+  for (const [ex, ey] of arms) {
+    const d = Math.hypot(ex - 12, ey - (U + 13));
+    const ux = (ex - 12) / d, uy = (ey - (U + 13)) / d;
+    const px = -uy, py = ux;
+    for (let k = -3; k <= 3; k++) {
+      P.line(12 + px * k, U + 13 + py * k, ex + px * k, ey + py * k, cols[k + 3]);
+    }
+    P.line(ex + ux + px * -3.5, ey + uy + py * -3.5, ex + ux + px * 3.5, ey + uy + py * 3.5, C.ink2);
+  }
+
+  // le pivot central, dessiné en dernier
+  P.disc(12, U + 13, 1.5, C.s2);
+  P.p(12, U + 12, C.s0);
 }
 
 /** Ère 2 · un socle de pierre et un volet de bois qui bascule sur son axe. */
