@@ -21,6 +21,7 @@ import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem } from './placeholders';
 import { buildingSprite, prepareBuildings } from './buildings';
+import { drawPuitsMotion } from './buildingAnims';
 import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -617,6 +618,9 @@ export class PxRenderer {
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       this.queue.addTall(foot, X, () => {
         ctx.drawImage(sprite.img, X, Y);
+        if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {
+          drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, e.progress);
+        }
         drawLights(P, sprite.lights, X + 1, Y + 1, now);
         if (outputPorts(e).length) drawChute(P, e);
       });

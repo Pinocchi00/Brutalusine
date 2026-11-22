@@ -33,8 +33,8 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
     { up: 30, draw: towerE2 },
   ],
   puits: [
-    { up: 10, draw: (P, U, L) => puitsE1(P, U, L, false) },
-    { up: 42, draw: (P, U, L) => puitsE2(P, U, L, false) },
+    { up: 10, draw: (P, U, L) => puitsE1(P, U, L, false, true) },
+    { up: 42, draw: (P, U, L) => puitsE2(P, U, L, false, true) },
   ],
   charbonniere: [
     { up: 2, draw: kilnE1 },
