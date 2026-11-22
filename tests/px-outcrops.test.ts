@@ -355,7 +355,8 @@ describe('masque des cailloux', () => {
   });
 });
 
-describe('le coup de pioche', () => {  it('ne trempe que de -1, 0 ou 1 et retombe à zéro dès 0,28 s', () => {
+describe('le coup de pioche', () => {
+  it('ne trempe que de -1, 0 ou 1 et retombe à zéro dès 0,28 s', () => {
     for (let i = 0; i <= 1000; i++) {
       const shake = rockShake(i / 1000);
       expect([-1, 0, 1]).toContain(shake);
