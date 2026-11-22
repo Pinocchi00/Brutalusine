@@ -2,12 +2,19 @@
  * Les animations propres aux bâtiments : le seau du Puits et les évents de fumée.
  * Tout est pur et ne dépend que de la progression de la simulation, jamais du temps.
  */
+import type { Ent } from '../../sim/ent';
+import { Status } from '../../sim/ent';
 import type { Era } from './eras';
 import { C } from './palette';
 import type { Pen } from './pen';
 
 /** Le tour complet d'un cycle, en radians. */
 const TAU = Math.PI * 2;
+
+/** Vrai si la machine brûle : une machine en marche, ou un générateur dont le statut est `Working`. */
+export function isBurning(e: Ent): boolean {
+  return e.working || (e.def.kind === 'generator' && e.status === Status.Working);
+}
 
 /** Le nombre de pas d'un minerai, la durée d'un cycle du Puits. */
 const CYCLE = 60;

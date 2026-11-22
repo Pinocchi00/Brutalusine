@@ -3,9 +3,14 @@
  * Un faux crayon enregistre les rectangles et les traits, sans aucune API du navigateur.
  */
 import { describe, expect, it } from 'vitest';
-import { bucketDrop, drawPuitsMotion, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
+import { bucketDrop, drawPuitsMotion, isBurning, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
 import { puitsE1, puitsE2 } from '../src/render/px/artWorks';
+import { bruleurE1, bruleurE2 } from '../src/render/px/artFirst';
+import { fourE2 } from '../src/render/px/artStone';
+import { B } from '../src/sim/data';
+import { Ent, Status } from '../src/sim/ent';
 import type { Pen } from '../src/render/px/pen';
+import type { Light } from '../src/render/px/sprite';
 
 /** Un rectangle enregistré par le faux crayon. */
 interface Rect {
@@ -43,6 +48,38 @@ function fakePen(): { P: Pen; rects: Rect[]; lines: Line[] } {
 function hasRect(rects: readonly Rect[], a: number, b: number, w: number, h: number): boolean {
   return rects.some((rect) => rect.a === a && rect.b === b && rect.w === w && rect.h === h);
 }
+
+describe('isBurning', () => {
+  it('suit l’état d’une machine', () => {
+    const machine = new Ent(1, B.charbonniere, 0, 0, 0, 2, 2);
+    machine.working = true;
+    expect(isBurning(machine)).toBe(true);
+    machine.working = false;
+    expect(isBurning(machine)).toBe(false);
+  });
+
+  it('suit le statut d’un générateur', () => {
+    const generator = new Ent(2, B.bruleur, 0, 0, 0, 2, 2);
+    generator.status = Status.Working;
+    expect(isBurning(generator)).toBe(true);
+    generator.status = Status.NoInput;
+    expect(isBurning(generator)).toBe(false);
+  });
+});
+
+describe('les foyers éteints', () => {
+  it('n’émettent aucune lumière, et un seul feu allumés', () => {
+    for (const draw of [bruleurE1, bruleurE2, fourE2]) {
+      const off: Light[] = [];
+      draw(fakePen().P, 0, off, false);
+      expect(off).toHaveLength(0);
+      const on: Light[] = [];
+      draw(fakePen().P, 0, on, true);
+      expect(on).toHaveLength(1);
+      expect(on[0].k).toBe('fire');
+    }
+  });
+});
 
 describe('bucketDrop', () => {
   it('part en haut, descend à fond au milieu et revient en haut', () => {

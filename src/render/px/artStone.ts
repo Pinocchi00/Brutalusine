@@ -10,7 +10,7 @@ import { rng } from './noise';
 import { box, courses, logEnds, moss } from './volumes';
 
 /** Ère 2 · un corps de pierre, une gueule voûtée avec son feu, une cheminée au nord-est, des briques devant. */
-export function fourE2(P: Pen, U: number, L: Light[]): void {
+export function fourE2(P: Pen, U: number, L: Light[], lit = true): void {
   courses(P, 31, 2, 12, U + 2, 41, STONE_F);
   P.r(31, 2, 2, U + 2, C.st1);
   P.r(40, 2, 3, U + 2, C.st3);
@@ -39,11 +39,17 @@ export function fourE2(P: Pen, U: number, L: Light[]): void {
   P.r(12, U + 30, 2, 10, C.st1);
   P.r(35, U + 30, 2, 10, C.st1);
 
-  P.r(16, U + 30, 17, 10, C.o4);
-  P.r(17, U + 32, 15, 8, C.o3);
-  P.r(19, U + 34, 11, 6, C.o2);
-  P.r(21, U + 36, 7, 4, C.o1);
-  L.push({ k: 'fire', x: 18, y: U + 35, w: 12 });
+  if (lit) {
+    P.r(16, U + 30, 17, 10, C.o4);
+    P.r(17, U + 32, 15, 8, C.o3);
+    P.r(19, U + 34, 11, 6, C.o2);
+    P.r(21, U + 36, 7, 4, C.o1);
+    L.push({ k: 'fire', x: 18, y: U + 35, w: 12 });
+  } else {
+    for (const [x, y] of [[18, U + 34], [21, U + 32], [24, U + 36], [27, U + 33], [30, U + 35]]) {
+      P.p(x, y, C.st3);
+    }
+  }
 
   moss(P, 5, U + 36, 38, 4, 17, 14);
   moss(P, 6, U - 2, 38, 4, 23, 10);

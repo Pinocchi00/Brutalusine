@@ -21,7 +21,7 @@ import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem } from './placeholders';
 import { buildingSprite, prepareBuildings } from './buildings';
-import { drawPuitsMotion, smokeVent } from './buildingAnims';
+import { drawPuitsMotion, isBurning, smokeVent } from './buildingAnims';
 import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -609,7 +609,8 @@ export class PxRenderer {
     const { g, ctx, P, now, view } = f;
     for (const e of g.tickers) {
       if (!this.visible(view, e)) continue;
-      const sprite = buildingSprite(e.def, e.w, e.h, this.era);
+      const burning = isBurning(e);
+      const sprite = buildingSprite(e.def, e.w, e.h, this.era, burning);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
@@ -617,8 +618,6 @@ export class PxRenderer {
       if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       const vent = smokeVent(e.def.key, this.era, sprite.up);
-      // Un générateur ne remplit jamais `working` : c'est son statut qui dit qu'il brûle.
-      const burning = e.working || (e.def.kind === 'generator' && e.status === Status.Working);
       if (vent && burning && Math.random() < f.opts.dt * 4) {
         const color = vent.color === 'dark' ? C.s3 : C.c2;
         this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
