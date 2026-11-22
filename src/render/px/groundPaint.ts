@@ -4,6 +4,7 @@
  */
 import { CHUNK, FORD_TILE } from '../../sim/world';
 import { C } from './palette';
+import type { Era } from './eras';
 import { hash, rng, smooth, vnoise } from './noise';
 import { TILE_PX } from './view';
 
@@ -30,6 +31,8 @@ export interface GroundSource {
   readonly slab: ArrayLike<number>;
   /** 32×32 cases, indice `ly * 32 + lx`. */
   readonly loot: ArrayLike<number>;
+  /** L'ère des dalles : absente, la dalle de la maquette est peinte à l'identique. */
+  readonly slabEra?: Era;
 }
 
 /** Le nombre de coins d'un côté du champ de rivage. */
@@ -54,8 +57,8 @@ const RGB = {
   sd0: pack(C.sd0), sd1: pack(C.sd1), sd2: pack(C.sd2), sd3: pack(C.sd3),
   m1: pack(C.m1), m2: pack(C.m2), m3: pack(C.m3), m5: pack(C.m5),
   c0: pack(C.c0), c1: pack(C.c1), c2: pack(C.c2), c3: pack(C.c3), c4: pack(C.c4),
-  e0: pack(C.e0), e1: pack(C.e1), e2: pack(C.e2),
-  st0: pack(C.st0), st1: pack(C.st1), st3: pack(C.st3),
+  e0: pack(C.e0), e1: pack(C.e1), e2: pack(C.e2), e3: pack(C.e3), e4: pack(C.e4),
+  st0: pack(C.st0), st1: pack(C.st1), st2: pack(C.st2), st3: pack(C.st3), st4: pack(C.st4),
   s1: pack(C.s1), s3: pack(C.s3), ink: pack(C.ink),
 } as const;
 
@@ -552,12 +555,14 @@ function paintSlabDetails(
   ty1: number,
   slabAt: (lx: number, ly: number) => boolean,
 ): void {
+  const era = src.slabEra;
   for (let ty = ty0 - 1; ty < ty1; ty++) {
     const ly = ty - src.originY;
     for (let tx = tx0 - 1; tx < tx1; tx++) {
       const lx = tx - src.originX;
       if (!slabAt(lx, ly)) continue;
-      paintSlabTile(out, bounds, tx, ty, lx, ly, slabAt);
+      if (era === undefined) paintSlabTile(out, bounds, tx, ty, lx, ly, slabAt);
+      else paintEraSlabTile(out, bounds, tx, ty, lx, ly, slabAt, era);
     }
   }
 }
@@ -610,6 +615,169 @@ function paintSlabTile(
     for (let j = 0; j < TILE_PX; j += 3) {
       if (r() < 0.6) putWorld(out, bounds, X, Y + j, RGB.m3);
     }
+  }
+}
+
+/** Peint une dalle d'ère entière, par-dessus le fond, puis ses lèvres sud et est. */
+function paintEraSlabTile(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+  lx: number,
+  ly: number,
+  slabAt: (lx: number, ly: number) => boolean,
+  era: Era,
+): void {
+  if (era === 1) paintWoodSlabTile(out, bounds, tx, ty);
+  else paintStoneSlabTile(out, bounds, tx, ty);
+  paintEraSlabEdges(out, bounds, tx, ty, lx, ly, slabAt, era);
+}
+
+/** La hauteur d'un rondin de bois, en pixels. */
+const WOOD_LOG_PX = 6;
+
+/** Le nombre de rondins d'une case. */
+const WOOD_LOGS = 4;
+
+/** Peint quatre rondins fendus horizontaux, qui se prolongent d'une case à la voisine. */
+function paintWoodSlabTile(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+): void {
+  const X = tx * TILE_PX;
+  const Y = ty * TILE_PX;
+  const r = rng(tx * 17 + ty);
+  for (let log = 0; log < WOOD_LOGS; log++) {
+    const top = Y + log * WOOD_LOG_PX;
+    const body = (log & 1) === 0 ? RGB.e1 : RGB.e2;
+    fillWorld(out, bounds, X, top, TILE_PX, 1, RGB.e0);
+    fillWorld(out, bounds, X, top + 1, TILE_PX, 3, body);
+    for (let vein = 0; vein < 2; vein++) {
+      const vx = X + 1 + Math.floor(r() * (TILE_PX - 6));
+      const vy = top + 1 + Math.floor(r() * 3);
+      const vw = 2 + Math.floor(r() * 4);
+      fillWorld(out, bounds, vx, vy, vw, 1, RGB.e3);
+    }
+    fillWorld(out, bounds, X, top + 4, TILE_PX, 1, RGB.e3);
+    fillWorld(out, bounds, X, top + 5, TILE_PX, 1, RGB.e4);
+    if (r() < 0.6) paintLogJoint(out, bounds, X, top, Math.floor(r() * (TILE_PX - 4)));
+  }
+}
+
+/** Peint le joint d'extrémité d'un rondin, avec son petit cerne clair. */
+function paintLogJoint(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  X: number,
+  top: number,
+  dx: number,
+): void {
+  const x = X + 2 + dx;
+  fillWorld(out, bounds, x, top, 1, WOOD_LOG_PX - 1, RGB.e4);
+  putWorld(out, bounds, x + 1, top + 1, RGB.e0);
+  putWorld(out, bounds, x + 1, top + 2, RGB.e0);
+}
+
+/** La hauteur d'un rang de pavés, joint compris. */
+const STONE_ROW_PX = 8;
+
+/** La hauteur d'un pavé dans son rang, le reste étant le joint. */
+const STONE_PAVER_PX = 7;
+
+/** Le nombre de rangs de pavés d'une case. */
+const STONE_ROWS = 3;
+
+/** Peint trois rangs de pavés irréguliers, décalés, avec de la mousse dans certains joints. */
+function paintStoneSlabTile(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+): void {
+  const X = tx * TILE_PX;
+  const Y = ty * TILE_PX;
+  const r = rng(tx * 17 + ty);
+  for (let row = 0; row < STONE_ROWS; row++) {
+    const top = Y + row * STONE_ROW_PX;
+    fillWorld(out, bounds, X, top, TILE_PX, STONE_ROW_PX, RGB.st4);
+    const offset = Math.floor(r() * 6);
+    let x = X - offset;
+    while (x < X + TILE_PX) {
+      const w = 6 + Math.floor(r() * 5);
+      const left = Math.max(X, x);
+      const right = Math.min(X + TILE_PX, x + w);
+      if (right > left) {
+        const face = r() < 0.5 ? RGB.st1 : RGB.st2;
+        paintPaver(out, bounds, left, top, right - left, face);
+        if (right < X + TILE_PX && r() < 0.34) paintJointMoss(out, bounds, right, top, r);
+      }
+      x += w + 1;
+    }
+  }
+}
+
+/** Peint un pavé : face, arêtes claires au nord et à l'ouest, ombre au sud et à l'est. */
+function paintPaver(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  x: number,
+  y: number,
+  w: number,
+  face: number,
+): void {
+  fillWorld(out, bounds, x, y, w, STONE_PAVER_PX, face);
+  fillWorld(out, bounds, x, y, w, 1, RGB.st0);
+  fillWorld(out, bounds, x, y, 1, STONE_PAVER_PX, RGB.st0);
+  fillWorld(out, bounds, x, y + STONE_PAVER_PX - 1, w, 1, RGB.st3);
+  fillWorld(out, bounds, x + w - 1, y, 1, STONE_PAVER_PX, RGB.st3);
+}
+
+/** Pose quelques pixels de mousse sur la colonne d'un joint de pavés. */
+function paintJointMoss(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  x: number,
+  y: number,
+  r: () => number,
+): void {
+  const count = 2 + Math.floor(r() * 3);
+  for (let k = 0; k < count; k++) {
+    const py = y + 1 + Math.floor(r() * (STONE_ROW_PX - 2));
+    const color = r() < 0.5 ? RGB.m2 : RGB.m3;
+    putWorld(out, bounds, x, py, color);
+  }
+}
+
+/** Peint la lèvre de trois pixels et l'ombre des bords sud et est d'une dalle d'ère. */
+function paintEraSlabEdges(
+  out: Uint8ClampedArray,
+  bounds: Bounds,
+  tx: number,
+  ty: number,
+  lx: number,
+  ly: number,
+  slabAt: (lx: number, ly: number) => boolean,
+  era: Era,
+): void {
+  const X = tx * TILE_PX;
+  const Y = ty * TILE_PX;
+  const light = era === 1 ? RGB.e1 : RGB.st1;
+  const mid = era === 1 ? RGB.e2 : RGB.st2;
+  const dark = era === 1 ? RGB.e3 : RGB.st3;
+  if (!slabAt(lx, ly + 1)) {
+    fillWorld(out, bounds, X, Y + TILE_PX - 3, TILE_PX, 1, light);
+    fillWorld(out, bounds, X, Y + TILE_PX - 2, TILE_PX, 1, mid);
+    fillWorld(out, bounds, X, Y + TILE_PX - 1, TILE_PX, 1, dark);
+    fillWorld(out, bounds, X, Y + TILE_PX, TILE_PX, 1, RGB.m5);
+  }
+  if (!slabAt(lx + 1, ly)) {
+    fillWorld(out, bounds, X + TILE_PX - 3, Y, 1, TILE_PX, light);
+    fillWorld(out, bounds, X + TILE_PX - 2, Y, 1, TILE_PX, mid);
+    fillWorld(out, bounds, X + TILE_PX - 1, Y, 1, TILE_PX, dark);
+    fillWorld(out, bounds, X + TILE_PX, Y, 1, TILE_PX, RGB.m5);
   }
 }
 
