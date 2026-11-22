@@ -3,10 +3,11 @@
  * Dessin inventé dans le style de la maquette `docs/maquettes/heure-doree.html`.
  */
 import type { Pen } from './pen';
+import { stroke } from './pen';
 import type { Light } from './sprite';
 import { C, STONE, STONE_F } from './palette';
 import { rng } from './noise';
-import { box, courses, logEnds } from './volumes';
+import { box, courses, logEnds, moss } from './volumes';
 
 /** Ère 1 · un tronc lisible sur deux chevalets en X, une scie verticale, quatre poteaux et un auvent. */
 export function scierieE1(P: Pen, U: number, L: Light[]): void {
@@ -138,5 +139,99 @@ export function scierieE2(P: Pen, U: number, L: Light[]): void {
   for (let k = 0; k < 22; k++) {
     P.p(6 + Math.floor(r() * 37), U + 40 + Math.floor(r() * 6), r() < 0.6 ? C.sd1 : C.sd0);
   }
+}
+
+/** Ère 1 · un foyer au creux d'un cercle de bûches, un lit de braises et de courtes flammes. */
+export function bruleurE1(P: Pen, U: number, L: Light[]): void {
+  const r = rng(101);
+
+  // des bûches empilées au nord, en arrière-plan
+  P.r(12, U + 5, 24, 4, C.e3);
+  P.r(12, U + 5, 24, 1, C.e2);
+  P.r(12, U + 8, 24, 1, C.e4);
+  P.r(15, U + 9, 20, 4, C.e3);
+  P.r(15, U + 9, 20, 1, C.e2);
+  P.r(15, U + 12, 20, 1, C.e4);
+  logEnds(P, [[12, U + 6], [36, U + 6], [15, U + 10], [35, U + 10]]);
+
+  // le cercle de bûches, dessiné de l'arrière vers l'avant
+  const logs: [number, number, number][] = [];
+  for (let k = 0; k < 14; k++) {
+    const a = k / 14 * Math.PI * 2 + 0.11;
+    logs.push([24 + Math.cos(a) * 17, U + 26 + Math.sin(a) * 14, a]);
+  }
+  logs.sort((a, b) => a[1] - b[1]);
+  for (const [x, y, a] of logs) {
+    const tx = Math.cos(a) * 3, ty = Math.sin(a) * 2;
+    stroke(P, x - tx, y - ty, x + tx, y + ty, 4, C.e3);
+    stroke(P, x - tx, y - ty - 1, x + tx, y + ty - 1, 2.5, C.e1);
+    logEnds(P, [[x - tx, y - ty], [x + tx, y + ty]]);
+  }
+
+  // le creux : cendre et braises
+  P.ell(24, U + 26, 14, 9, C.ink2);
+  P.ell(24, U + 26, 12, 7, C.st4);
+  for (let k = 0; k < 34; k++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r());
+    P.p(24 + Math.cos(a) * 11 * d, U + 26 + Math.sin(a) * 6 * d, r() < 0.5 ? C.o4 : r() < 0.7 ? C.o3 : C.o2);
+  }
+  P.ell(24, U + 27, 7, 3, C.o4);
+
+  // les flammes basses
+  for (const [x, h, w] of [[19, 6, 3], [23, 9, 4], [27, 7, 3], [31, 5, 2]] as const) {
+    P.line(x, U + 27, x, U + 27 - h, C.o4, w);
+    P.line(x, U + 27, x, U + 27 - h + 2, C.o3, Math.max(1, w - 1));
+    P.line(x, U + 26, x, U + 27 - h + 3, C.o2, 1);
+  }
+  P.ell(24, U + 25, 3, 2, C.o1);
+  P.p(24, U + 25, C.o0);
+  L.push({ k: 'fire', x: 18, y: U + 21, w: 12 });
+}
+
+/** Ère 2 · un poêle voûté de pierre, une porte à feu sous un arc, une cheminée de pierre. */
+export function bruleurE2(P: Pen, U: number, L: Light[]): void {
+  // la cheminée de pierre, en arrière-plan
+  P.r(31, U - 38, 10, 52, C.st2);
+  P.r(31, U - 38, 2, 52, C.st1);
+  P.r(39, U - 38, 2, 52, C.st3);
+  courses(P, 31, U - 38, 10, 52, 61, STONE_F);
+  P.r(29, U - 40, 14, 3, C.st3);
+  P.r(29, U - 40, 14, 1, C.st1);
+  P.r(31, U - 37, 9, 2, C.st3);
+  P.r(33, U - 37, 5, 1, C.ink2);
+  moss(P, 31, U + 4, 10, 8, 62, 8);
+
+  // le corps du poêle
+  box(P, 2, U + 14, 44, 12, 22, STONE, false);
+  courses(P, 2, U + 26, 44, 22, 63, STONE_F);
+  P.r(2, U + 14, 44, 1, C.st0);
+  P.r(2, U + 14, 1, 12, C.st0);
+  P.r(45, U + 15, 1, 11, C.st3);
+
+  // la voûte de pierre
+  P.ell(24, U + 20, 21, 11, C.st3);
+  P.ell(24, U + 18, 21, 10, C.st2);
+  P.ell(24, U + 17, 19, 8, C.st1);
+  P.ell(24, U + 17, 15, 6, C.st2);
+  P.ell(24, U + 17, 11, 4, C.st1);
+  P.ell(20, U + 14, 10, 3, C.st0);
+  P.ell(24, U + 17, 7, 2, C.st2);
+  moss(P, 4, U + 8, 40, 6, 64, 10);
+
+  // la porte à feu, sous un arc de pierre
+  P.r(15, U + 30, 18, 15, C.st0);
+  P.ell(24, U + 31, 9, 5, C.st0);
+  P.r(16, U + 31, 16, 14, C.ink2);
+  P.ell(24, U + 32, 8, 4, C.ink2);
+  P.r(18, U + 37, 12, 8, C.o4);
+  P.r(19, U + 38, 10, 7, C.o3);
+  P.r(20, U + 40, 8, 5, C.o2);
+  P.r(22, U + 42, 4, 3, C.o1);
+  P.p(23, U + 43, C.o0);
+  L.push({ k: 'fire', x: 18, y: U + 39, w: 12 });
+
+  // l'âtre déborde un peu au pied
+  P.r(13, U + 45, 22, 3, C.st4);
+  P.r(13, U + 45, 22, 1, C.st3);
 }
 

@@ -7,7 +7,7 @@ import { eraFor, readEra } from '../src/render/px/eras';
 import { eraArts } from '../src/render/px/buildings';
 import { towerE1, towerE2 } from '../src/render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../src/render/px/artWorks';
-import { scierieE1, scierieE2 } from '../src/render/px/artFirst';
+import { bruleurE1, bruleurE2, scierieE1, scierieE2 } from '../src/render/px/artFirst';
 import { fourE2 } from '../src/render/px/artStone';
 import type { Pen } from '../src/render/px/pen';
 import type { Light } from '../src/render/px/sprite';
@@ -81,11 +81,12 @@ describe('eraArts', () => {
     expect(eraArts('charbonniere')?.map((art) => art.up)).toEqual([2, 4]);
     expect(eraArts('entrepot')?.map((art) => art.up)).toEqual([2, 20]);
     expect(eraArts('scierie')?.map((art) => art.up)).toEqual([18, 22]);
+    expect(eraArts('bruleur')?.map((art) => art.up)).toEqual([10, 40]);
     expect(eraArts('four')?.map((art) => art.up)).toEqual([44, 44]);
   });
 
   it('renvoie null pour un bâtiment sans dessin', () => {
-    expect(eraArts('bruleur')).toBeNull();
+    expect(eraArts('trieur')).toBeNull();
   });
 });
 
@@ -116,6 +117,11 @@ describe('les lumières des dessins', () => {
   it('n’allume aucune lumière dans les Scieries', () => {
     expect(lightKinds(scierieE1)).toEqual([]);
     expect(lightKinds(scierieE2)).toEqual([]);
+  });
+
+  it('allume un seul feu dans chaque Brûleur', () => {
+    expect(lightKinds(bruleurE1)).toEqual(['fire']);
+    expect(lightKinds(bruleurE2)).toEqual(['fire']);
   });
 
   it('allume un seul feu dans la gueule du Four', () => {
