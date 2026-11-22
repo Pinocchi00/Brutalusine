@@ -7,7 +7,14 @@ import { C } from '../render/px/palette';
 import { build, castShadow, type Sprite } from '../render/px/sprite';
 import { towerE1, towerE2 } from '../render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
-import { scierieE1 } from '../render/px/artFirst';
+import {
+  aiguillageE1,
+  aiguillageE2,
+  bruleurE1,
+  bruleurE2,
+  scierieE1,
+  scierieE2,
+} from '../render/px/artFirst';
 import { fourE2 } from '../render/px/artStone';
 import {
   placeholderBuilder,
@@ -127,11 +134,16 @@ for (const [label, footprint, up, draw] of [
 }
 
 const TEMOINS = section('Témoins');
-for (const [label, up, draw] of [
-  ['Scierie · Bois', 18, scierieE1],
-  ['Four · Pierre', 44, fourE2],
+for (const [label, footprint, up, draw] of [
+  ['Scierie · Bois', 48, 18, scierieE1],
+  ['Scierie · Pierre', 48, 22, scierieE2],
+  ['Brûleur · Bois', 48, 10, bruleurE1],
+  ['Brûleur · Pierre', 48, 40, bruleurE2],
+  ['Répartiteur · Bois', 24, 6, aiguillageE1],
+  ['Répartiteur · Pierre', 24, 6, aiguillageE2],
+  ['Four · Pierre', 48, 44, fourE2],
 ] as const) {
-  const sprite = build(48, 48, up, draw);
+  const sprite = build(footprint, footprint, up, draw);
   if (figure(TEMOINS, label, spriteTile(sprite))) count++;
 }
 
