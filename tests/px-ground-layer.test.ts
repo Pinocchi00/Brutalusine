@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHUNK, Chunk, World } from '../src/sim/world';
 import { TREE_MIN } from '../src/sim/data';
-import { GroundLayer } from '../src/render/px/groundLayer';
+import { GroundLayer, lifeFits } from '../src/render/px/groundLayer';
 import { paintTiles, type GroundSource } from '../src/render/px/groundPaint';
 import type { PixelView } from '../src/render/px/view';
 
@@ -310,5 +310,138 @@ describe('blocs du monde', () => {
     const view = viewOf(1000, 1000, 1063, 1031);
     settle(layer, world, view, 0);
     expect(world.chunks.size).toBe(before);
+  });
+});
+
+/** Une horloge factice qui rend les valeurs fournies, puis répète la dernière. */
+class ScriptClock {
+  private values: number[] = [];
+  private index = 0;
+
+  readonly now = (): number => {
+    const last = Math.max(0, this.values.length - 1);
+    const value = this.values[Math.min(this.index, last)] ?? 0;
+    this.index++;
+    return value;
+  };
+
+  script(values: number[]): void {
+    this.values = values;
+    this.index = 0;
+  }
+}
+
+/** Ce que les tests observent de l'état interne de la couche. */
+interface LayerInternals {
+  life: Map<Chunk, { life: unknown; seen: number }>;
+  lifeRecent: number[];
+  lifeEstimate: number;
+}
+
+/** La couche vue par ses tests : mêmes objets, champs privés compris. */
+function internalsOf(layer: GroundLayer): LayerInternals {
+  return layer as unknown as LayerInternals;
+}
+
+/** Une couche peinte et prête, son horloge factice et ses entrailles. */
+function preparedLayer(seed: number): {
+  clock: ScriptClock;
+  world: World;
+  view: PixelView;
+  layer: GroundLayer;
+  internals: LayerInternals;
+} {
+  const clock = new ScriptClock();
+  const world = new World(seed);
+  const view = viewOf(0, 0, 31, 31);
+  const layer = new GroundLayer({ now: clock.now });
+  settle(layer, world, view, 0);
+  return { clock, world, view, layer, internals: internalsOf(layer) };
+}
+
+describe('budget de la vie du sol', () => {
+  it('lifeFits respecte les bornes, égalité comprise', () => {
+    expect(lifeFits(0, 4)).toBe(true);
+    expect(lifeFits(1, 3)).toBe(true);
+    expect(lifeFits(2, 2)).toBe(true);
+    expect(lifeFits(2, 2.001)).toBe(false);
+    expect(lifeFits(3, 1, 5)).toBe(true);
+    expect(lifeFits(3, 2.001, 5)).toBe(false);
+  });
+
+  it('reporte la vie quand la peinture a déjà consommé le temps, puis la prépare', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(51);
+    internals.life.clear();
+    internals.lifeEstimate = 2;
+    clock.script([0, 0, 3, 9, 9, 9]);
+    layer.update(world, view, 10);
+    expect(internals.life.size).toBe(0);
+    clock.script([0, 0, 0, 0, 0, 0]);
+    layer.update(world, view, 11);
+    expect(internals.life.size).toBe(1);
+  });
+
+  it('garde le maximum des huit derniers coûts et oublie les plus anciens', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(52);
+    const costs = [50, 1, 2, 3, 4, 5, 6, 7, 8];
+    for (let i = 0; i < costs.length; i++) {
+      internals.life.clear();
+      const cost = costs[i];
+      clock.script([0, 0, 0, 10, 10 + cost, 10 + cost]);
+      layer.update(world, view, 10 + i);
+    }
+    expect(internals.lifeRecent.length).toBe(8);
+    expect(internals.lifeEstimate).toBe(8);
+  });
+
+  it('lance la vie malgré une estimation au-dessus du plafond quand rien n’a été peint', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(53);
+    internals.life.clear();
+    internals.lifeEstimate = 100;
+    clock.script([5, 5, 5, 5, 5, 5]);
+    layer.update(world, view, 10);
+    expect(internals.life.size).toBe(1);
+  });
+
+  it('clear remet l’estimation à son état initial', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(54);
+    internals.life.clear();
+    clock.script([0, 0, 0, 20, 30, 30]);
+    layer.update(world, view, 10);
+    expect(internals.lifeEstimate).toBe(10);
+    layer.clear();
+    expect(internals.lifeEstimate).toBe(1);
+    expect(internals.lifeRecent.length).toBe(0);
+  });
+
+  it('mesure groundMs avec l’horloge injectée', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(55);
+    internals.life.clear();
+    clock.script([10, 10, 10, 10, 10, 17]);
+    layer.update(world, view, 10);
+    expect(layer.groundMs).toBe(7);
+  });
+
+  it('continue de marquer les blocs vus quand le calcul est reporté', () => {
+    const clock = new ScriptClock();
+    const world = new World(56);
+    world.chunk(1, 0);
+    const view = viewOf(0, 0, 63, 31);
+    const layer = new GroundLayer({ now: clock.now });
+    settle(layer, world, view, 0);
+    const internals = internalsOf(layer);
+    for (let i = 0; i < 10 && internals.life.size < 2; i++) {
+      clock.script([0]);
+      layer.update(world, view, 10 + i);
+    }
+    expect(internals.life.size).toBe(2);
+    const chunks = [...internals.life.keys()];
+    internals.life.delete(chunks[0]);
+    const kept = chunks[1];
+    internals.lifeEstimate = 2;
+    clock.script([0, 0, 3, 9, 9, 9]);
+    layer.update(world, view, 100);
+    expect(internals.life.has(chunks[0])).toBe(false);
+    expect(internals.life.get(kept)?.seen).toBe(100);
   });
 });

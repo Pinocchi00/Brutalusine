@@ -21,11 +21,25 @@ const CODES = CHUNK + 2;
 /** Le nombre d'images sans être vu après lequel la vie d'un bloc est oubliée. */
 const LIFE_TTL = 120;
 
-/**
- * Le budget de peinture par image, en millisecondes. Il laisse 0,5 ms de marge aux autres
- * travaux du sol (tri des blocs, lecture des codes et vie du sol) dans le budget de 4 ms.
- */
-const GROUND_BUDGET_MS = 3.5;
+/** Le plafond de toute la mise à jour du sol, en millisecondes. */
+export const GROUND_TOTAL_MS = 4;
+
+/** Le budget de peinture par image, en millisecondes : il laisse 1 ms au reste du sol. */
+const GROUND_BUDGET_MS = 3;
+
+/** Le nombre de coûts récents retenus pour estimer la vie d'un bloc. */
+const LIFE_RECENT = 8;
+
+/** L'estimation de départ d'un calcul de vie, en millisecondes. */
+const LIFE_DEFAULT_MS = 1;
+
+/** En dessous de ce temps écoulé, aucune peinture n'a eu lieu, en millisecondes. */
+const IDLE_MS = 0.5;
+
+/** Vrai si un calcul estimé à `estimateMs` tient encore dans le plafond, après `elapsedMs`. */
+export function lifeFits(elapsedMs: number, estimateMs: number, totalMs: number = GROUND_TOTAL_MS): boolean {
+  return elapsedMs + estimateMs <= totalMs;
+}
 
 /** Une entrée de vie du sol, avec la dernière image où son bloc a été vu. */
 interface LifeEntry {
@@ -49,13 +63,17 @@ export class GroundLayer {
   private readonly nearby: Chunk[] = [];
   private readonly life = new Map<Chunk, LifeEntry>();
   private readonly slab = new Uint8Array(CODES * CODES);
+  private readonly now: () => number;
+  private readonly lifeRecent: number[] = [];
+  private lifeEstimate = LIFE_DEFAULT_MS;
   private paths = new WeakMap<Chunk, readonly GroundPathSegment[]>();
   private world: World | null = null;
 
   /** Le temps réel passé dans la mise à jour du sol à la dernière image. */
   groundMs = 0;
 
-  constructor() {
+  constructor(options: { now?: () => number } = {}) {
+    this.now = options.now ?? (() => performance.now());
     this.cache = new GroundCache<Chunk, HTMLCanvasElement>(
       {
         readCodes: (chunk, out) => {
@@ -71,7 +89,7 @@ export class GroundLayer {
           const image = new ImageData(data as Uint8ClampedArray<ArrayBuffer>, w, h);
           ctx.putImageData(image, x, y);
         },
-        now: () => performance.now(),
+        now: () => this.now(),
       },
       { budgetMs: GROUND_BUDGET_MS },
     );
@@ -84,12 +102,14 @@ export class GroundLayer {
     this.paths = new WeakMap();
     this.visible.length = 0;
     this.nearby.length = 0;
+    this.lifeRecent.length = 0;
+    this.lifeEstimate = LIFE_DEFAULT_MS;
     this.groundMs = 0;
   }
 
   /** Avance la peinture des blocs visibles et prépare la vie d'un bloc au plus par image. */
   update(world: World, view: PixelView, frame: number): void {
-    const start = performance.now();
+    const start = this.now();
     this.world = world;
     const cx0 = Math.floor(view.tileX0 / CHUNK);
     const cx1 = Math.floor(view.tileX1 / CHUNK);
@@ -120,8 +140,8 @@ export class GroundLayer {
       }
     }
     this.cache.update(this.visible, this.nearby, frame);
-    this.updateLife(frame);
-    this.groundMs = performance.now() - start;
+    this.updateLife(frame, start);
+    this.groundMs = this.now() - start;
   }
 
   /** Dessine le sol visible : un canevas peint, ou un aplat en attendant. */
@@ -236,8 +256,8 @@ export class GroundLayer {
     return paths;
   }
 
-  /** Marque les blocs vus et calcule la vie d'un seul bloc nouveau par image. */
-  private updateLife(frame: number): void {
+  /** Marque les blocs vus et calcule la vie d'un seul bloc nouveau si le temps le permet. */
+  private updateLife(frame: number, start: number): void {
     let target: Chunk | null = null;
     for (const chunk of this.visible) {
       const entry = this.life.get(chunk);
@@ -249,18 +269,36 @@ export class GroundLayer {
       if (entry) entry.seen = frame;
     }
     if (target && this.world) {
-      const world = this.world;
-      const life = layoutLife({
-        seed: world.seed,
-        originX: target.cx * CHUNK,
-        originY: target.cy * CHUNK,
-        shore: target.shore,
-        ground: target.ground,
-      });
-      this.life.set(target, { life, seen: frame });
+      const elapsed = this.now() - start;
+      const idle = elapsed < IDLE_MS;
+      if (idle || lifeFits(elapsed, this.lifeEstimate)) {
+        const before = this.now();
+        const world = this.world;
+        const life = layoutLife({
+          seed: world.seed,
+          originX: target.cx * CHUNK,
+          originY: target.cy * CHUNK,
+          shore: target.shore,
+          ground: target.ground,
+        });
+        this.recordLifeCost(before);
+        this.life.set(target, { life, seen: frame });
+      }
     }
     for (const [chunk, entry] of this.life) {
       if (frame - entry.seen > LIFE_TTL) this.life.delete(chunk);
     }
+  }
+
+  /** Retient le coût d'un calcul de vie et garde le maximum des huit derniers. */
+  private recordLifeCost(before: number): void {
+    const cost = Math.max(0, this.now() - before);
+    this.lifeRecent.push(cost);
+    if (this.lifeRecent.length > LIFE_RECENT) this.lifeRecent.shift();
+    let max = 0;
+    for (const value of this.lifeRecent) {
+      if (value > max) max = value;
+    }
+    this.lifeEstimate = max;
   }
 }
