@@ -705,7 +705,15 @@ export class PxRenderer {
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;
-        this.queue.add('fx', () => drawGhost(ctx, sprite, X, Y, p.ok));
+        this.queue.add('fx', () => {
+          drawGhost(ctx, sprite, X, Y, p.ok);
+          if (def.key === 'puits' && fw === def.w && fh === def.h) {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, 0);
+            ctx.restore();
+          }
+        });
       } else if (def.kind === 'slab') {
         this.queue.add('fx', () => this.drawSlabGhost(f, p, fw, fh));
       }
