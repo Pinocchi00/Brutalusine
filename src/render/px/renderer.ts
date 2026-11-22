@@ -20,7 +20,16 @@ import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem, placeholderSprite } from './placeholders';
-import { TREE_RADIUS, canopySprite, drawTree, prepareTrees, treeKindAt, treeVariantAt } from './trees';
+import {
+  TREE_RADIUS,
+  canopySolid,
+  canopySprite,
+  drawTree,
+  prepareTrees,
+  treeCovers,
+  treeKindAt,
+  treeVariantAt,
+} from './trees';
 import {
   OUTCROP_ALTS,
   OUTCROP_VARIANTS,
@@ -36,10 +45,12 @@ import {
 } from './outcrops';
 import {
   oreCell,
+  oreCoversScrap,
   oreOffset,
   oreSolidAt,
   oreVariant,
-  pickOreTile,
+  pickVisibleOreTile,
+  type OreBlocker,
   type OreCell,
   type PlacedOre,
 } from './oreField';
@@ -78,6 +89,15 @@ interface OreDraw {
   Y: number;
   footPx: number;
   placed: PlacedOre;
+}
+
+/** Un affleurement de la vue et les débris qui passent devant lui. */
+interface OreEntry {
+  cell: OreCell;
+  cellX: number;
+  cellY: number;
+  draw: OreDraw;
+  debris: string[];
 }
 
 /** Tout ce qu'une image a besoin de partager entre ses étapes. */
@@ -132,7 +152,7 @@ export class PxRenderer {
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
   private readonly lit: LitBuilding[] = [];
-  private readonly scraps = new Map<string, HTMLCanvasElement>();
+  private readonly scraps = new Map<string, { data: Uint8ClampedArray; img: HTMLCanvasElement }>();
   private buffer: HTMLCanvasElement | null = null;
   private bufferCtx: CanvasRenderingContext2D | null = null;
   private bufW = 0;
@@ -286,7 +306,7 @@ export class PxRenderer {
     this.queue.addTall(y, x, () => drawTree(f.ctx, f.P, { x, y, kind, img, shake, chop }, f.now));
   }
 
-  /** Parcourt les carrés 2 × 2 qui touchent la vue, avec deux cases de marge, et pose chaque affleurement une fois. */
+  /** Parcourt les carrés 2 × 2 qui touchent la vue et pose chaque affleurement avec ce qui passe devant. */
   private addOres(f: Frame): void {
     const { g, view } = f;
     const read = (tx: number, ty: number): number => this.oreRead(g, tx, ty);
@@ -294,22 +314,24 @@ export class PxRenderer {
     const cellX1 = Math.floor((view.tileX1 + 2) / 2);
     const cellY0 = Math.floor((view.tileY0 - 2) / 2);
     const cellY1 = Math.floor((view.tileY1 + 2) / 2);
-    const debris = new Map<string, number>();
+    const entries: OreEntry[] = [];
     for (let cellY = cellY0; cellY <= cellY1; cellY++) {
       for (let cellX = cellX0; cellX <= cellX1; cellX++) {
         const cell = oreCell(read, cellX, cellY);
         if (!cell) continue;
-        const placed = this.addOre(f, cell, cellX, cellY);
-        this.collectDebris(g, placed, debris);
+        entries.push({ cell, cellX, cellY, draw: this.placeOre(g, cell, cellX, cellY), debris: [] });
       }
     }
-    for (const [key, footPx] of debris) {
-      const comma = key.indexOf(',');
-      const tx = Number(key.slice(0, comma));
-      const ty = Number(key.slice(comma + 1));
-      const img = this.scrapImage(tx, ty, g.seed);
-      this.queue.addTall(footPx + 1, tx * TILE_PX, () => f.ctx.drawImage(img, tx * TILE_PX, ty * TILE_PX));
+    const owner = new Map<string, number>();
+    for (let i = 0; i < entries.length; i++) {
+      const placed = entries[i].draw.placed;
+      for (const key of this.coveredDebris(g, placed)) {
+        const previous = owner.get(key);
+        if (previous === undefined || placed.footPx > entries[previous].draw.footPx) owner.set(key, i);
+      }
     }
+    for (const [key, index] of owner) entries[index].debris.push(key);
+    for (const entry of entries) this.addOre(f, entry);
   }
 
   /** La case de roche visible sous un point en cases, ou `null`. */
@@ -326,7 +348,64 @@ export class PxRenderer {
         if (cell) rocks.push(this.placeOre(g, cell, cellX, cellY).placed);
       }
     }
-    return pickOreTile(rocks, x * TILE_PX, y * TILE_PX);
+    return pickVisibleOreTile(rocks, this.oreBlockers(g, x, y), x * TILE_PX, y * TILE_PX);
+  }
+
+  /** Les objets hauts qui peuvent cacher une roche à moins de quatre cases du point. */
+  private oreBlockers(g: Game, x: number, y: number): OreBlocker[] {
+    const blockers: OreBlocker[] = [];
+    const tx0 = Math.floor(x) - 4;
+    const tx1 = Math.floor(x) + 4;
+    const ty0 = Math.floor(y) - 4;
+    const ty1 = Math.floor(y) + 4;
+    const cx0 = Math.floor(tx0 / CHUNK);
+    const cx1 = Math.floor(tx1 / CHUNK);
+    const cy0 = Math.floor(ty0 / CHUNK);
+    const cy1 = Math.floor(ty1 / CHUNK);
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const chunk = g.world.chunk(cx, cy, false);
+        if (!chunk) continue;
+        const lx0 = Math.max(0, tx0 - cx * CHUNK);
+        const lx1 = Math.min(CHUNK - 1, tx1 - cx * CHUNK);
+        const ly0 = Math.max(0, ty0 - cy * CHUNK);
+        const ly1 = Math.min(CHUNK - 1, ty1 - cy * CHUNK);
+        for (let ly = ly0; ly <= ly1; ly++) {
+          for (let lx = lx0; lx <= lx1; lx++) {
+            const canopy = chunk.canopy[(ly << 5) | lx];
+            if (canopy < TREE_MIN) continue;
+            const tx = cx * CHUNK + lx;
+            const ty = cy * CHUNK + ly;
+            const kind = treeKindAt(tx, ty, g.seed);
+            const variant = treeVariantAt(tx, ty, g.seed);
+            const size = treeSize(canopy);
+            const img = canopySprite(kind, size, variant);
+            const jitter = Math.round((hash(tx, ty, g.seed + 5) - 0.5) * 6);
+            const treeX = Math.round((tx + 0.5) * TILE_PX + jitter);
+            const treeY = Math.round((ty + 0.9) * TILE_PX);
+            const solid = canopySolid(kind, size, variant);
+            blockers.push({
+              footPx: treeY,
+              covers: (px, py) => treeCovers({ x: treeX, y: treeY, kind, width: img.width, height: img.height, solid }, px, py),
+            });
+          }
+        }
+      }
+    }
+    for (const e of g.tickers) {
+      if (e.x - 4 > x || e.x + e.w + 4 < x || e.y - 4 > y || e.y + e.h + 4 < y) continue;
+      const sprite = placeholderSprite(e.def, e.w, e.h);
+      if (!sprite) continue;
+      const X = e.x * TILE_PX - 1;
+      const Y = e.y * TILE_PX - sprite.up - 1;
+      const right = X + sprite.img.width;
+      const bottom = Y + sprite.img.height;
+      blockers.push({
+        footPx: (e.y + e.h) * TILE_PX,
+        covers: (px, py) => px >= X && px < right && py >= Y && py < bottom,
+      });
+    }
+    return blockers;
   }
 
   /** La règle de lecture d'une case de gisement : rien sans bloc, dalle ou entité. */
@@ -360,10 +439,11 @@ export class PxRenderer {
     return { sprite, X, Y, footPx, placed };
   }
 
-  /** Ajoute un affleurement : son ombre, son image triée par le pied et les cailloux des cases restantes. */
-  private addOre(f: Frame, cell: OreCell, cellX: number, cellY: number): PlacedOre {
+  /** Ajoute un affleurement : son ombre, son image triée par le pied, puis ce qui passe devant. */
+  private addOre(f: Frame, entry: OreEntry): void {
+    const { cell, draw, debris } = entry;
     const { g } = f;
-    const { sprite, X, Y, footPx, placed } = this.placeOre(g, cell, cellX, cellY);
+    const { sprite, X, Y, footPx, placed } = draw;
     if (f.fade > 0) {
       this.queue.add('cast', () => {
         f.P.ell(X + sprite.img.width * 0.9, footPx - 2, sprite.img.width * 0.6, 3, C.shadeL);
@@ -375,34 +455,50 @@ export class PxRenderer {
       if (value !== null && (since === null || value < since)) since = value;
     }
     const shifted = X + (since === null ? 0 : rockShake(since));
-    const phase = hash(cellX, cellY, g.seed + 214) * 8;
-    this.queue.addTall(footPx, X, () => this.drawOre(f, sprite, shifted, Y, phase, since));
-    this.addRubble(f, cell, placed);
-    return placed;
-  }
-
-  /** Dessine un affleurement, la vie de son minerai et l'éclat de la pioche. */
-  private drawOre(f: Frame, sprite: OutcropSprite, X: number, Y: number, phase: number, since: number | null): void {
-    f.ctx.drawImage(sprite.img, X, Y);
-    drawOreLive(f.P, sprite, X, Y, f.now, phase);
-    if (since !== null) drawRockHit(f.P, sprite, X, Y, since);
-  }
-
-  /** Pose des cailloux sur les cases dont le centre n'est pas couvert par la roche. */
-  private addRubble(f: Frame, cell: OreCell, placed: PlacedOre): void {
+    const phase = hash(entry.cellX, entry.cellY, g.seed + 214) * 8;
+    const after: (() => void)[] = [];
+    for (const key of debris) {
+      const comma = key.indexOf(',');
+      const tx = Number(key.slice(0, comma));
+      const ty = Number(key.slice(comma + 1));
+      const img = this.scrapImage(tx, ty, g.seed);
+      after.push(() => f.ctx.drawImage(img, tx * TILE_PX, ty * TILE_PX));
+    }
     const kind = rockKind(cell.type as 1 | 2 | 3 | 4);
     for (const tile of cell.tiles) {
       const px = (tile.x + 0.5) * TILE_PX;
       const py = (tile.y + 0.5) * TILE_PX;
-      if (!oreSolidAt(placed, px, py)) this.drawRubble(f, kind, tile.x, tile.y);
+      if (!oreSolidAt(placed, px, py)) this.queue.add('flat', this.rubbleDraw(f, kind, tile.x, tile.y));
     }
     for (const other of cell.others) {
-      this.drawRubble(f, rockKind(other.type as 1 | 2 | 3 | 4), other.x, other.y);
+      const rubble = this.rubbleDraw(f, rockKind(other.type as 1 | 2 | 3 | 4), other.x, other.y);
+      const px = (other.x + 0.5) * TILE_PX;
+      const py = (other.y + 0.5) * TILE_PX;
+      if (oreSolidAt(placed, px, py)) after.push(rubble);
+      else this.queue.add('flat', rubble);
     }
+    this.queue.addTall(footPx, X, () => this.drawOre(f, sprite, shifted, Y, phase, since, after));
   }
 
-  /** Note chaque débris recouvert par une roche, une seule fois, avec le plus grand pied. */
-  private collectDebris(g: Game, placed: PlacedOre, debris: Map<string, number>): void {
+  /** Dessine un affleurement, la vie de son minerai, l'éclat de la pioche, puis ce qui passe devant. */
+  private drawOre(
+    f: Frame,
+    sprite: OutcropSprite,
+    X: number,
+    Y: number,
+    phase: number,
+    since: number | null,
+    after: readonly (() => void)[],
+  ): void {
+    f.ctx.drawImage(sprite.img, X, Y);
+    drawOreLive(f.P, sprite, X, Y, f.now, phase);
+    if (since !== null) drawRockHit(f.P, sprite, X, Y, since);
+    for (const draw of after) draw();
+  }
+
+  /** Les débris du rectangle d'une roche qu'un de ses pixels pleins recouvre. */
+  private coveredDebris(g: Game, placed: PlacedOre): string[] {
+    const keys: string[] = [];
     const x0 = Math.floor(placed.X / TILE_PX);
     const x1 = Math.floor((placed.X + placed.width - 1) / TILE_PX);
     const y0 = Math.floor(placed.Y / TILE_PX);
@@ -413,34 +509,44 @@ export class PxRenderer {
         if (!chunk) continue;
         const i = ((ty & 31) << 5) | (tx & 31);
         if (!chunk.loot[i]) continue;
-        const key = `${tx},${ty}`;
-        const previous = debris.get(key);
-        if (previous === undefined || placed.footPx > previous) debris.set(key, placed.footPx);
+        if (oreCoversScrap(placed, this.scrapPixels(tx, ty, g.seed), tx, ty)) keys.push(`${tx},${ty}`);
       }
     }
+    return keys;
+  }
+
+  /** Les pixels RGBA d'un débris, calculés une fois et gardés jusqu'au prochain reset. */
+  private scrapPixels(tx: number, ty: number, seed: number): Uint8ClampedArray {
+    return this.scrapTile(tx, ty, seed).data;
   }
 
   /** L'image d'un débris, dessinée une fois et gardée jusqu'au prochain reset. */
   private scrapImage(tx: number, ty: number, seed: number): HTMLCanvasElement {
+    return this.scrapTile(tx, ty, seed).img;
+  }
+
+  /** Le débris d'une case : ses pixels et son image finie. */
+  private scrapTile(tx: number, ty: number, seed: number): { data: Uint8ClampedArray; img: HTMLCanvasElement } {
     const key = `${tx},${ty}`;
     const cached = this.scraps.get(key);
     if (cached) return cached;
-    const out = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
-    paintScrapTile(out, tx, ty, seed);
-    const { canvas, ctx } = makeSurface(TILE_PX, TILE_PX, { read: true });
-    ctx.putImageData(new ImageData(out, TILE_PX, TILE_PX), 0, 0);
-    this.scraps.set(key, canvas);
-    return canvas;
+    const data = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintScrapTile(data, tx, ty, seed);
+    const { canvas, ctx } = makeSurface(TILE_PX, TILE_PX);
+    ctx.putImageData(new ImageData(data, TILE_PX, TILE_PX), 0, 0);
+    const tile = { data, img: canvas };
+    this.scraps.set(key, tile);
+    return tile;
   }
 
-  /** Dessine un petit tas de cailloux au centre d'une case, en file plate. */
-  private drawRubble(f: Frame, kind: RockKind, tx: number, ty: number): void {
+  /** La fonction qui dessine un petit tas de cailloux au centre d'une case. */
+  private rubbleDraw(f: Frame, kind: RockKind, tx: number, ty: number): () => void {
     const variant = Math.floor(hash(tx, ty, f.g.seed + 216) * OUTCROP_VARIANTS);
     const img = rubbleSprite(kind, variant);
     const since = this.fx.hitSince(tx, ty, f.now);
     const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + (since === null ? 0 : rockShake(since));
     const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2);
-    this.queue.add('flat', () => f.ctx.drawImage(img, x, y));
+    return () => f.ctx.drawImage(img, x, y);
   }
 
   /** Ajoute les bâtiments visibles, leur ombre portée, leurs lumières et leur goulotte. */

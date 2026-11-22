@@ -96,19 +96,23 @@ export function oreSolidAt(rock: PlacedOre, px: number, py: number): boolean {
   return rock.solid[y * rock.width + x] !== 0;
 }
 
-/** La case de la roche visible sous ce pixel monde : la roche au pied le plus au sud gagne, puis sa case la plus proche du point. */
-export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number): OrePoint | null {
+/** La roche choisie sous un pixel : la plus au sud, puis la plus à l'est. */
+function chooseOreRock(rocks: readonly PlacedOre[], px: number, py: number): PlacedOre | null {
   let best: PlacedOre | null = null;
   for (const rock of rocks) {
     if (!oreSolidAt(rock, px, py)) continue;
     if (!best || rock.footPx > best.footPx || (rock.footPx === best.footPx && rock.X > best.X)) best = rock;
   }
-  if (!best) return null;
+  return best;
+}
+
+/** La case d'une roche la plus proche d'un pixel. */
+function nearestOreTile(rock: PlacedOre, px: number, py: number): OrePoint | null {
   const pointX = px / TILE_PX;
   const pointY = py / TILE_PX;
   let nearest: OrePoint | null = null;
   let bestDistance = Infinity;
-  for (const tile of best.tiles) {
+  for (const tile of rock.tiles) {
     const dx = tile.x + 0.5 - pointX;
     const dy = tile.y + 0.5 - pointY;
     const distance = dx * dx + dy * dy;
@@ -118,6 +122,69 @@ export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number)
     }
   }
   return nearest;
+}
+
+/** La case de la roche visible sous ce pixel monde : la roche au pied le plus au sud gagne, puis sa case la plus proche du point. */
+export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number): OrePoint | null {
+  const best = chooseOreRock(rocks, px, py);
+  return best ? nearestOreTile(best, px, py) : null;
+}
+
+/** Un objet haut qui peut cacher une roche : son pied et le test de ses pixels. */
+export interface OreBlocker {
+  footPx: number;
+  covers(px: number, py: number): boolean;
+}
+
+/** Comme `pickOreTile`, mais rend `null` si un objet au pied plus au sud que la roche choisie couvre ce pixel. */
+export function pickVisibleOreTile(
+  rocks: readonly PlacedOre[],
+  blockers: readonly OreBlocker[],
+  px: number,
+  py: number,
+): OrePoint | null {
+  const best = chooseOreRock(rocks, px, py);
+  if (!best) return null;
+  for (const blocker of blockers) {
+    if (blocker.footPx > best.footPx && blocker.covers(px, py)) return null;
+  }
+  return nearestOreTile(best, px, py);
+}
+
+/** Vrai si la roche recouvre au moins un pixel opaque d'un débris de 24 × 24. */
+export function oreCoversScrap(rock: PlacedOre, scrap: ArrayLike<number>, tx: number, ty: number): boolean {
+  const baseX = tx * TILE_PX;
+  const baseY = ty * TILE_PX;
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      if (scrap[(y * TILE_PX + x) * 4 + 3] === 0) continue;
+      if (oreSolidAt(rock, baseX + x, baseY + y)) return true;
+    }
+  }
+  return false;
+}
+
+/** Ce qu'un clic récolte, avec la case à viser. */
+export interface HarvestPick {
+  kind: 'loot' | 'tree' | 'ore';
+  x: number;
+  y: number;
+}
+
+/** Ce que la scène offre au clic, avant de choisir. */
+export interface HarvestInput {
+  loot: OrePoint | null;
+  entity: boolean;
+  visibleOre: OrePoint | null;
+  direct: HarvestPick | null;
+}
+
+/** L'ordre du clic : débris, puis entité, puis roche visible, puis la case visée. */
+export function chooseHarvest(input: HarvestInput): HarvestPick | null {
+  if (input.loot) return { kind: 'loot', x: input.loot.x, y: input.loot.y };
+  if (input.entity) return null;
+  if (input.visibleOre) return { kind: 'ore', x: input.visibleOre.x, y: input.visibleOre.y };
+  return input.direct;
 }
 
 /** La variante d'affleurement selon le nombre de cases et un tirage `h` dans [0, 1[. */

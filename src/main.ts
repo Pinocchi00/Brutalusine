@@ -11,6 +11,7 @@ import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
 import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
 import { PxRenderer, coopScale } from './render/px/renderer';
+import { chooseHarvest, type HarvestPick } from './render/px/oreField';
 import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
@@ -360,17 +361,19 @@ class App {
     return null;
   }
 
-  /** Ce que le clic ou le bouton maintenu doit récolter : la case visée d'abord, sinon la roche visible sous le point. */
-  private harvestTarget(p: Player): { kind: Task['kind']; x: number; y: number } | null {
-    const direct = this.gatherable(p.cx, p.cy);
-    if (direct) return { kind: direct, x: p.cx, y: p.cy };
-    if (this.game.entAt(p.cx, p.cy)) return null;
-    const oreTileAt = this.renderer.oreTileAt?.bind(this.renderer);
-    if (!oreTileAt) return null;
-    const point = p.pad === null ? this.pick(this.mouse.x, this.mouse.y) : { x: p.x + p.aimX, y: p.y + p.aimY };
-    const tile = oreTileAt(this.game, point.x, point.y);
-    if (!tile || this.gatherable(tile.x, tile.y) !== 'ore') return null;
-    return { kind: 'ore', x: tile.x, y: tile.y };
+  /** Ce que le clic ou le bouton maintenu doit récolter : la case visée, sauf ce qui passe devant. */
+  private harvestTarget(p: Player): HarvestPick | null {
+    const aimed = this.gatherable(p.cx, p.cy);
+    const loot = aimed === 'loot' ? { x: p.cx, y: p.cy } : null;
+    const direct: HarvestPick | null = aimed === 'tree' || aimed === 'ore' ? { kind: aimed, x: p.cx, y: p.cy } : null;
+    const entity = this.game.entAt(p.cx, p.cy) !== null;
+    let visibleOre: { x: number; y: number } | null = null;
+    if (!loot && !entity) {
+      const point = p.pad === null ? this.pick(this.mouse.x, this.mouse.y) : { x: p.x + p.aimX, y: p.y + p.aimY };
+      const tile = this.renderer.oreTileAt?.(this.game, point.x, point.y);
+      if (tile && this.gatherable(tile.x, tile.y) === 'ore') visibleOre = tile;
+    }
+    return chooseHarvest({ loot, entity, visibleOre, direct });
   }
 
   private primaryDown(p: Player): void {

@@ -43,6 +43,9 @@ const KIND_SALT: Readonly<Record<TreeKind, number>> = { leafy: 1, palm: 2, flowe
 /** Le cache des houppiers finis, par espèce, taille et variante. */
 const canopies = new Map<string, HTMLCanvasElement>();
 
+/** Le cache des masques de houppier, par espèce, taille et variante. */
+const canopyMasks = new Map<string, Uint8Array>();
+
 /** L'espèce d'un arbre selon sa case et la graine : pur et déterministe. */
 export function treeKindAt(tx: number, ty: number, seed: number): TreeKind {
   const h = hash(tx, ty, seed + 211);
@@ -166,6 +169,39 @@ export function canopySprite(kind: TreeKind, size: TreeSize, variant: number): H
   const img = finish(canvas);
   canopies.set(key, img);
   return img;
+}
+
+/** Le masque alpha du houppier fini, en cache par espèce, taille et variante. */
+export function canopySolid(kind: TreeKind, size: TreeSize, variant: number): Uint8Array {
+  const key = `${kind}:${size}:${variant}`;
+  const cached = canopyMasks.get(key);
+  if (cached) return cached;
+  const img = canopySprite(kind, size, variant);
+  const { ctx } = makeSurface(img.width, img.height, { read: true });
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, img.width, img.height).data;
+  const solid = new Uint8Array(img.width * img.height);
+  for (let i = 0; i < solid.length; i++) solid[i] = data[i * 4 + 3] !== 0 ? 1 : 0;
+  canopyMasks.set(key, solid);
+  return solid;
+}
+
+/** Le test des pixels d'un arbre debout : houppier sans balancement, plus le tronc. */
+export function treeCovers(
+  tree: { x: number; y: number; kind: TreeKind; width: number; height: number; solid: ArrayLike<number> },
+  px: number,
+  py: number,
+): boolean {
+  const { x, y } = tree;
+  const top = tree.kind === 'palm' ? y - 24 : y - 16;
+  const before = py >= top && py <= y && px >= x - 4 && px <= x + 3;
+  if (before) return true;
+  const left = Math.round(x - tree.width / 2);
+  const upper = Math.round(top - tree.height * 0.76);
+  const lx = Math.floor(px) - left;
+  const ly = Math.floor(py) - upper;
+  if (lx < 0 || ly < 0 || lx >= tree.width || ly >= tree.height) return false;
+  return tree.solid[ly * tree.width + lx] !== 0;
 }
 
 /** Dessine le tronc puis le houppier, comme `drawTree` de la maquette. */

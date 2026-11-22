@@ -4,11 +4,15 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  chooseHarvest,
   oreCell,
+  oreCoversScrap,
   oreOffset,
   oreSolidAt,
   oreVariant,
   pickOreTile,
+  pickVisibleOreTile,
+  type OreBlocker,
   type PlacedOre,
 } from '../src/render/px/oreField';
 
@@ -274,5 +278,90 @@ describe('pickOreTile', () => {
       tiles: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
     });
     expect(pickOreTile([ore], 24, 12)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('pickVisibleOreTile', () => {
+  const solid = [1, 1, 1, 1];
+  const ore = rock({ footPx: 10, solid, tiles: [{ x: 3, y: 3 }] });
+
+  it('choisit la roche quand aucun bloqueur ne couvre le pixel', () => {
+    expect(pickVisibleOreTile([ore], [], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
+  it('rend null si un bloqueur au pied plus au sud couvre le pixel', () => {
+    const blocker: OreBlocker = { footPx: 11, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('ne cache pas si le bloqueur est au même pied ou plus au nord', () => {
+    const same: OreBlocker = { footPx: 10, covers: () => true };
+    const north: OreBlocker = { footPx: 9, covers: () => true };
+    expect(pickVisibleOreTile([ore], [same], 0, 0)).toEqual({ x: 3, y: 3 });
+    expect(pickVisibleOreTile([ore], [north], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
+  it('ne cache pas si le bloqueur au sud ne couvre pas ce pixel', () => {
+    const blocker: OreBlocker = { footPx: 20, covers: () => false };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+});
+
+describe('oreCoversScrap', () => {
+  /** Un débris 24 × 24 dont seuls les pixels indiqués portent de l'alpha. */
+  function scrap(opaque: ReadonlyMap<number, number>): Uint8ClampedArray {
+    const data = new Uint8ClampedArray(24 * 24 * 4);
+    for (const [index, alpha] of opaque) data[index * 4 + 3] = alpha;
+    return data;
+  }
+
+  it('recouvre un débris dès qu’un pixel plein de la roche tombe sur un pixel opaque', () => {
+    const placed = rock({ X: 24, Y: 48, width: 2, height: 2, solid: [1, 0, 0, 0] });
+    expect(oreCoversScrap(placed, scrap(new Map([[0, 255]])), 1, 2)).toBe(true);
+  });
+
+  it('ne recouvre rien si la roche ne tombe que sur des pixels transparents', () => {
+    const placed = rock({ X: 24, Y: 48, width: 2, height: 2, solid: [1, 0, 0, 0] });
+    expect(oreCoversScrap(placed, scrap(new Map([[1, 255]])), 1, 2)).toBe(false);
+    expect(oreCoversScrap(placed, scrap(new Map()), 1, 2)).toBe(false);
+  });
+});
+
+describe('chooseHarvest', () => {
+  it('fait gagner un débris sur tout le reste', () => {
+    expect(chooseHarvest({
+      loot: { x: 1, y: 2 },
+      entity: true,
+      visibleOre: { x: 3, y: 4 },
+      direct: { kind: 'tree', x: 5, y: 6 },
+    })).toEqual({ kind: 'loot', x: 1, y: 2 });
+  });
+
+  it('rend null devant une entité quand il n’y a pas de débris', () => {
+    expect(chooseHarvest({
+      loot: null,
+      entity: true,
+      visibleOre: { x: 3, y: 4 },
+      direct: { kind: 'tree', x: 5, y: 6 },
+    })).toBeNull();
+  });
+
+  it('fait passer la roche visible devant l’arbre ou le gisement de la case', () => {
+    expect(chooseHarvest({
+      loot: null,
+      entity: false,
+      visibleOre: { x: 3, y: 4 },
+      direct: { kind: 'tree', x: 5, y: 6 },
+    })).toEqual({ kind: 'ore', x: 3, y: 4 });
+  });
+
+  it('retombe sur la case visée quand rien ne passe devant', () => {
+    expect(chooseHarvest({
+      loot: null,
+      entity: false,
+      visibleOre: null,
+      direct: { kind: 'tree', x: 5, y: 6 },
+    })).toEqual({ kind: 'tree', x: 5, y: 6 });
+    expect(chooseHarvest({ loot: null, entity: false, visibleOre: null, direct: null })).toBeNull();
   });
 });

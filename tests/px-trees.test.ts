@@ -7,6 +7,7 @@ import {
   canopySize,
   paintCanopy,
   treeKindAt,
+  treeCovers,
   treeSpriteKeys,
   treeSway,
   treeVariantAt,
@@ -212,6 +213,45 @@ describe('balancement', () => {
       expect(sway).toBeGreaterThanOrEqual(-1);
       expect(sway).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe('treeCovers', () => {
+  const W = 40;
+  const H = 50;
+
+  /** Un arbre de test dont le houppier n'a qu'un seul pixel plein. */
+  function tree(kind: 'leafy' | 'palm', full: boolean): Parameters<typeof treeCovers>[0] {
+    const solid = new Uint8Array(W * H);
+    if (full) solid[5 * W + 5] = 1;
+    return { x: 100, y: 100, kind, width: W, height: H, solid };
+  }
+
+  it('couvre un pixel plein du houppier', () => {
+    expect(treeCovers(tree('leafy', true), 85, 51)).toBe(true);
+  });
+
+  it('ne couvre pas un pixel transparent du houppier', () => {
+    expect(treeCovers(tree('leafy', true), 86, 51)).toBe(false);
+  });
+
+  it('couvre le tronc d’un feuillu de x - 4 à x + 3 et de y - 16 à y', () => {
+    expect(treeCovers(tree('leafy', false), 96, 84)).toBe(true);
+    expect(treeCovers(tree('leafy', false), 103, 100)).toBe(true);
+    expect(treeCovers(tree('leafy', false), 95, 99)).toBe(false);
+    expect(treeCovers(tree('leafy', false), 104, 99)).toBe(false);
+    expect(treeCovers(tree('leafy', false), 100, 83)).toBe(false);
+  });
+
+  it('couvre le tronc d’un palmier de y - 24 à y', () => {
+    expect(treeCovers(tree('palm', false), 100, 80)).toBe(true);
+    expect(treeCovers(tree('leafy', false), 100, 80)).toBe(false);
+    expect(treeCovers(tree('palm', false), 100, 75)).toBe(false);
+  });
+
+  it('ne couvre rien hors de l’image', () => {
+    expect(treeCovers(tree('leafy', true), 200, 200)).toBe(false);
+    expect(treeCovers(tree('palm', true), -50, -50)).toBe(false);
   });
 });
 
