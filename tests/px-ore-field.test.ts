@@ -316,19 +316,34 @@ describe('pickVisibleOreTile', () => {
   });
 
   it('rend null si un bloqueur au pied plus au sud couvre le pixel', () => {
-    const blocker: OreBlocker = { footPx: 11, covers: () => true };
+    const blocker: OreBlocker = { footPx: 11, x: 0, frontOnTie: false, covers: () => true };
     expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
   });
 
-  it('ne cache pas si le bloqueur est au même pied ou plus au nord', () => {
-    const same: OreBlocker = { footPx: 10, covers: () => true };
-    const north: OreBlocker = { footPx: 9, covers: () => true };
+  it('ne cache pas si le bloqueur est au même pied mais à un X plus petit', () => {
+    const same: OreBlocker = { footPx: 10, x: -1, frontOnTie: false, covers: () => true };
+    const north: OreBlocker = { footPx: 9, x: 0, frontOnTie: false, covers: () => true };
     expect(pickVisibleOreTile([ore], [same], 0, 0)).toEqual({ x: 3, y: 3 });
     expect(pickVisibleOreTile([ore], [north], 0, 0)).toEqual({ x: 3, y: 3 });
   });
 
+  it('à pied égal, un bloqueur de X plus grand cache la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 1, frontOnTie: false, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('à pied et X égaux, un bloqueur de façade cache la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 0, frontOnTie: true, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('à pied et X égaux, un bloqueur d’arbre ne cache pas la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 0, frontOnTie: false, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
   it('ne cache pas si le bloqueur au sud ne couvre pas ce pixel', () => {
-    const blocker: OreBlocker = { footPx: 20, covers: () => false };
+    const blocker: OreBlocker = { footPx: 20, x: 0, frontOnTie: false, covers: () => false };
     expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
   });
 });

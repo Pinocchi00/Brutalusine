@@ -133,13 +133,23 @@ export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number)
   return best ? nearestOreTile(best, px, py) : null;
 }
 
-/** Un objet haut qui peut cacher une roche : son pied et le test de ses pixels. */
+/** Un objet haut qui peut cacher une roche : son pied, son X de tri et le test de ses pixels. */
 export interface OreBlocker {
   footPx: number;
+  x: number;
+  frontOnTie: boolean;
   covers(px: number, py: number): boolean;
 }
 
-/** Comme `pickOreTile`, mais rend `null` si un objet au pied plus au sud que la roche choisie couvre ce pixel. */
+/** Vrai si ce bloqueur passe devant une roche de pied `footPx` et de X `rockX`. */
+function blockerInFront(blocker: OreBlocker, footPx: number, rockX: number): boolean {
+  if (blocker.footPx > footPx) return true;
+  if (blocker.footPx < footPx) return false;
+  if (blocker.x > rockX) return true;
+  return blocker.x === rockX && blocker.frontOnTie;
+}
+
+/** Comme `pickOreTile`, mais rend `null` si un objet devant la roche choisie couvre ce pixel. */
 export function pickVisibleOreTile(
   rocks: readonly PlacedOre[],
   blockers: readonly OreBlocker[],
@@ -149,7 +159,7 @@ export function pickVisibleOreTile(
   const best = chooseOreRock(rocks, px, py);
   if (!best) return null;
   for (const blocker of blockers) {
-    if (blocker.footPx > best.footPx && blocker.covers(px, py)) return null;
+    if (blockerInFront(blocker, best.footPx, best.X) && blocker.covers(px, py)) return null;
   }
   return nearestOreTile(best, px, py);
 }

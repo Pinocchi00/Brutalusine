@@ -389,6 +389,8 @@ export class PxRenderer {
             const solid = canopySolid(kind, size, variant);
             blockers.push({
               footPx: treeY,
+              x: treeX,
+              frontOnTie: false,
               covers: (px, py) => treeCovers({ x: treeX, y: treeY, kind, width: img.width, height: img.height, solid }, px, py),
             });
           }
@@ -404,6 +406,8 @@ export class PxRenderer {
       const mask = spriteMask(sprite);
       blockers.push({
         footPx: (e.y + e.h) * TILE_PX,
+        x: X,
+        frontOnTie: true,
         covers: (px, py) => maskCovers(mask, sprite.img.width, sprite.img.height, Math.floor(px) - X, Math.floor(py) - Y),
       });
     }
