@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHUNK, Chunk, World } from '../src/sim/world';
 import { TREE_MIN } from '../src/sim/data';
-import { GroundLayer, lifeFits, warmGroundSource } from '../src/render/px/groundLayer';
+import { GroundLayer, lifeFits, lifeGround, warmGroundSource } from '../src/render/px/groundLayer';
 import { paintTiles, type GroundSource } from '../src/render/px/groundPaint';
 import type { PixelView } from '../src/render/px/view';
 
@@ -337,6 +337,7 @@ interface LayerInternals {
   lifeRecent: number[];
   lifeEstimate: number;
   preparedEstimate: number;
+  lifeDeferred: number;
 }
 
 /** La couche vue par ses tests : mêmes objets, champs privés compris. */
@@ -523,5 +524,60 @@ describe('préchauffage du sol', () => {
     expect(internals.preparedEstimate).toBe(11);
     expect(internals.lifeEstimate).toBe(11);
     expect(internals.lifeRecent.length).toBe(0);
+  });
+});
+
+describe('reports bornés de la vie du sol', () => {
+  it('finit par laisser passer un calcul malgré une estimation très haute', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(57);
+    internals.life.clear();
+    internals.lifeEstimate = 100;
+    let frames = 0;
+    while (internals.life.size === 0 && frames <= 60) {
+      clock.script([0, 0, 3, 9, 9, 9]);
+      layer.update(world, view, 10 + frames);
+      frames++;
+    }
+    expect(internals.life.size).toBe(1);
+    expect(frames).toBeLessThanOrEqual(60);
+  });
+
+  it('force un calcul au plus tard après soixante reports', () => {
+    const { clock, world, view, layer, internals } = preparedLayer(58);
+    internals.life.clear();
+    internals.lifeEstimate = 100;
+    for (let i = 0; i < 60; i++) {
+      clock.script([0, 0, 3.9, 4, 4, 4]);
+      layer.update(world, view, 10 + i);
+    }
+    expect(internals.life.size).toBe(0);
+    expect(internals.lifeDeferred).toBe(60);
+    clock.script([0, 0, 3.9, 4, 4, 4]);
+    layer.update(world, view, 200);
+    expect(internals.life.size).toBe(1);
+    expect(internals.lifeDeferred).toBe(0);
+  });
+
+  it('ne laisse jamais l’estimation à zéro', () => {
+    const constant = (): number => 7;
+    const world = new World(59);
+    const view = viewOf(0, 0, 31, 31);
+    const layer = new GroundLayer({ now: constant });
+    settle(layer, world, view, 0);
+    expect(internalsOf(layer).lifeEstimate).toBe(0.5);
+    const warm = new GroundLayer({ now: constant });
+    warm.prepare();
+    expect(internalsOf(warm).preparedEstimate).toBe(1);
+    expect(internalsOf(warm).lifeEstimate).toBe(1);
+  });
+});
+
+describe('codes de sol du préchauffage', () => {
+  it('lifeGround produit les cinq codes 0, 1, 2, 3 et 4', () => {
+    const ground = lifeGround(warmGroundSource());
+    const codes = new Set(Array.from(ground));
+    for (const code of [0, 1, 2, 3, 4]) {
+      expect(codes.has(code)).toBe(true);
+    }
   });
 });

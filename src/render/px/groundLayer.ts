@@ -36,6 +36,12 @@ const LIFE_RECENT = 8;
 /** L'estimation de départ d'un calcul de vie, en millisecondes. */
 const LIFE_DEFAULT_MS = 1;
 
+/** Le plancher de l'estimation d'un calcul de vie, en millisecondes. */
+const LIFE_FLOOR_MS = 0.5;
+
+/** Le nombre de reports après lequel un calcul de vie est forcé. */
+const MAX_LIFE_DEFER = 60;
+
 /** En dessous de ce temps écoulé, aucune peinture n'a eu lieu, en millisecondes. */
 const IDLE_MS = 0.5;
 
@@ -79,14 +85,40 @@ export function warmGroundSource(): GroundSource {
   return { seed: WARM_SEED, originX: 0, originY: 0, shore, ford, paths, slab, loot };
 }
 
-/** Déduit les codes de sol d'une source de vie : eau si la moyenne des quatre coins est négative. */
-function lifeGround(shore: ArrayLike<number>): Uint8Array {
+/** Vrai si le centre d'une case est à moins de 0,6 case d'un segment de sentier. */
+function nearPath(paths: readonly GroundPathSegment[], tx: number, ty: number): boolean {
+  const px = tx + 0.5;
+  const py = ty + 0.5;
+  for (const path of paths) {
+    const dx = path.bx - path.ax;
+    const dy = path.by - path.ay;
+    const len2 = dx * dx + dy * dy;
+    let t = 0;
+    if (len2 > 0) {
+      t = ((px - path.ax) * dx + (py - path.ay) * dy) / len2;
+      if (t < 0) t = 0;
+      else if (t > 1) t = 1;
+    }
+    const qx = path.ax + t * dx;
+    const qy = path.ay + t * dy;
+    if (Math.hypot(px - qx, py - qy) < 0.6) return true;
+  }
+  return false;
+}
+
+/** Déduit les cinq codes de sol d'une source : terre, eau, berge, chemin ou gué. */
+export function lifeGround(source: GroundSource): Uint8Array {
   const ground = new Uint8Array(CHUNK * CHUNK);
   for (let ly = 0; ly < CHUNK; ly++) {
     for (let lx = 0; lx < CHUNK; lx++) {
       const i = ly * CORNER + lx;
-      const avg = shore[i] + shore[i + 1] + shore[i + CORNER] + shore[i + CORNER + 1];
-      ground[ly * CHUNK + lx] = avg < 0 ? 1 : 0;
+      const shore = (source.shore[i] + source.shore[i + 1] + source.shore[i + CORNER] + source.shore[i + CORNER + 1]) / 4;
+      const ford = (source.ford[i] + source.ford[i + 1] + source.ford[i + CORNER] + source.ford[i + CORNER + 1]) / 4;
+      let code = 0;
+      if (shore < 0) code = ford >= 0.9 ? 4 : 1;
+      else if (nearPath(source.paths, lx, ly)) code = 3;
+      else if (shore < 1.6) code = 2;
+      ground[ly * CHUNK + lx] = code;
     }
   }
   return ground;
@@ -118,6 +150,7 @@ export class GroundLayer {
   private readonly lifeRecent: number[] = [];
   private lifeEstimate = LIFE_DEFAULT_MS;
   private preparedEstimate = LIFE_DEFAULT_MS;
+  private lifeDeferred = 0;
   private paths = new WeakMap<Chunk, readonly GroundPathSegment[]>();
   private world: World | null = null;
 
@@ -156,6 +189,7 @@ export class GroundLayer {
     this.nearby.length = 0;
     this.lifeRecent.length = 0;
     this.lifeEstimate = this.preparedEstimate;
+    this.lifeDeferred = 0;
     this.groundMs = 0;
   }
 
@@ -180,7 +214,7 @@ export class GroundLayer {
       originX: source.originX,
       originY: source.originY,
       shore: source.shore,
-      ground: lifeGround(source.shore),
+      ground: lifeGround(source),
     };
     for (let i = 0; i < WARM_LIFE; i++) {
       measure(() => layoutLife(lifeSource));
@@ -189,7 +223,7 @@ export class GroundLayer {
     for (const value of recent) {
       if (value > max) max = value;
     }
-    this.preparedEstimate = recent.length > 0 ? max : LIFE_DEFAULT_MS;
+    this.preparedEstimate = Math.max(LIFE_DEFAULT_MS, max);
     this.lifeEstimate = this.preparedEstimate;
   }
 
@@ -357,7 +391,8 @@ export class GroundLayer {
     if (target && this.world) {
       const elapsed = this.now() - start;
       const idle = elapsed < IDLE_MS;
-      if (idle || lifeFits(elapsed, this.lifeEstimate)) {
+      const forced = this.lifeDeferred >= MAX_LIFE_DEFER;
+      if (idle || lifeFits(elapsed, this.lifeEstimate) || forced) {
         const before = this.now();
         const world = this.world;
         const life = layoutLife({
@@ -369,6 +404,12 @@ export class GroundLayer {
         });
         this.recordLifeCost(before);
         this.life.set(target, { life, seen: frame });
+        this.lifeDeferred = 0;
+      } else {
+        const previous = this.lifeEstimate;
+        this.lifeDeferred++;
+        this.lifeEstimate = Math.max(LIFE_DEFAULT_MS, previous * 0.9);
+        if (this.lifeEstimate < previous) this.lifeRecent.length = 0;
       }
     }
     for (const [chunk, entry] of this.life) {
@@ -385,6 +426,6 @@ export class GroundLayer {
     for (const value of this.lifeRecent) {
       if (value > max) max = value;
     }
-    this.lifeEstimate = max;
+    this.lifeEstimate = Math.max(LIFE_FLOOR_MS, max);
   }
 }
