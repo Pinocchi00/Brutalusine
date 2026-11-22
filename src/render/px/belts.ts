@@ -192,7 +192,7 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
       }
     }
     if (horiz) {
-      P.r(X, Y + 21, T, 1, C.s3);
+      P.r(X, Y + 21, T, 1, logs ? C.e4 : C.s3);
       P.r(X, Y + 22, T, 1, C.ink2);
     }
     return;
