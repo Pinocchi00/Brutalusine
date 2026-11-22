@@ -19,6 +19,7 @@ import {
   paintRubble,
   rockKind,
   rockShake,
+  rubbleSolid,
 } from '../src/render/px/outcrops';
 
 vi.mock('../src/render/px/surface', () => ({
@@ -344,8 +345,17 @@ describe('les cailloux au pied', () => {
   });
 });
 
-describe('le coup de pioche', () => {
-  it('ne trempe que de -1, 0 ou 1 et retombe à zéro dès 0,28 s', () => {
+describe('masque des cailloux', () => {
+  it('couvre 20 × 14 pixels et reste en cache par type et variante', () => {
+    const first = rubbleSolid('st', 0);
+    expect(first).toHaveLength(20 * 14);
+    expect(rubbleSolid('st', 0)).toBe(first);
+    expect(rubbleSolid('st', 1)).not.toBe(first);
+    expect(rubbleSolid('fe', 0)).not.toBe(first);
+  });
+});
+
+describe('le coup de pioche', () => {  it('ne trempe que de -1, 0 ou 1 et retombe à zéro dès 0,28 s', () => {
     for (let i = 0; i <= 1000; i++) {
       const shake = rockShake(i / 1000);
       expect([-1, 0, 1]).toContain(shake);

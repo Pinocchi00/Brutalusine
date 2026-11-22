@@ -77,6 +77,16 @@ export function oreCell(read: (tx: number, ty: number) => number, cellX: number,
   };
 }
 
+/** Un tas de cailloux posé devant une roche, avec la case qu'il faut viser. */
+export interface OreFront {
+  X: number;
+  Y: number;
+  width: number;
+  height: number;
+  solid: ArrayLike<number>;
+  tile: OrePoint;
+}
+
 /** Une roche posée dans le monde, avec son masque de pixels pleins. */
 export interface PlacedOre {
   X: number;
@@ -86,6 +96,7 @@ export interface PlacedOre {
   footPx: number;
   solid: ArrayLike<number>;
   tiles: readonly OrePoint[];
+  front?: readonly OreFront[];
 }
 
 /** Vrai si le pixel (x, y) d'un masque de largeur `width` et hauteur `height` est plein. */
@@ -127,10 +138,24 @@ function nearestOreTile(rock: PlacedOre, px: number, py: number): OrePoint | nul
   return nearest;
 }
 
+/** La case d'un caillou posé devant la roche sous ce pixel, du dernier dessiné au premier, ou `null`. */
+function pickFrontTile(rock: PlacedOre, px: number, py: number): OrePoint | null {
+  const front = rock.front;
+  if (!front) return null;
+  const x = Math.floor(px);
+  const y = Math.floor(py);
+  for (let i = front.length - 1; i >= 0; i--) {
+    const item = front[i];
+    if (maskCovers(item.solid, item.width, item.height, x - item.X, y - item.Y)) return item.tile;
+  }
+  return null;
+}
+
 /** La case de la roche visible sous ce pixel monde : la roche au pied le plus au sud gagne, puis sa case la plus proche du point. */
 export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number): OrePoint | null {
   const best = chooseOreRock(rocks, px, py);
-  return best ? nearestOreTile(best, px, py) : null;
+  if (!best) return null;
+  return pickFrontTile(best, px, py) ?? nearestOreTile(best, px, py);
 }
 
 /** Un objet haut qui peut cacher une roche : son pied, son X de tri et le test de ses pixels. */
@@ -161,7 +186,7 @@ export function pickVisibleOreTile(
   for (const blocker of blockers) {
     if (blockerInFront(blocker, best.footPx, best.X) && blocker.covers(px, py)) return null;
   }
-  return nearestOreTile(best, px, py);
+  return pickFrontTile(best, px, py) ?? nearestOreTile(best, px, py);
 }
 
 /** Vrai si la roche recouvre au moins un pixel opaque d'un débris de 24 × 24. */

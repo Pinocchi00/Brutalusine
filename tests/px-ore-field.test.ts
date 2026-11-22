@@ -15,6 +15,7 @@ import {
   pickVisibleOreTile,
   rubbleOffset,
   type OreBlocker,
+  type OreFront,
   type PlacedOre,
 } from '../src/render/px/oreField';
 
@@ -345,6 +346,43 @@ describe('pickVisibleOreTile', () => {
   it('ne cache pas si le bloqueur au sud ne couvre pas ce pixel', () => {
     const blocker: OreBlocker = { footPx: 20, x: 0, frontOnTie: false, covers: () => false };
     expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+});
+
+describe('cailloux posés devant une roche', () => {
+  const full = new Uint8Array(24 * 24).fill(1);
+
+  /** Une roche pleine portant les cailloux indiqués. */
+  function oreWith(front: readonly OreFront[]): PlacedOre {
+    return rock({ width: 24, height: 24, solid: full, tiles: [{ x: 0, y: 0 }, { x: 1, y: 0 }], front });
+  }
+
+  /** Un caillou d'une case, plein sur son premier pixel. */
+  function frontAt(overrides: Partial<OreFront>): OreFront {
+    return { X: 0, Y: 0, width: 1, height: 1, solid: [1], tile: { x: 4, y: 4 }, ...overrides };
+  }
+
+  it('le front gagne sur la case la plus proche', () => {
+    expect(pickOreTile([oreWith([frontAt({})])], 0, 0)).toEqual({ x: 4, y: 4 });
+  });
+
+  it('le dernier front gagne', () => {
+    const ore = oreWith([frontAt({ tile: { x: 2, y: 2 } }), frontAt({ tile: { x: 3, y: 3 } })]);
+    expect(pickOreTile([ore], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
+  it('un pixel transparent de front retombe sur la roche', () => {
+    expect(pickOreTile([oreWith([frontAt({ solid: [0] })])], 0, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('un bloqueur devant rend toujours null', () => {
+    const ore = oreWith([frontAt({})]);
+    const blocker: OreBlocker = { footPx: ore.footPx + 1, x: 0, frontOnTie: false, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('pickVisibleOreTile rend aussi le front', () => {
+    expect(pickVisibleOreTile([oreWith([frontAt({})])], [], 0, 0)).toEqual({ x: 4, y: 4 });
   });
 });
 
