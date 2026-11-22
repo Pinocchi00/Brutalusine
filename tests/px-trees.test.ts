@@ -253,6 +253,21 @@ describe('treeCovers', () => {
     expect(treeCovers(tree('leafy', true), 200, 200)).toBe(false);
     expect(treeCovers(tree('palm', true), -50, -50)).toBe(false);
   });
+
+  it('arrondit vers le bas le bord du tronc d’un feuillu', () => {
+    expect(treeCovers(tree('leafy', false), 103.5, 90)).toBe(true);
+    expect(treeCovers(tree('leafy', false), 100, 100.5)).toBe(true);
+  });
+
+  it('suit la courbe du tronc d’un palmier', () => {
+    expect(treeCovers(tree('palm', false), 104, 86)).toBe(true);
+    expect(treeCovers(tree('palm', false), 97, 86)).toBe(false);
+  });
+
+  it('couvre une racine d’un feuillu', () => {
+    expect(treeCovers(tree('leafy', false), 95, 100)).toBe(true);
+    expect(treeCovers(tree('leafy', false), 93, 101)).toBe(true);
+  });
 });
 
 describe('clés des houppiers', () => {

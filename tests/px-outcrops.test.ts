@@ -19,6 +19,7 @@ import {
   paintRubble,
   rockKind,
   rockShake,
+  rubbleSolid,
 } from '../src/render/px/outcrops';
 
 vi.mock('../src/render/px/surface', () => ({
@@ -341,6 +342,16 @@ describe('les cailloux au pied', () => {
       if (kind === 'cu') expect(painted).toContain(C.ma2);
       if (kind === 'qz') expect(painted).toContain(C.qz1);
     }
+  });
+});
+
+describe('masque des cailloux', () => {
+  it('couvre 20 × 14 pixels et reste en cache par type et variante', () => {
+    const first = rubbleSolid('st', 0);
+    expect(first).toHaveLength(20 * 14);
+    expect(rubbleSolid('st', 0)).toBe(first);
+    expect(rubbleSolid('st', 1)).not.toBe(first);
+    expect(rubbleSolid('fe', 0)).not.toBe(first);
   });
 });
 

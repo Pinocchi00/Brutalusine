@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chooseHarvest,
+  maskCovers,
   oreCell,
   oreCoversScrap,
   oreOffset,
@@ -14,6 +15,7 @@ import {
   pickVisibleOreTile,
   rubbleOffset,
   type OreBlocker,
+  type OreFront,
   type PlacedOre,
 } from '../src/render/px/oreField';
 
@@ -210,6 +212,30 @@ function rock(overrides: Partial<PlacedOre>): PlacedOre {
   };
 }
 
+describe('maskCovers', () => {
+  const mask = [1, 0, 1, 0];
+
+  it('reconnaît un pixel plein et un pixel transparent', () => {
+    expect(maskCovers(mask, 2, 2, 0, 0)).toBe(true);
+    expect(maskCovers(mask, 2, 2, 1, 0)).toBe(false);
+  });
+
+  it('refuse les quatre bords hors des bornes', () => {
+    expect(maskCovers(mask, 2, 2, -1, 0)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 2, 0)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 0, -1)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 0, 2)).toBe(false);
+  });
+
+  it('reconnaît les quatre coins du masque', () => {
+    const corners = [1, 0, 0, 1];
+    expect(maskCovers(corners, 2, 2, 0, 0)).toBe(true);
+    expect(maskCovers(corners, 2, 2, 1, 0)).toBe(false);
+    expect(maskCovers(corners, 2, 2, 0, 1)).toBe(false);
+    expect(maskCovers(corners, 2, 2, 1, 1)).toBe(true);
+  });
+});
+
 describe('oreSolidAt', () => {
   it('reconnaît un pixel plein et un pixel transparent', () => {
     const ore = rock({ solid: [1, 0, 0, 1] });
@@ -291,20 +317,72 @@ describe('pickVisibleOreTile', () => {
   });
 
   it('rend null si un bloqueur au pied plus au sud couvre le pixel', () => {
-    const blocker: OreBlocker = { footPx: 11, covers: () => true };
+    const blocker: OreBlocker = { footPx: 11, x: 0, frontOnTie: false, covers: () => true };
     expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
   });
 
-  it('ne cache pas si le bloqueur est au même pied ou plus au nord', () => {
-    const same: OreBlocker = { footPx: 10, covers: () => true };
-    const north: OreBlocker = { footPx: 9, covers: () => true };
+  it('ne cache pas si le bloqueur est au même pied mais à un X plus petit', () => {
+    const same: OreBlocker = { footPx: 10, x: -1, frontOnTie: false, covers: () => true };
+    const north: OreBlocker = { footPx: 9, x: 0, frontOnTie: false, covers: () => true };
     expect(pickVisibleOreTile([ore], [same], 0, 0)).toEqual({ x: 3, y: 3 });
     expect(pickVisibleOreTile([ore], [north], 0, 0)).toEqual({ x: 3, y: 3 });
   });
 
-  it('ne cache pas si le bloqueur au sud ne couvre pas ce pixel', () => {
-    const blocker: OreBlocker = { footPx: 20, covers: () => false };
+  it('à pied égal, un bloqueur de X plus grand cache la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 1, frontOnTie: false, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('à pied et X égaux, un bloqueur de façade cache la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 0, frontOnTie: true, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('à pied et X égaux, un bloqueur d’arbre ne cache pas la roche', () => {
+    const blocker: OreBlocker = { footPx: 10, x: 0, frontOnTie: false, covers: () => true };
     expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
+  it('ne cache pas si le bloqueur au sud ne couvre pas ce pixel', () => {
+    const blocker: OreBlocker = { footPx: 20, x: 0, frontOnTie: false, covers: () => false };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+});
+
+describe('cailloux posés devant une roche', () => {
+  const full = new Uint8Array(24 * 24).fill(1);
+
+  /** Une roche pleine portant les cailloux indiqués. */
+  function oreWith(front: readonly OreFront[]): PlacedOre {
+    return rock({ width: 24, height: 24, solid: full, tiles: [{ x: 0, y: 0 }, { x: 1, y: 0 }], front });
+  }
+
+  /** Un caillou d'une case, plein sur son premier pixel. */
+  function frontAt(overrides: Partial<OreFront>): OreFront {
+    return { X: 0, Y: 0, width: 1, height: 1, solid: [1], tile: { x: 4, y: 4 }, ...overrides };
+  }
+
+  it('le front gagne sur la case la plus proche', () => {
+    expect(pickOreTile([oreWith([frontAt({})])], 0, 0)).toEqual({ x: 4, y: 4 });
+  });
+
+  it('le dernier front gagne', () => {
+    const ore = oreWith([frontAt({ tile: { x: 2, y: 2 } }), frontAt({ tile: { x: 3, y: 3 } })]);
+    expect(pickOreTile([ore], 0, 0)).toEqual({ x: 3, y: 3 });
+  });
+
+  it('un pixel transparent de front retombe sur la roche', () => {
+    expect(pickOreTile([oreWith([frontAt({ solid: [0] })])], 0, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('un bloqueur devant rend toujours null', () => {
+    const ore = oreWith([frontAt({})]);
+    const blocker: OreBlocker = { footPx: ore.footPx + 1, x: 0, frontOnTie: false, covers: () => true };
+    expect(pickVisibleOreTile([ore], [blocker], 0, 0)).toBeNull();
+  });
+
+  it('pickVisibleOreTile rend aussi le front', () => {
+    expect(pickVisibleOreTile([oreWith([frontAt({})])], [], 0, 0)).toEqual({ x: 4, y: 4 });
   });
 });
 

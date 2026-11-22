@@ -50,6 +50,23 @@ export function build(
   return { img, shadow: shadowSurface.canvas, up, lights };
 }
 
+/** Le cache des masques alpha des sprites finis. */
+const masks = new WeakMap<Sprite, Uint8Array>();
+
+/** Le masque alpha d'un sprite : 1 pour un pixel plein, 0 sinon, indice `y * largeur + x`. */
+export function spriteMask(sprite: Sprite): Uint8Array {
+  const cached = masks.get(sprite);
+  if (cached) return cached;
+  const { width, height } = sprite.img;
+  const { ctx } = makeSurface(width, height, { read: true });
+  ctx.drawImage(sprite.img, 0, 0);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const mask = new Uint8Array(width * height);
+  for (let i = 0; i < mask.length; i++) mask[i] = data[i * 4 + 3] !== 0 ? 1 : 0;
+  masks.set(sprite, mask);
+  return mask;
+}
+
 /** Projette l'ombre longue d'un sprite en biais ; son alpha se multiplie à celui déjà posé autour. */
 export function castShadow(ctx: CanvasRenderingContext2D, sprite: Sprite, X: number, Y: number): void {
   const gy = Y + sprite.img.height - 2, K = 1.1, tt = 0.16;

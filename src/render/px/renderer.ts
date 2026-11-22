@@ -39,6 +39,7 @@ import {
   prepareOutcrops,
   rockKind,
   rockShake,
+  rubbleSolid,
   rubbleSprite,
   type OutcropSprite,
   type RockKind,
@@ -49,15 +50,17 @@ import {
   oreOffset,
   oreSolidAt,
   oreVariant,
+  maskCovers,
   pickVisibleOreTile,
   rubbleOffset,
   type OreBlocker,
   type OreCell,
+  type OreFront,
   type PlacedOre,
 } from './oreField';
 import { paintScrapTile } from './groundPaint';
 import { makeSurface } from './surface';
-import { castShadow, type Sprite } from './sprite';
+import { castShadow, spriteMask, type Sprite } from './sprite';
 import {
   drawBrackets,
   drawCauseBubble,
@@ -99,6 +102,14 @@ interface OreEntry {
   cellY: number;
   draw: OreDraw;
   debris: string[];
+}
+
+/** Un tas de cailloux prêt à dessiner, sans la secousse du coup. */
+interface RubbleDraw {
+  variant: number;
+  img: HTMLCanvasElement;
+  x: number;
+  y: number;
 }
 
 /** Tout ce qu'une image a besoin de partager entre ses étapes. */
@@ -347,10 +358,34 @@ export class PxRenderer {
     for (let cellY = cellY0; cellY <= cellY1; cellY++) {
       for (let cellX = cellX0; cellX <= cellX1; cellX++) {
         const cell = oreCell(read, cellX, cellY);
-        if (cell) rocks.push(this.placeOre(g, cell, cellX, cellY).placed);
+        if (!cell) continue;
+        const placed = this.placeOre(g, cell, cellX, cellY).placed;
+        placed.front = this.oreFront(g, placed, cell);
+        rocks.push(placed);
       }
     }
     return pickVisibleOreTile(rocks, this.oreBlockers(g, x, y), x * TILE_PX, y * TILE_PX);
+  }
+
+  /** Les cailloux d'un autre minerai dessinés devant la roche, avec leur case à viser. */
+  private oreFront(g: Game, placed: PlacedOre, cell: OreCell): OreFront[] {
+    const front: OreFront[] = [];
+    for (const other of cell.others) {
+      const px = (other.x + 0.5) * TILE_PX;
+      const py = (other.y + 0.5) * TILE_PX;
+      if (!oreSolidAt(placed, px, py)) continue;
+      const kind = rockKind(other.type as 1 | 2 | 3 | 4);
+      const rubble = this.rubbleAt(g, kind, other.x, other.y);
+      front.push({
+        X: rubble.x,
+        Y: rubble.y,
+        width: rubble.img.width,
+        height: rubble.img.height,
+        solid: rubbleSolid(kind, rubble.variant),
+        tile: { x: other.x, y: other.y },
+      });
+    }
+    return front;
   }
 
   /** Les objets hauts qui peuvent cacher une roche à moins de quatre cases du point. */
@@ -388,6 +423,8 @@ export class PxRenderer {
             const solid = canopySolid(kind, size, variant);
             blockers.push({
               footPx: treeY,
+              x: treeX,
+              frontOnTie: false,
               covers: (px, py) => treeCovers({ x: treeX, y: treeY, kind, width: img.width, height: img.height, solid }, px, py),
             });
           }
@@ -400,11 +437,12 @@ export class PxRenderer {
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
-      const right = X + sprite.img.width;
-      const bottom = Y + sprite.img.height;
+      const mask = spriteMask(sprite);
       blockers.push({
         footPx: (e.y + e.h) * TILE_PX,
-        covers: (px, py) => px >= X && px < right && py >= Y && py < bottom,
+        x: X,
+        frontOnTie: true,
+        covers: (px, py) => maskCovers(mask, sprite.img.width, sprite.img.height, Math.floor(px) - X, Math.floor(py) - Y),
       });
     }
     return blockers;
@@ -541,15 +579,22 @@ export class PxRenderer {
     return tile;
   }
 
+  /** L'image, la variante et la position d'un tas de cailloux, sans secousse. */
+  private rubbleAt(g: Game, kind: RockKind, tx: number, ty: number): RubbleDraw {
+    const variant = Math.floor(hash(tx, ty, g.seed + 216) * OUTCROP_VARIANTS);
+    const img = rubbleSprite(kind, variant);
+    const offset = rubbleOffset(hash(tx, ty, g.seed + 221), hash(tx, ty, g.seed + 222));
+    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + offset.x;
+    const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2) + offset.y;
+    return { variant, img, x, y };
+  }
+
   /** La fonction qui dessine un petit tas de cailloux au centre d'une case. */
   private rubbleDraw(f: Frame, kind: RockKind, tx: number, ty: number): () => void {
-    const variant = Math.floor(hash(tx, ty, f.g.seed + 216) * OUTCROP_VARIANTS);
-    const img = rubbleSprite(kind, variant);
-    const offset = rubbleOffset(hash(tx, ty, f.g.seed + 221), hash(tx, ty, f.g.seed + 222));
+    const rubble = this.rubbleAt(f.g, kind, tx, ty);
     const since = this.fx.hitSince(tx, ty, f.now);
-    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + offset.x + (since === null ? 0 : rockShake(since));
-    const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2) + offset.y;
-    return () => f.ctx.drawImage(img, x, y);
+    const x = rubble.x + (since === null ? 0 : rockShake(since));
+    return () => f.ctx.drawImage(rubble.img, x, rubble.y);
   }
 
   /** Ajoute les bâtiments visibles, leur ombre portée, leurs lumières et leur goulotte. */

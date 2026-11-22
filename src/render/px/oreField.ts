@@ -77,6 +77,16 @@ export function oreCell(read: (tx: number, ty: number) => number, cellX: number,
   };
 }
 
+/** Un tas de cailloux posé devant une roche, avec la case qu'il faut viser. */
+export interface OreFront {
+  X: number;
+  Y: number;
+  width: number;
+  height: number;
+  solid: ArrayLike<number>;
+  tile: OrePoint;
+}
+
 /** Une roche posée dans le monde, avec son masque de pixels pleins. */
 export interface PlacedOre {
   X: number;
@@ -86,14 +96,18 @@ export interface PlacedOre {
   footPx: number;
   solid: ArrayLike<number>;
   tiles: readonly OrePoint[];
+  front?: readonly OreFront[];
+}
+
+/** Vrai si le pixel (x, y) d'un masque de largeur `width` et hauteur `height` est plein. */
+export function maskCovers(mask: ArrayLike<number>, width: number, height: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= width || y >= height) return false;
+  return mask[y * width + x] !== 0;
 }
 
 /** Vrai si le pixel monde (px, py) tombe sur un pixel plein de cette roche. */
 export function oreSolidAt(rock: PlacedOre, px: number, py: number): boolean {
-  const x = Math.floor(px) - rock.X;
-  const y = Math.floor(py) - rock.Y;
-  if (x < 0 || y < 0 || x >= rock.width || y >= rock.height) return false;
-  return rock.solid[y * rock.width + x] !== 0;
+  return maskCovers(rock.solid, rock.width, rock.height, Math.floor(px) - rock.X, Math.floor(py) - rock.Y);
 }
 
 /** La roche choisie sous un pixel : la plus au sud, puis la plus à l'est. */
@@ -124,19 +138,43 @@ function nearestOreTile(rock: PlacedOre, px: number, py: number): OrePoint | nul
   return nearest;
 }
 
+/** La case d'un caillou posé devant la roche sous ce pixel, du dernier dessiné au premier, ou `null`. */
+function pickFrontTile(rock: PlacedOre, px: number, py: number): OrePoint | null {
+  const front = rock.front;
+  if (!front) return null;
+  const x = Math.floor(px);
+  const y = Math.floor(py);
+  for (let i = front.length - 1; i >= 0; i--) {
+    const item = front[i];
+    if (maskCovers(item.solid, item.width, item.height, x - item.X, y - item.Y)) return item.tile;
+  }
+  return null;
+}
+
 /** La case de la roche visible sous ce pixel monde : la roche au pied le plus au sud gagne, puis sa case la plus proche du point. */
 export function pickOreTile(rocks: readonly PlacedOre[], px: number, py: number): OrePoint | null {
   const best = chooseOreRock(rocks, px, py);
-  return best ? nearestOreTile(best, px, py) : null;
+  if (!best) return null;
+  return pickFrontTile(best, px, py) ?? nearestOreTile(best, px, py);
 }
 
-/** Un objet haut qui peut cacher une roche : son pied et le test de ses pixels. */
+/** Un objet haut qui peut cacher une roche : son pied, son X de tri et le test de ses pixels. */
 export interface OreBlocker {
   footPx: number;
+  x: number;
+  frontOnTie: boolean;
   covers(px: number, py: number): boolean;
 }
 
-/** Comme `pickOreTile`, mais rend `null` si un objet au pied plus au sud que la roche choisie couvre ce pixel. */
+/** Vrai si ce bloqueur passe devant une roche de pied `footPx` et de X `rockX`. */
+function blockerInFront(blocker: OreBlocker, footPx: number, rockX: number): boolean {
+  if (blocker.footPx > footPx) return true;
+  if (blocker.footPx < footPx) return false;
+  if (blocker.x > rockX) return true;
+  return blocker.x === rockX && blocker.frontOnTie;
+}
+
+/** Comme `pickOreTile`, mais rend `null` si un objet devant la roche choisie couvre ce pixel. */
 export function pickVisibleOreTile(
   rocks: readonly PlacedOre[],
   blockers: readonly OreBlocker[],
@@ -146,9 +184,9 @@ export function pickVisibleOreTile(
   const best = chooseOreRock(rocks, px, py);
   if (!best) return null;
   for (const blocker of blockers) {
-    if (blocker.footPx > best.footPx && blocker.covers(px, py)) return null;
+    if (blockerInFront(blocker, best.footPx, best.X) && blocker.covers(px, py)) return null;
   }
-  return nearestOreTile(best, px, py);
+  return pickFrontTile(best, px, py) ?? nearestOreTile(best, px, py);
 }
 
 /** Vrai si la roche recouvre au moins un pixel opaque d'un débris de 24 × 24. */

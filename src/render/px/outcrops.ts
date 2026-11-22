@@ -269,7 +269,7 @@ export function outcropSpriteKeys(): readonly { kind: RockKind; variant: number;
 export function prepareOutcrops(): void {
   for (const key of outcropSpriteKeys()) outcropSprite(key.kind, key.variant, key.alt);
   for (const kind of KIND_ORDER) {
-    for (let variant = 0; variant < OUTCROP_VARIANTS; variant++) rubbleSprite(kind, variant);
+    for (let variant = 0; variant < OUTCROP_VARIANTS; variant++) rubbleSolid(kind, variant);
   }
 }
 
@@ -304,6 +304,9 @@ export function paintRubble(P: Pen, kind: RockKind, variant: number): void {
 /** Le cache des cailloux finis, un par type et variante. */
 const RUBBLES = new Map<string, HTMLCanvasElement>();
 
+/** Le cache des masques de cailloux, un par type et variante. */
+const RUBBLE_SOLID = new Map<string, Uint8Array>();
+
 /** Les cailloux tombés au pied d'un affleurement, dans une surface de 20 × 14 avec leur contour. */
 export function rubbleSprite(kind: RockKind, variant: number): HTMLCanvasElement {
   const v = normalizeVariant(variant);
@@ -315,6 +318,17 @@ export function rubbleSprite(kind: RockKind, variant: number): HTMLCanvasElement
   const img = outline(canvas, C.ink);
   RUBBLES.set(key, img);
   return img;
+}
+
+/** Le masque des pixels pleins des cailloux, en cache par type et variante. */
+export function rubbleSolid(kind: RockKind, variant: number): Uint8Array {
+  const v = normalizeVariant(variant);
+  const key = `${kind}:${v}`;
+  const cached = RUBBLE_SOLID.get(key);
+  if (cached) return cached;
+  const mask = solidMask(rubbleSprite(kind, v));
+  RUBBLE_SOLID.set(key, mask);
+  return mask;
 }
 
 /** L'indice d'un repère, ramené dans les bornes même pour un temps négatif. */

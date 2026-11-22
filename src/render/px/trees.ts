@@ -193,13 +193,24 @@ export function treeCovers(
   py: number,
 ): boolean {
   const { x, y } = tree;
+  const fx = Math.floor(px);
+  const fy = Math.floor(py);
+  if (tree.kind === 'palm') {
+    const j = y - fy;
+    if (j >= 0 && j < 24) {
+      const xo = Math.round(Math.sin(j / 9) * 3);
+      if (fx >= x - 3 + xo && fx <= x + 2 + xo) return true;
+    }
+  } else {
+    if (fy >= y - 16 && fy <= y && fx >= x - 4 && fx <= x + 3) return true;
+    if (fy === y && ((fx >= x - 6 && fx <= x - 4) || (fx >= x + 3 && fx <= x + 5))) return true;
+    if (fx === x - 7 && fy === y + 1) return true;
+  }
   const top = tree.kind === 'palm' ? y - 24 : y - 16;
-  const before = py >= top && py <= y && px >= x - 4 && px <= x + 3;
-  if (before) return true;
   const left = Math.round(x - tree.width / 2);
   const upper = Math.round(top - tree.height * 0.76);
-  const lx = Math.floor(px) - left;
-  const ly = Math.floor(py) - upper;
+  const lx = fx - left;
+  const ly = fy - upper;
   if (lx < 0 || ly < 0 || lx >= tree.width || ly >= tree.height) return false;
   return tree.solid[ly * tree.width + lx] !== 0;
 }
