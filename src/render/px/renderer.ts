@@ -50,6 +50,7 @@ import {
   oreSolidAt,
   oreVariant,
   pickVisibleOreTile,
+  rubbleOffset,
   type OreBlocker,
   type OreCell,
   type PlacedOre,
@@ -543,9 +544,10 @@ export class PxRenderer {
   private rubbleDraw(f: Frame, kind: RockKind, tx: number, ty: number): () => void {
     const variant = Math.floor(hash(tx, ty, f.g.seed + 216) * OUTCROP_VARIANTS);
     const img = rubbleSprite(kind, variant);
+    const offset = rubbleOffset(hash(tx, ty, f.g.seed + 221), hash(tx, ty, f.g.seed + 222));
     const since = this.fx.hitSince(tx, ty, f.now);
-    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + (since === null ? 0 : rockShake(since));
-    const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2);
+    const x = Math.round((tx + 0.5) * TILE_PX - img.width / 2) + offset.x + (since === null ? 0 : rockShake(since));
+    const y = Math.round((ty + 0.5) * TILE_PX - img.height / 2) + offset.y;
     return () => f.ctx.drawImage(img, x, y);
   }
 

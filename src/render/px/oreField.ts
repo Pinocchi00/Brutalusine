@@ -187,6 +187,14 @@ export function chooseHarvest(input: HarvestInput): HarvestPick | null {
   return input.direct;
 }
 
+/** Le petit décalage d'un tas de cailloux, en pixels, tiré de deux hashes. */
+export function rubbleOffset(h1: number, h2: number): { x: number; y: number } {
+  return {
+    x: Math.round((h1 - 0.5) * 10),
+    y: Math.round((h2 - 0.5) * 12) - 3,
+  };
+}
+
 /** La variante d'affleurement selon le nombre de cases et un tirage `h` dans [0, 1[. */
 export function oreVariant(count: number, h: number): number {
   if (count <= 1) return 0;

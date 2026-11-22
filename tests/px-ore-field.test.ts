@@ -12,6 +12,7 @@ import {
   oreVariant,
   pickOreTile,
   pickVisibleOreTile,
+  rubbleOffset,
   type OreBlocker,
   type PlacedOre,
 } from '../src/render/px/oreField';
@@ -363,5 +364,26 @@ describe('chooseHarvest', () => {
       direct: { kind: 'tree', x: 5, y: 6 },
     })).toEqual({ kind: 'tree', x: 5, y: 6 });
     expect(chooseHarvest({ loot: null, entity: false, visibleOre: null, direct: null })).toBeNull();
+  });
+});
+
+describe('rubbleOffset', () => {
+  it('garde x dans [-5, 5] et y dans [-9, 3] pour h1 et h2 dans [0, 1[', () => {
+    for (let i = 0; i <= 1000; i++) {
+      const h = i / 1000;
+      const offset = rubbleOffset(h, h);
+      expect(offset.x).toBeGreaterThanOrEqual(-5);
+      expect(offset.x).toBeLessThanOrEqual(5);
+      expect(offset.y).toBeGreaterThanOrEqual(-9);
+      expect(offset.y).toBeLessThanOrEqual(3);
+      expect(Number.isInteger(offset.x)).toBe(true);
+      expect(Number.isInteger(offset.y)).toBe(true);
+    }
+  });
+
+  it('est déterministe et suit les extrémités des tirages', () => {
+    expect(rubbleOffset(0.25, 0.8)).toEqual(rubbleOffset(0.25, 0.8));
+    expect(rubbleOffset(0, 0)).toEqual({ x: -5, y: -9 });
+    expect(rubbleOffset(0.999, 0.999)).toEqual({ x: 5, y: 3 });
   });
 });

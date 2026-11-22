@@ -306,6 +306,30 @@ describe('les cailloux au pied', () => {
     }
   });
 
+  it('reste dans 20 × 14 pour chaque type et variante', () => {
+    for (const kind of KINDS) {
+      for (const variant of VARIANTS) {
+        const { pen, grid } = fakePen(20, 14);
+        paintRubble(pen, kind, variant);
+        expect(grid.outside, `${kind} ${variant}`).toBe(0);
+      }
+    }
+  });
+
+  it('ne range pas tous les cailloux sur la même ligne', () => {
+    const rows = new Set<number>();
+    for (const kind of KINDS) {
+      for (const variant of VARIANTS) {
+        const { pen, grid } = fakePen(20, 14);
+        paintRubble(pen, kind, variant);
+        grid.cells.forEach((col, index) => {
+          if (col) rows.add(Math.floor(index / grid.width));
+        });
+      }
+    }
+    expect(rows.size).toBeGreaterThan(1);
+  });
+
   it('garde chaque type dans sa propre pierre et le minerai qui lui correspond', () => {
     for (const kind of KINDS) {
       const { pen, grid } = fakePen(20, 14);

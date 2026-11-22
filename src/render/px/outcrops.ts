@@ -293,8 +293,8 @@ export function paintRubble(P: Pen, kind: RockKind, variant: number): void {
   const count = v % 2 === 0 ? 3 : 4;
   const ore = oreColor(kind, pal);
   for (let k = 0; k < count; k++) {
-    const px = 2 + Math.round((k / count) * 13 + r() * 1.5);
-    const py = 7 + Math.round(r() * 4);
+    const px = 1 + Math.floor(r() * 15);
+    const py = 2 + Math.floor(r() * 10);
     P.r(px, py, 3, 2, pal[3]);
     P.r(px, py, 2, 1, pal[1]);
     if (k === 1) P.p(px + 1, py + 1, ore);
