@@ -8,6 +8,7 @@ import { hash } from '../src/render/px/noise';
 import { TILE_PX } from '../src/render/px/view';
 import {
   paintGroundCore,
+  paintScrapTile,
   paintTiles,
   type GroundPathSegment,
   type GroundSource,
@@ -409,6 +410,34 @@ describe('peinture du sol', () => {
         throw new Error(`couleur de ferraille inattendue : ${color.toString(16)}`);
       }
     }
+  });
+
+  it('peint un débris isolé avec exactement les pixels du sol et rien autour', () => {
+    const scene: Scene = {
+      shore: () => 5,
+      slab: () => false,
+      paths: [],
+      loot: (tx, ty) => tx === 4 && ty === 4,
+    };
+    const src = blockSource(scene, 0, 0);
+    const withLoot = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintTiles(src, withLoot, 4, 4, 5, 5);
+    const cleanSrc = { ...src, loot: new Uint8Array(CHUNK * CHUNK) };
+    const clean = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintTiles(cleanSrc, clean, 4, 4, 5, 5);
+    const diff = diffPixels(withLoot, clean);
+    expect(diff.length).toBeGreaterThan(0);
+    const scrap = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+    paintScrapTile(scrap, 4, 4, src.seed);
+    const opaque: number[] = [];
+    for (let i = 0; i < TILE_PX * TILE_PX; i++) {
+      const o = i * 4;
+      if (scrap[o + 3] === 0) continue;
+      opaque.push(i);
+      expect([scrap[o], scrap[o + 1], scrap[o + 2]]).toEqual([withLoot[o], withLoot[o + 1], withLoot[o + 2]]);
+      expect(scrap[o + 3]).toBe(255);
+    }
+    expect(opaque).toEqual(diff);
   });
 
   it('garde les bandes profondes quand le gué est nul', () => {

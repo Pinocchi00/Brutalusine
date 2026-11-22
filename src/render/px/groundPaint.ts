@@ -898,6 +898,29 @@ function paintDebris(
   }
 }
 
+/** Peint un débris isolé dans un tampon 24 × 24 RGBA, transparent hors du morceau. */
+export function paintScrapTile(out: Uint8ClampedArray, tx: number, ty: number, seed: number): void {
+  const baseX = tx * TILE_PX;
+  const baseY = ty * TILE_PX;
+  for (let py = 0; py < TILE_PX; py++) {
+    for (let px = 0; px < TILE_PX; px++) {
+      const o = (py * TILE_PX + px) * 4;
+      const color = scrapPixel(px, py, baseX + px, baseY + py, seed);
+      if (color === 0) {
+        out[o] = 0;
+        out[o + 1] = 0;
+        out[o + 2] = 0;
+        out[o + 3] = 0;
+      } else {
+        out[o] = color & 255;
+        out[o + 1] = (color >>> 8) & 255;
+        out[o + 2] = (color >>> 16) & 255;
+        out[o + 3] = 255;
+      }
+    }
+  }
+}
+
 /** Un pixel de ferraille, ou `0` hors du morceau. */
 function scrapPixel(px: number, py: number, wx: number, wy: number, seed: number): number {
   if (inScrap(px, py)) return hash(wx, wy, seed + 41) < 0.22 ? RGB.s3 : RGB.s1;

@@ -91,22 +91,6 @@ const ICON_ROWS: Record<FamilyIcon, readonly string[]> = {
   ],
 };
 
-const ROCK: Record<DepositType, readonly [string, string, string, string, string]> = {
-  1: ['#dcc6b6', '#ae9282', '#866c60', '#5f4b45', '#41332f'],
-  2: [C.st0, C.st1, C.st2, C.st3, C.st4],
-  3: ['#efebe2', '#cbc5b9', '#a29c92', '#77716a', '#4f4a45'],
-  4: ['#dedcce', '#b1b0a0', '#888a7a', '#5f6258', '#41443d'],
-};
-
-const DEPOSIT_TINT: Record<DepositType, readonly [string, string]> = {
-  1: [C.ir1, C.ir2],
-  2: [C.st1, C.st2],
-  3: [C.qz1, C.qz2],
-  4: [C.ma2, C.ma3],
-};
-
-const TREE_RADII: Record<1 | 2 | 3, number> = { 1: 10, 2: 14, 3: 18 };
-
 const sprites = new Map<string, Sprite | null>();
 const items = new Map<number, HTMLCanvasElement>();
 
@@ -254,71 +238,6 @@ export function placeholderSprite(def: BuildingDef, w = def.w, h = def.h): Sprit
     return null;
   }
   const sprite = build(spec.w, spec.h, spec.up, (P, _up, lights) => drawPlaceholder(P, spec, lights));
-  sprites.set(key, sprite);
-  return sprite;
-}
-
-/** Dessine un rocher de trois quarts : pied sombre, face, dessus éclairé et facette. */
-function boulder(P: Pen, cx: number, cy: number, w: number, h: number, pal: readonly [string, string, string, string, string]): void {
-  const [hi, t1, t2, f, ft] = pal;
-  const fh = Math.max(3, Math.round(h * 0.9));
-  P.ell(cx, cy + fh * 0.5, w, h * 0.85, ft);
-  P.r(cx - w + 1, cy, w * 2 - 2, fh * 0.6, f);
-  P.ell(cx, cy, w, h * 0.8, f);
-  P.ell(cx - 0.6, cy - 1, w * 0.92, h * 0.72, t2);
-  P.ell(cx - w * 0.25, cy - h * 0.3, w * 0.55, h * 0.42, t1);
-  P.r(cx - w * 0.55, cy - h * 0.5, Math.max(2, w * 0.3), 1, hi);
-  P.line(cx - w * 0.2, cy + h * 0.1, cx + w * 0.35, cy - h * 0.25, f);
-}
-
-/** Un arbre provisoire : un tronc et un houppier rond, verts de la maquette (taille 1 à 3). */
-export function placeholderTree(size: 1 | 2 | 3): Sprite {
-  const key = `tree:${size}`;
-  const cached = sprites.get(key);
-  if (cached) return cached;
-  const rad = TREE_RADII[size];
-  const w = rad * 2 + 12, h = 10 + size * 4, up = 10 + size * 8;
-  const sprite = build(w, h, up, (P) => {
-    const cx = w / 2;
-    const cy = h + up - up * 0.78 - 2;
-    const tw = 4 + size;
-    const ground = h + up - 2;
-    P.r(cx - Math.ceil(tw / 2), cy, tw, ground - cy, C.e3);
-    P.r(cx - Math.ceil(tw / 2) + 1, cy, 1, ground - cy - 1, C.e2);
-    P.p(cx + Math.floor(tw / 2), ground - 1, C.e4);
-    P.disc(cx, cy, rad, C.g5);
-    P.disc(cx - 1, cy - 1, rad - 1, C.g4);
-    P.disc(cx - 2, cy - 2, rad - 2, C.g3);
-    P.disc(cx - 3, cy - 3, rad - 4, C.g2);
-    P.disc(cx - 4, cy - 4, Math.max(2, rad - 7), C.g1);
-    for (let k = 0; k < size * 5; k++) {
-      const a = (k / (size * 5)) * Math.PI * 2;
-      const px = Math.round(cx - 2 + Math.cos(a) * rad * 0.72);
-      const py = Math.round(cy - 2 + Math.sin(a) * rad * 0.6);
-      P.p(px, py, k % 3 === 0 ? C.g1 : C.g4);
-    }
-  });
-  sprites.set(key, sprite);
-  return sprite;
-}
-
-/** Un tas de roche provisoire pour un gisement, aux teintes de pierre de la maquette. */
-export function placeholderDeposit(type: DepositType): Sprite {
-  const key = `deposit:${type}`;
-  const cached = sprites.get(key);
-  if (cached) return cached;
-  const pal = ROCK[type];
-  const tint = DEPOSIT_TINT[type];
-  const sprite = build(42, 26, 14, (P) => {
-    boulder(P, 16, 33, 11, 7, pal);
-    boulder(P, 28, 30, 9, 6, pal);
-    boulder(P, 21, 23, 8, 5, pal);
-    P.p(17, 31, tint[0]);
-    P.p(24, 28, tint[0]);
-    P.p(29, 29, tint[1]);
-    P.p(12, 36, C.ink2);
-    P.p(33, 35, C.ink2);
-  });
   sprites.set(key, sprite);
   return sprite;
 }
