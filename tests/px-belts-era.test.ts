@@ -113,6 +113,31 @@ describe('eraBeltTile — phases négatives', () => {
   });
 });
 
+/** Les colonnes de la strie des rondins d'une rangée, sans la strie fixe de la phase 4. */
+function logStripe(pixels: Pixels, y: number): number[] {
+  const cols: number[] = [];
+  for (let x = 0; x < T; x++) {
+    if (x % 6 !== 4 && pixels.get(`${x},${y}`) === C.e3) cols.push(x);
+  }
+  return cols;
+}
+
+describe('eraBeltTile — sens des rondins', () => {
+  it('avance les rondins vers l’ouest quand la sortie est à l’ouest', () => {
+    const before = logStripe(tile(2, 2, logOff(2), 1), 10);
+    const after = logStripe(tile(2, 2, logOff(3), 1), 10);
+    expect(before).toEqual([3, 9, 15, 21]);
+    expect(after).toEqual([2, 8, 14, 20]);
+  });
+
+  it('avance les rondins vers l’est quand la sortie est à l’est', () => {
+    const before = logStripe(tile(0, 0, logOff(2), 1), 10);
+    const after = logStripe(tile(0, 0, logOff(3), 1), 10);
+    expect(before).toEqual([2, 8, 14, 20]);
+    expect(after).toEqual([3, 9, 15, 21]);
+  });
+});
+
 describe('eraBeltTile — virage', () => {
   it('ne peint rien à d < 3 ni à d >= 21 aux deux ères', () => {
     for (const era of [1, 2] as const) {
