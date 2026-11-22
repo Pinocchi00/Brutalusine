@@ -9,7 +9,7 @@ import { build, type Light, type Sprite } from './sprite';
 import { placeholderSprite } from './placeholders';
 import { towerE1, towerE2 } from './artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from './artWorks';
-import { scierieE1 } from './artFirst';
+import { scierieE1, scierieE2 } from './artFirst';
 import { fourE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
@@ -39,7 +39,7 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
   ],
   scierie: [
     { up: 18, draw: scierieE1 },
-    { up: 18, draw: scierieE1 },
+    { up: 22, draw: scierieE2 },
   ],
   four: [
     { up: 44, draw: fourE2 },
