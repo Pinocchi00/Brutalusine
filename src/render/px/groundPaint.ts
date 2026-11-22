@@ -702,7 +702,7 @@ function paintStoneSlabTile(
   const r = rng(tx * 17 + ty);
   for (let row = 0; row < STONE_ROWS; row++) {
     const top = Y + row * STONE_ROW_PX;
-    fillWorld(out, bounds, X, top, TILE_PX, STONE_ROW_PX, RGB.st4);
+    fillWorld(out, bounds, X, top, TILE_PX, STONE_ROW_PX, RGB.st3);
     const offset = Math.floor(r() * 6);
     let x = X - offset;
     while (x < X + TILE_PX) {
@@ -710,7 +710,7 @@ function paintStoneSlabTile(
       const left = Math.max(X, x);
       const right = Math.min(X + TILE_PX, x + w);
       if (right > left) {
-        const face = r() < 0.5 ? RGB.st1 : RGB.st2;
+        const face = r() < 2 / 3 ? RGB.st1 : RGB.st2;
         paintPaver(out, bounds, left, top, right - left, face);
         if (right < X + TILE_PX && r() < 0.34) paintJointMoss(out, bounds, right, top, r);
       }
@@ -728,11 +728,11 @@ function paintPaver(
   w: number,
   face: number,
 ): void {
+  const shadow = face === RGB.st1 ? RGB.st2 : RGB.st3;
   fillWorld(out, bounds, x, y, w, STONE_PAVER_PX, face);
   fillWorld(out, bounds, x, y, w, 1, RGB.st0);
-  fillWorld(out, bounds, x, y, 1, STONE_PAVER_PX, RGB.st0);
-  fillWorld(out, bounds, x, y + STONE_PAVER_PX - 1, w, 1, RGB.st3);
-  fillWorld(out, bounds, x + w - 1, y, 1, STONE_PAVER_PX, RGB.st3);
+  fillWorld(out, bounds, x, y + STONE_PAVER_PX - 1, w, 1, shadow);
+  fillWorld(out, bounds, x + w - 1, y, 1, STONE_PAVER_PX, shadow);
 }
 
 /** Pose quelques pixels de mousse sur la colonne d'un joint de pavés. */

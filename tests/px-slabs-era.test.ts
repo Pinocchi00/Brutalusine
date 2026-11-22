@@ -120,13 +120,15 @@ describe('les dalles d’ère', () => {
       2: [pack(C.st1), pack(C.st2), pack(C.st3)],
     };
     for (const era of [1, 2] as const) {
-      const edge = paintRange(slabSource(onlyTile, era), 2, 2, 3, 3);
+      const edge = paintRange(slabSource(onlyTile, era), 2, 2, 3, 4);
       for (let i = 0; i < 3; i++) {
         const y = TILE_PX - 3 + i;
         expect(pixelColor(edge, y * TILE_PX + 5)).toBe(lips[era][i]);
       }
-      const inner = paintRange(slabSource(withSouth, era), 2, 2, 3, 3);
-      expect(pixelColor(inner, (TILE_PX - 1) * TILE_PX + 5)).not.toBe(lips[era][2]);
+      const m5 = pack(C.m5);
+      expect(pixelColor(edge, TILE_PX * TILE_PX + 5)).toBe(m5);
+      const inner = paintRange(slabSource(withSouth, era), 2, 2, 3, 4);
+      expect(pixelColor(inner, TILE_PX * TILE_PX + 5)).not.toBe(m5);
     }
   });
 });
