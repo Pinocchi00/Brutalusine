@@ -137,8 +137,18 @@ describe('drawPuitsMotion', () => {
   it('tourne les huit rayons de la roue de Pierre', () => {
     const two = fakePen();
     drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
-    expect(two.lines).toHaveLength(8);
-    expect(hasRect(two.rects, 46, 16, 1, 62)).toBe(true);
+    expect(two.lines).toHaveLength(9);
+    expect(hasRect(two.rects, 46, 23, 1, 52)).toBe(true);
+  });
+
+  it('redessine les montants par-dessus la corde et le seau', () => {
+    const one = fakePen();
+    drawPuitsMotion(one.P, 1, 0, 0, 10, 30);
+    expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 15, y1: 68 });
+    expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 59, y1: 66 });
+    const two = fakePen();
+    drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
+    expect(two.lines).toContainEqual({ x0: 58, y0: 98, x1: 42, y1: 22 });
   });
 });
 

@@ -62,11 +62,14 @@ export function drawPuitsMotion(P: Pen, era: Era, X: number, Y: number, up: numb
     const drop = bucketDrop(progress, 8);
     P.r(X + 36, Y + up - 3, 1, 34 + drop, C.c3);
     bucketE1(P, X, Y + up, drop);
+    P.line(X + 36, Y + up - 6, X + 15, Y + up + 58, C.e2, 2);
+    P.line(X + 36, Y + up - 6, X + 59, Y + up + 56, C.e2, 2);
     return;
   }
   const drop = bucketDrop(progress, 10);
-  P.r(X + 46, Y + up - 26, 1, 52 + drop, C.c3);
+  P.r(X + 46, Y + up - 19, 1, 42 + drop, C.c3);
   bucketE2(P, X, Y + up, drop);
+  P.line(X + 58, Y + up + 56, X + 42, Y + up - 20, C.e2, 2);
   const cx = X + 36;
   const cy = Y + up - 28;
   const angle = wheelAngle(progress);
