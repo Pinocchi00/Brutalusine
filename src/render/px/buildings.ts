@@ -1,0 +1,68 @@
+/**
+ * Les vrais dessins des bâtiments, ère par ère, et le choix entre ce dessin et le volume provisoire.
+ * La Tour, le Puits, la Charbonnière et l'Entrepôt ont désormais leur art de la maquette.
+ */
+import type { BuildingDef } from '../../sim/data';
+import { BUILDINGS } from '../../sim/data';
+import type { Pen } from './pen';
+import { build, type Light, type Sprite } from './sprite';
+import { placeholderSprite } from './placeholders';
+import { towerE1, towerE2 } from './artTower';
+import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from './artWorks';
+import { eraFor, type Era } from './eras';
+
+/** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
+export interface EraArt {
+  up: number;
+  draw(P: Pen, U: number, L: Light[]): void;
+}
+
+/** Les dessins de la maquette, Bois puis Pierre, par clé de bâtiment. */
+const ARTS: Record<string, readonly [EraArt, EraArt]> = {
+  tour: [
+    { up: 16, draw: towerE1 },
+    { up: 30, draw: towerE2 },
+  ],
+  puits: [
+    { up: 10, draw: (P, U, L) => puitsE1(P, U, L, false) },
+    { up: 42, draw: (P, U, L) => puitsE2(P, U, L, false) },
+  ],
+  charbonniere: [
+    { up: 2, draw: kilnE1 },
+    { up: 4, draw: kilnE2 },
+  ],
+  entrepot: [
+    { up: 2, draw: storeE1 },
+    { up: 20, draw: storeE2 },
+  ],
+};
+
+/** Les deux dessins d'un bâtiment, Bois puis Pierre, ou `null` s'il n'en a pas encore. */
+export function eraArts(key: string): readonly [EraArt, EraArt] | null {
+  return ARTS[key] ?? null;
+}
+
+/** Les sprites des vrais dessins, par clé de bâtiment et ère. */
+const sprites = new Map<string, Sprite>();
+
+/** Le sprite d'un bâtiment à cette ère : son vrai dessin, sinon son volume provisoire. */
+export function buildingSprite(def: BuildingDef, w: number, h: number, era: Era): Sprite | null {
+  const arts = eraArts(def.key);
+  if (!arts || w !== def.w || h !== def.h) return placeholderSprite(def, w, h);
+  const version = eraFor(era, 1);
+  const key = `${def.key}#${version}`;
+  const cached = sprites.get(key);
+  if (cached) return cached;
+  const art = arts[version - 1];
+  const sprite = build(def.w * 24, def.h * 24, art.up, art.draw);
+  sprites.set(key, sprite);
+  return sprite;
+}
+
+/** Dessine à l'avance tous les bâtiments de cette ère. */
+export function prepareBuildings(era: Era): void {
+  for (const def of BUILDINGS) {
+    if (!eraArts(def.key)) continue;
+    buildingSprite(def, def.w, def.h, era);
+  }
+}

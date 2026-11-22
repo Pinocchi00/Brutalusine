@@ -4,7 +4,9 @@
  */
 import { BUILDINGS, DEPOSITS, ITEMS } from '../sim/data';
 import { C } from '../render/px/palette';
-import { castShadow, type Sprite } from '../render/px/sprite';
+import { build, castShadow, type Sprite } from '../render/px/sprite';
+import { towerE1, towerE2 } from '../render/px/artTower';
+import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
 import {
   placeholderBuilder,
   placeholderItem,
@@ -105,6 +107,21 @@ for (const def of BUILDINGS) {
   const sprite = placeholderSprite(def);
   const canvas = sprite ? spriteTile(sprite) : groundTile();
   if (figure(buildings, def.name, canvas, sprite !== null)) count++;
+}
+
+const ERAS = section('Bâtiments Bois et Pierre');
+for (const [label, footprint, up, draw] of [
+  ['Tour · Bois', 72, 16, towerE1],
+  ['Tour · Pierre', 72, 30, towerE2],
+  ['Puits · Bois', 72, 10, puitsE1],
+  ['Puits · Pierre', 72, 42, puitsE2],
+  ['Charbonnière · Bois', 48, 2, kilnE1],
+  ['Charbonnière · Pierre', 48, 4, kilnE2],
+  ['Stockage · Bois', 48, 2, storeE1],
+  ['Stockage · Pierre', 48, 20, storeE2],
+] as const) {
+  const sprite = build(footprint, footprint, up, draw);
+  if (figure(ERAS, label, spriteTile(sprite))) count++;
 }
 
 const KIND_NAMES: Record<TreeKind, string> = { leafy: 'Feuillu', palm: 'Palmier', flower: 'Fleuri' };
