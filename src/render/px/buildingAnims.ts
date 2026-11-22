@@ -11,9 +11,9 @@ import type { Pen } from './pen';
 /** Le tour complet d'un cycle, en radians. */
 const TAU = Math.PI * 2;
 
-/** Vrai si la machine brûle : une machine en marche, ou un générateur dont le statut est `Working`. */
+/** Vrai si la machine brûle : son statut est `Working`, y compris quand `working` retombe en fin de cycle. */
 export function isBurning(e: Ent): boolean {
-  return e.working || (e.def.kind === 'generator' && e.status === Status.Working);
+  return e.status === Status.Working;
 }
 
 /** Le nombre de pas d'un minerai, la durée d'un cycle du Puits. */

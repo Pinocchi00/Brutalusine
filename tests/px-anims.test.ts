@@ -50,12 +50,16 @@ function hasRect(rects: readonly Rect[], a: number, b: number, w: number, h: num
 }
 
 describe('isBurning', () => {
-  it('suit l’état d’une machine', () => {
+  it('suit le statut d’une machine, même en fin de cycle', () => {
     const machine = new Ent(1, B.charbonniere, 0, 0, 0, 2, 2);
-    machine.working = true;
-    expect(isBurning(machine)).toBe(true);
+    machine.status = Status.Working;
     machine.working = false;
-    expect(isBurning(machine)).toBe(false);
+    expect(isBurning(machine)).toBe(true);
+    for (const status of [Status.NoInput, Status.Blocked, Status.NoPower]) {
+      machine.status = status;
+      machine.working = true;
+      expect(isBurning(machine)).toBe(false);
+    }
   });
 
   it('suit le statut d’un générateur', () => {
