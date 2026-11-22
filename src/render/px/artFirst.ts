@@ -4,77 +4,93 @@
  */
 import type { Pen } from './pen';
 import type { Light } from './sprite';
-import { C, M } from './palette';
+import { C } from './palette';
 import { rng } from './noise';
-import { box, logEnds, moss } from './volumes';
+import { logEnds, moss } from './volumes';
 
-/** Ère 1 · un chevalet de bois, un tronc, une longue lame, quatre poteaux et un auvent de branches. */
+/** Ère 1 · un sol de terre battue, quatre poteaux, un rondin sur un chevalet et une scie à deux poignées. */
 export function scierieE1(P: Pen, U: number, L: Light[]): void {
   const r = rng(83);
 
-  P.ell(24, U + 43, 17, 4, C.sd1);
-  P.ell(24, U + 42, 14, 3, C.sd0);
-  for (let k = 0; k < 20; k++) {
-    const x = 9 + Math.floor(r() * 30);
-    const y = U + 39 + Math.floor(r() * 6);
-    P.p(x, y, r() < 0.7 ? C.sd0 : C.sd2);
+  P.ell(24, U + 33, 23, 14, C.sd2);
+  P.ell(24, U + 32, 21, 12, C.sd1);
+  P.ell(23, U + 30, 17, 9, C.sd0);
+  P.ell(28, U + 35, 14, 7, C.sd1);
+  for (let k = 0; k < 26; k++) {
+    const a = r() * 6.283;
+    const d = 0.55 + r() * 0.45;
+    P.p(24 + Math.cos(a) * 22 * d, U + 32 + Math.sin(a) * 13 * d, r() < 0.5 ? C.sd2 : C.e1);
   }
 
-  P.r(6, U - 2, 2, 20, C.e3);
-  P.r(6, U - 2, 1, 20, C.e1);
-  P.r(40, U - 2, 2, 20, C.e3);
-  P.r(40, U - 2, 1, 20, C.e2);
-  P.r(3, U + 4, 2, 38, C.e3);
-  P.r(3, U + 4, 1, 38, C.e1);
-  P.r(43, U + 4, 2, 38, C.e3);
-  P.r(43, U + 4, 1, 38, C.e2);
+  P.r(5, U - 8, 3, 22, C.e3);
+  P.r(5, U - 8, 1, 22, C.e1);
+  P.r(7, U - 8, 1, 22, C.e2);
+  P.r(40, U - 8, 3, 22, C.e3);
+  P.r(40, U - 8, 1, 22, C.e1);
+  P.r(42, U - 8, 1, 22, C.e2);
+  P.r(3, U - 6, 3, 50, C.e3);
+  P.r(3, U - 6, 1, 50, C.e1);
+  P.r(5, U - 6, 1, 50, C.e2);
+  P.r(42, U - 6, 3, 50, C.e3);
+  P.r(42, U - 6, 1, 50, C.e1);
+  P.r(44, U - 6, 1, 50, C.e2);
 
-  P.line(1, U + 6, 46, U - 4, C.e3, 2);
-  P.line(2, U + 2, 44, U + 10, C.e2, 2);
-  P.line(2, U - 6, 20, U + 6, C.e3);
-  P.line(46, U - 6, 28, U + 6, C.e3);
+  P.line(1, U - 2, 46, U - 8, C.e3, 2);
+  P.line(2, U - 10, 44, U - 2, C.e2, 2);
+  P.line(4, U - 7, 20, U + 2, C.e3);
+  P.line(44, U - 7, 28, U + 2, C.e3);
   const leaves: [number, number, number][] = [
-    [6, U - 6, 6], [16, U - 8, 5], [27, U - 7, 6], [38, U - 6, 5],
-    [10, U - 1, 5], [21, U + 1, 6], [33, U, 5], [43, U - 1, 4],
-    [15, U + 7, 4], [30, U + 8, 4], [42, U + 7, 3],
+    [6, U - 8, 6], [15, U - 11, 5], [25, U - 10, 6], [36, U - 9, 5], [44, U - 7, 4],
+    [10, U - 3, 5], [20, U - 5, 6], [31, U - 4, 5], [41, U - 2, 4],
+    [14, U + 1, 4], [27, U, 4], [38, U - 1, 3],
   ];
   for (const [x, y, rad] of leaves) {
     P.ell(x, y, rad, Math.max(2, rad - 2), C.g3);
     P.ell(x - 1, y - 1, Math.max(2, rad - 3), Math.max(1, rad - 3), C.g2);
     P.p(x - 2, y - 2, C.g1);
   }
-  moss(P, 2, U - 8, 44, 18, 31, 16);
+  moss(P, 2, U - 12, 44, 16, 31, 18);
 
-  const beam = U + 27;
-  P.line(15, beam, 10, U + 42, C.e3, 2);
-  P.line(15, beam, 20, U + 42, C.e3, 2);
-  P.line(33, beam, 28, U + 42, C.e3, 2);
-  P.line(33, beam, 38, U + 42, C.e3, 2);
-  P.line(13, beam, 35, beam, C.e3, 2);
-  P.r(13, beam - 1, 23, 1, C.e1);
-  for (const x of [10, 20, 28, 38]) P.r(x - 1, U + 41, 2, 2, C.e2);
+  const beam = U + 34;
+  P.line(15, beam, 11, U + 45, C.e3, 2);
+  P.line(15, beam, 21, U + 45, C.e3, 2);
+  P.line(33, beam, 27, U + 45, C.e3, 2);
+  P.line(33, beam, 37, U + 45, C.e3, 2);
+  P.line(14, beam, 34, beam, C.e3, 2);
+  P.r(14, beam - 1, 21, 1, C.e1);
 
-  P.r(8, U + 20, 32, 8, C.e2);
-  P.r(8, U + 20, 32, 2, C.e1);
-  P.r(8, U + 26, 32, 2, C.e3);
-  for (const [x, y] of [[12, U + 24], [17, U + 23], [31, U + 24], [36, U + 23]]) {
-    P.p(x, y, C.e3);
-    P.p(x + 1, y, C.e2);
+  P.disc(7, U + 29, 5, C.e3);
+  P.disc(40, U + 29, 5, C.e3);
+  P.r(7, U + 24, 34, 10, C.e3);
+  P.r(7, U + 24, 34, 2, C.e2);
+  P.r(7, U + 24, 1, 10, C.e2);
+  P.r(7, U + 32, 34, 2, C.e4);
+  for (const [x, y, len] of [[12, U + 27, 4], [18, U + 30, 3], [30, U + 27, 5], [35, U + 30, 3]]) {
+    P.r(x, y, 1, len, C.e4);
   }
-  P.r(22, U + 19, 5, 3, C.e4);
+  logEnds(P, [[7, U + 29], [40, U + 29]]);
 
-  P.r(22, U + 4, 4, 17, C.s1);
-  P.r(22, U + 4, 1, 17, C.s0);
-  P.r(25, U + 4, 1, 17, C.s2);
-  for (let y = U + 7; y < U + 21; y += 2) P.p(21, y, C.s1);
-  P.r(20, U + 1, 8, 3, C.e3);
-  P.r(20, U + 1, 8, 1, C.e1);
-  P.r(19, U + 3, 2, 3, C.e3);
-  P.r(27, U + 3, 2, 3, C.e3);
+  P.r(22, U + 24, 5, 10, C.e4);
+  P.r(23, U + 12, 4, 28, C.s1);
+  P.r(23, U + 12, 1, 28, C.s0);
+  P.r(26, U + 12, 1, 28, C.s3);
+  for (let y = U + 15; y < U + 39; y += 2) P.p(22, y, C.s1);
+  P.r(19, U + 8, 12, 4, C.e3);
+  P.r(19, U + 8, 12, 1, C.e1);
+  P.r(19, U + 11, 12, 1, C.e4);
+  P.r(24, U + 12, 2, 1, C.e2);
+  P.r(19, U + 39, 12, 4, C.e3);
+  P.r(19, U + 39, 12, 1, C.e1);
+  P.r(19, U + 42, 12, 1, C.e4);
 
-  box(P, 4, U + 40, 14, 4, 2, M.wood, false);
-  P.r(4, U + 40, 14, 1, C.e1);
-  box(P, 28, U + 41, 14, 4, 2, M.wood, false);
-  box(P, 8, U + 36, 10, 3, 2, M.wood, false);
-  logEnds(P, [[18, U + 42], [42, U + 43], [18, U + 38]]);
+  P.r(5, U + 43, 9, 3, C.e2);
+  P.r(5, U + 43, 9, 1, C.e1);
+  P.r(5, U + 45, 9, 1, C.e3);
+  P.r(33, U + 44, 9, 3, C.e2);
+  P.r(33, U + 44, 9, 1, C.e1);
+  P.r(33, U + 46, 9, 1, C.e3);
+  logEnds(P, [[14, U + 44], [41, U + 45]]);
+
+  P.ell(24, U + 44, 7, 2, C.sd0);
+  for (let k = 0; k < 10; k++) P.p(18 + Math.floor(r() * 12), U + 43 + Math.floor(r() * 4), C.sd0);
 }
