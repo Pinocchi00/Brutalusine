@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chooseHarvest,
+  maskCovers,
   oreCell,
   oreCoversScrap,
   oreOffset,
@@ -209,6 +210,30 @@ function rock(overrides: Partial<PlacedOre>): PlacedOre {
     ...overrides,
   };
 }
+
+describe('maskCovers', () => {
+  const mask = [1, 0, 1, 0];
+
+  it('reconnaît un pixel plein et un pixel transparent', () => {
+    expect(maskCovers(mask, 2, 2, 0, 0)).toBe(true);
+    expect(maskCovers(mask, 2, 2, 1, 0)).toBe(false);
+  });
+
+  it('refuse les quatre bords hors des bornes', () => {
+    expect(maskCovers(mask, 2, 2, -1, 0)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 2, 0)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 0, -1)).toBe(false);
+    expect(maskCovers(mask, 2, 2, 0, 2)).toBe(false);
+  });
+
+  it('reconnaît les quatre coins du masque', () => {
+    const corners = [1, 0, 0, 1];
+    expect(maskCovers(corners, 2, 2, 0, 0)).toBe(true);
+    expect(maskCovers(corners, 2, 2, 1, 0)).toBe(false);
+    expect(maskCovers(corners, 2, 2, 0, 1)).toBe(false);
+    expect(maskCovers(corners, 2, 2, 1, 1)).toBe(true);
+  });
+});
 
 describe('oreSolidAt', () => {
   it('reconnaît un pixel plein et un pixel transparent', () => {

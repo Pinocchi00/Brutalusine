@@ -49,6 +49,7 @@ import {
   oreOffset,
   oreSolidAt,
   oreVariant,
+  maskCovers,
   pickVisibleOreTile,
   rubbleOffset,
   type OreBlocker,
@@ -57,7 +58,7 @@ import {
 } from './oreField';
 import { paintScrapTile } from './groundPaint';
 import { makeSurface } from './surface';
-import { castShadow, type Sprite } from './sprite';
+import { castShadow, spriteMask, type Sprite } from './sprite';
 import {
   drawBrackets,
   drawCauseBubble,
@@ -400,11 +401,10 @@ export class PxRenderer {
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
-      const right = X + sprite.img.width;
-      const bottom = Y + sprite.img.height;
+      const mask = spriteMask(sprite);
       blockers.push({
         footPx: (e.y + e.h) * TILE_PX,
-        covers: (px, py) => px >= X && px < right && py >= Y && py < bottom,
+        covers: (px, py) => maskCovers(mask, sprite.img.width, sprite.img.height, Math.floor(px) - X, Math.floor(py) - Y),
       });
     }
     return blockers;

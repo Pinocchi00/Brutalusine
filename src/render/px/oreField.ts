@@ -88,12 +88,15 @@ export interface PlacedOre {
   tiles: readonly OrePoint[];
 }
 
+/** Vrai si le pixel (x, y) d'un masque de largeur `width` et hauteur `height` est plein. */
+export function maskCovers(mask: ArrayLike<number>, width: number, height: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= width || y >= height) return false;
+  return mask[y * width + x] !== 0;
+}
+
 /** Vrai si le pixel monde (px, py) tombe sur un pixel plein de cette roche. */
 export function oreSolidAt(rock: PlacedOre, px: number, py: number): boolean {
-  const x = Math.floor(px) - rock.X;
-  const y = Math.floor(py) - rock.Y;
-  if (x < 0 || y < 0 || x >= rock.width || y >= rock.height) return false;
-  return rock.solid[y * rock.width + x] !== 0;
+  return maskCovers(rock.solid, rock.width, rock.height, Math.floor(px) - rock.X, Math.floor(py) - rock.Y);
 }
 
 /** La roche choisie sous un pixel : la plus au sud, puis la plus à l'est. */
