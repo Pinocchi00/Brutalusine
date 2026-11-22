@@ -18,6 +18,9 @@ const BLOCK_PX = CHUNK * TILE_PX;
 /** Le nombre de cases d'un côté des codes, marge d'une case comprise. */
 const CODES = CHUNK + 2;
 
+/** Le nombre de coins d'un côté du champ de rivage. */
+const CORNER = CHUNK + 1;
+
 /** Le nombre d'images sans être vu après lequel la vie d'un bloc est oubliée. */
 const LIFE_TTL = 120;
 
@@ -36,9 +39,57 @@ const LIFE_DEFAULT_MS = 1;
 /** En dessous de ce temps écoulé, aucune peinture n'a eu lieu, en millisecondes. */
 const IDLE_MS = 0.5;
 
+/** Le nombre de passes de peinture du préchauffage. */
+const WARM_PASSES = 3;
+
+/** Le nombre de calculs de vie du préchauffage. */
+const WARM_LIFE = 8;
+
+/** Le nombre de coûts de préchauffage retenus pour l'estimation. */
+const WARM_RECENT = 3;
+
+/** La graine fixe de la source de préchauffage. */
+const WARM_SEED = 0x5eed;
+
 /** Vrai si un calcul estimé à `estimateMs` tient encore dans le plafond, après `elapsedMs`. */
 export function lifeFits(elapsedMs: number, estimateMs: number, totalMs: number = GROUND_TOTAL_MS): boolean {
   return elapsedMs + estimateMs <= totalMs;
+}
+
+/** Une source synthétique, pure et déterministe, qui chauffe toutes les branches de la peinture. */
+export function warmGroundSource(): GroundSource {
+  const shore = new Float32Array(CORNER * CORNER);
+  const ford = new Float32Array(CORNER * CORNER);
+  const slab = new Uint8Array(CODES * CODES);
+  const loot = new Uint8Array(CHUNK * CHUNK);
+  for (let j = 0; j < CORNER; j++) {
+    for (let i = 0; i < CORNER; i++) {
+      const k = j * CORNER + i;
+      shore[k] = (CHUNK - j) * 0.5 - 4;
+      const across = Math.min(i - 6, 25 - i);
+      if (j >= 20 && across >= 0) ford[k] = across >= 2 ? 1 : across * 0.5;
+    }
+  }
+  for (let ly = 4; ly < 7; ly++) {
+    for (let lx = 4; lx < 7; lx++) slab[(ly + 1) * CODES + (lx + 1)] = 1;
+  }
+  loot[10 * CHUNK + 10] = 1;
+  loot[16 * CHUNK + 21] = 1;
+  const paths: GroundPathSegment[] = [{ ax: 2, ay: 2, bx: 29, by: 23 }];
+  return { seed: WARM_SEED, originX: 0, originY: 0, shore, ford, paths, slab, loot };
+}
+
+/** Déduit les codes de sol d'une source de vie : eau si la moyenne des quatre coins est négative. */
+function lifeGround(shore: ArrayLike<number>): Uint8Array {
+  const ground = new Uint8Array(CHUNK * CHUNK);
+  for (let ly = 0; ly < CHUNK; ly++) {
+    for (let lx = 0; lx < CHUNK; lx++) {
+      const i = ly * CORNER + lx;
+      const avg = shore[i] + shore[i + 1] + shore[i + CORNER] + shore[i + CORNER + 1];
+      ground[ly * CHUNK + lx] = avg < 0 ? 1 : 0;
+    }
+  }
+  return ground;
 }
 
 /** Une entrée de vie du sol, avec la dernière image où son bloc a été vu. */
@@ -66,6 +117,7 @@ export class GroundLayer {
   private readonly now: () => number;
   private readonly lifeRecent: number[] = [];
   private lifeEstimate = LIFE_DEFAULT_MS;
+  private preparedEstimate = LIFE_DEFAULT_MS;
   private paths = new WeakMap<Chunk, readonly GroundPathSegment[]>();
   private world: World | null = null;
 
@@ -103,8 +155,42 @@ export class GroundLayer {
     this.visible.length = 0;
     this.nearby.length = 0;
     this.lifeRecent.length = 0;
-    this.lifeEstimate = LIFE_DEFAULT_MS;
+    this.lifeEstimate = this.preparedEstimate;
     this.groundMs = 0;
+  }
+
+  /** Peint et calcule une source synthétique pour chauffer le code hors partie. */
+  prepare(): void {
+    const source = warmGroundSource();
+    const row = new Uint8ClampedArray(BLOCK_PX * TILE_PX * 4);
+    const recent: number[] = [];
+    const measure = (run: () => void): void => {
+      const before = this.now();
+      run();
+      recent.push(Math.max(0, this.now() - before));
+      if (recent.length > WARM_RECENT) recent.shift();
+    };
+    for (let pass = 0; pass < WARM_PASSES; pass++) {
+      for (let ty = 0; ty < CHUNK; ty++) {
+        measure(() => paintTiles(source, row, 0, ty, CHUNK, ty + 1));
+      }
+    }
+    const lifeSource = {
+      seed: source.seed,
+      originX: source.originX,
+      originY: source.originY,
+      shore: source.shore,
+      ground: lifeGround(source.shore),
+    };
+    for (let i = 0; i < WARM_LIFE; i++) {
+      measure(() => layoutLife(lifeSource));
+    }
+    let max = 0;
+    for (const value of recent) {
+      if (value > max) max = value;
+    }
+    this.preparedEstimate = recent.length > 0 ? max : LIFE_DEFAULT_MS;
+    this.lifeEstimate = this.preparedEstimate;
   }
 
   /** Avance la peinture des blocs visibles et prépare la vie d'un bloc au plus par image. */

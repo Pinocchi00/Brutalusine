@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHUNK, Chunk, World } from '../src/sim/world';
 import { TREE_MIN } from '../src/sim/data';
-import { GroundLayer, lifeFits } from '../src/render/px/groundLayer';
+import { GroundLayer, lifeFits, warmGroundSource } from '../src/render/px/groundLayer';
 import { paintTiles, type GroundSource } from '../src/render/px/groundPaint';
 import type { PixelView } from '../src/render/px/view';
 
@@ -336,6 +336,7 @@ interface LayerInternals {
   life: Map<Chunk, { life: unknown; seen: number }>;
   lifeRecent: number[];
   lifeEstimate: number;
+  preparedEstimate: number;
 }
 
 /** La couche vue par ses tests : mêmes objets, champs privés compris. */
@@ -443,5 +444,84 @@ describe('budget de la vie du sol', () => {
     layer.update(world, view, 100);
     expect(internals.life.has(chunks[0])).toBe(false);
     expect(internals.life.get(kept)?.seen).toBe(100);
+  });
+});
+
+/** Une horloge factice dont chaque mesure coûte le budget fourni, dans l'ordre. */
+class CostClock {
+  private call = 0;
+  private total = 0;
+
+  constructor(private readonly costs: number[]) {}
+
+  readonly now = (): number => {
+    const measurement = Math.floor(this.call / 2);
+    if (this.call % 2 === 0) {
+      this.call++;
+      return this.total;
+    }
+    this.total += this.costs[measurement] ?? 0;
+    this.call++;
+    return this.total;
+  };
+}
+
+describe('préchauffage du sol', () => {
+  it('décrit une source complète et déterministe', () => {
+    const first = warmGroundSource();
+    const second = warmGroundSource();
+    expect(first.originX).toBe(0);
+    expect(first.originY).toBe(0);
+    expect(first.shore.length).toBe(33 * 33);
+    expect(first.ford.length).toBe(33 * 33);
+    expect(first.slab.length).toBe(34 * 34);
+    expect(first.loot.length).toBe(32 * 32);
+    expect(first.paths.length).toBeGreaterThan(0);
+    expect(Array.from(first.shore)).toEqual(Array.from(second.shore));
+    expect(Array.from(first.ford)).toEqual(Array.from(second.ford));
+    expect(Array.from(first.slab)).toEqual(Array.from(second.slab));
+    expect(Array.from(first.loot)).toEqual(Array.from(second.loot));
+    expect(first.paths).toEqual(second.paths);
+  });
+
+  it('contient de l’eau, de la terre, un gué, une dalle, un débris et un sentier', () => {
+    const source = warmGroundSource();
+    const shore = Array.from(source.shore);
+    const ford = Array.from(source.ford);
+    expect(shore.some((value) => value < 0)).toBe(true);
+    expect(shore.some((value) => value > 0)).toBe(true);
+    expect(ford.some((value) => value > 0 && value < 1)).toBe(true);
+    expect(ford.some((value) => value >= 1)).toBe(true);
+    expect(Array.from(source.slab).some((value) => value !== 0)).toBe(true);
+    expect(Array.from(source.loot).filter((value) => value !== 0).length).toBe(2);
+    expect(source.paths.length).toBeGreaterThan(0);
+  });
+
+  it('prepare ne peint aucun bloc, ne crée aucune vie et laisse groundMs à 0', () => {
+    const layer = new GroundLayer();
+    const internals = internalsOf(layer);
+    const beforeCreated = created.length;
+    const beforeBlits = blits.length;
+    layer.prepare();
+    expect(created.length).toBe(beforeCreated);
+    expect(blits.length).toBe(beforeBlits);
+    expect(internals.life.size).toBe(0);
+    expect(layer.groundMs).toBe(0);
+  });
+
+  it('prepare retient le maximum des trois derniers coûts, qui survit à clear', () => {
+    const costs = new Array<number>(104).fill(0);
+    costs[101] = 6;
+    costs[102] = 11;
+    costs[103] = 4;
+    const clock = new CostClock(costs);
+    const layer = new GroundLayer({ now: clock.now });
+    const internals = internalsOf(layer);
+    layer.prepare();
+    expect(internals.preparedEstimate).toBe(11);
+    layer.clear();
+    expect(internals.preparedEstimate).toBe(11);
+    expect(internals.lifeEstimate).toBe(11);
+    expect(internals.lifeRecent.length).toBe(0);
   });
 });
