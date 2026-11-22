@@ -174,6 +174,7 @@ export class PxRenderer {
   private bufW = 0;
   private bufH = 0;
   private now = 0;
+  private lastSmokeTick = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -618,7 +619,7 @@ export class PxRenderer {
       if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
       const vent = smokeVent(e.def.key, this.era, sprite.up);
-      if (vent && burning && Math.random() < f.opts.dt * 4) {
+      if (vent && burning && g.tick !== this.lastSmokeTick && Math.random() < f.opts.dt * 4) {
         const color = vent.color === 'dark' ? C.s3 : C.c2;
         this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
       }
@@ -632,6 +633,7 @@ export class PxRenderer {
       });
       f.shown.push({ e, sprite });
     }
+    this.lastSmokeTick = g.tick;
   }
 
   /** Ajoute les bâtisseurs, triés avec le reste par leur pied. */
