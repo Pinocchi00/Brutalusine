@@ -3,7 +3,7 @@
  * Un faux crayon enregistre les rectangles et les traits, sans aucune API du navigateur.
  */
 import { describe, expect, it } from 'vitest';
-import { bucketDrop, drawPuitsMotion, wheelAngle } from '../src/render/px/buildingAnims';
+import { bucketDrop, drawPuitsMotion, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
 import { puitsE1, puitsE2 } from '../src/render/px/artWorks';
 import type { Pen } from '../src/render/px/pen';
 
@@ -102,5 +102,23 @@ describe('drawPuitsMotion', () => {
     drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
     expect(two.lines).toHaveLength(8);
     expect(hasRect(two.rects, 46, 16, 1, 62)).toBe(true);
+  });
+});
+
+describe('smokeVent', () => {
+  it('donne un évent aux trois bâtiments qui fument, aux deux ères', () => {
+    for (const era of [1, 2] as const) {
+      expect(smokeVent('charbonniere', era, 2)).not.toBeNull();
+      expect(smokeVent('four', era, 44)).not.toBeNull();
+      expect(smokeVent('bruleur', era, 40)).not.toBeNull();
+    }
+  });
+
+  it('colore la fumée et n’en donne pas aux autres bâtiments', () => {
+    expect(smokeVent('charbonniere', 1, 2)).toEqual({ x: 24, y: 20, color: 'dark' });
+    expect(smokeVent('four', 2, 44)).toEqual({ x: 36, y: 2, color: 'pale' });
+    expect(smokeVent('bruleur', 2, 40)?.color).toBe('dark');
+    expect(smokeVent('puits', 1, 10)).toBeNull();
+    expect(smokeVent('entrepot', 2, 20)).toBeNull();
   });
 });

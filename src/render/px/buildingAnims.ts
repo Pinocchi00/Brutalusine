@@ -70,3 +70,19 @@ export function drawPuitsMotion(P: Pen, era: Era, X: number, Y: number, up: numb
   P.disc(cx, cy, 2.5, C.s3);
   P.p(cx - 1, cy - 1, C.s1);
 }
+
+/** Où sort la fumée, en pixels depuis l'origine du sprite, ou null. */
+export function smokeVent(key: string, era: Era, up: number): { x: number; y: number; color: 'dark' | 'pale' } | null {
+  if (key === 'charbonniere') {
+    return { x: 24, y: era === 1 ? up + 18 : up + 1, color: 'dark' };
+  }
+  if (key === 'four') {
+    return { x: 36, y: 2, color: 'pale' };
+  }
+  if (key === 'bruleur') {
+    return era === 1
+      ? { x: 24, y: up + 18, color: 'dark' }
+      : { x: 36, y: up - 38, color: 'dark' };
+  }
+  return null;
+}

@@ -21,7 +21,7 @@ import { drawBelts } from './belts';
 import { drawLights } from './lights';
 import { placeholderBuilder, placeholderItem } from './placeholders';
 import { buildingSprite, prepareBuildings } from './buildings';
-import { drawPuitsMotion } from './buildingAnims';
+import { drawPuitsMotion, smokeVent } from './buildingAnims';
 import { readEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -616,6 +616,13 @@ export class PxRenderer {
       const foot = (e.y + e.h) * TILE_PX;
       if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
+      const vent = smokeVent(e.def.key, this.era, sprite.up);
+      // Un générateur ne remplit jamais `working` : c'est son statut qui dit qu'il brûle.
+      const burning = e.working || (e.def.kind === 'generator' && e.status === Status.Working);
+      if (vent && burning && Math.random() < f.opts.dt * 4) {
+        const color = vent.color === 'dark' ? C.s3 : C.c2;
+        this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
+      }
       this.queue.addTall(foot, X, () => {
         ctx.drawImage(sprite.img, X, Y);
         if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {

@@ -22,7 +22,7 @@ const PARTICLE_CAP = 1200;
 const PACE = 2;
 
 /** Une sorte de rafale, comme dans l'ancien rendu. */
-export type BurstKind = 'leaf' | 'dust' | 'spark' | 'chip' | 'star';
+export type BurstKind = 'leaf' | 'dust' | 'spark' | 'chip' | 'star' | 'smoke';
 
 /** Une particule vivante, en pixels monde. */
 interface Particle {
@@ -175,6 +175,22 @@ export class PixelFx {
     this.hits.set(`${Math.floor(tx)},${Math.floor(ty)}`, { at: now, power, age: 0 });
   }
 
+  /** Lance une fumée qui monte lentement depuis un point en pixels monde et dérive avec le vent. */
+  smoke(px: number, py: number, color: string, wind: number): void {
+    if (this.parts.length >= PARTICLE_CAP) return;
+    this.parts.push({
+      kind: 'smoke',
+      x: px,
+      y: py,
+      vx: wind * 0.6 * T,
+      vy: -(9 + Math.random() * 2),
+      life: 0,
+      max: 1.6 + Math.random() * 1,
+      color,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
   /** Le coup actif d'une case et son âge, ou `null` s'il n'y en a pas. */
   private activeHit(tx: number, ty: number, now: number): { hit: Shake; since: number } | null {
     const hit = this.hits.get(`${Math.floor(tx)},${Math.floor(ty)}`);
@@ -229,6 +245,8 @@ export class PixelFx {
       } else if (p.kind === 'leaf') {
         p.vy += 2.2 * T * dt;
         p.vx += (wind * 0.25 * T - p.vx) * dt * 0.6;
+      } else if (p.kind === 'smoke') {
+        p.vx += (wind * 0.9 * T - p.vx) * dt * 0.5;
       } else {
         p.vy += 7 * T * dt;
         p.vx *= 1 - dt * 2;
@@ -286,6 +304,24 @@ export class PixelFx {
     const x = Math.round(p.x);
     const y = Math.round(p.y);
     const f = p.life / p.max;
+    if (p.kind === 'smoke') {
+      const width = f < 0.25 ? 1 : f < 0.6 ? 2 : 3;
+      const alpha = f < 0.6 ? 1 : 1 - (f - 0.6) / 0.4;
+      const x0 = x - Math.floor(width / 2);
+      const y0 = y - Math.floor(width / 2);
+      for (let j = 0; j < width; j++) {
+        for (let i = 0; i < width; i++) {
+          const sx = x0 + i;
+          const sy = y0 + j;
+          if (alpha < 1) {
+            const wave = Math.sin(sx * 12.9898 + sy * 78.233 + p.phase) * 43758.5453;
+            if (wave - Math.floor(wave) > alpha) continue;
+          }
+          P.p(sx, sy, p.color);
+        }
+      }
+      return;
+    }
     if (p.kind === 'leaf') {
       const alt = Math.floor(p.life * 3 + p.phase) % 2 === 0;
       P.r(x, y, 2, 1, alt ? C.g1 : C.g2);
