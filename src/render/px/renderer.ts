@@ -167,6 +167,7 @@ export class PxRenderer {
     this.ctx = ctx;
     prepareTrees();
     prepareOutcrops();
+    this.ground.prepare();
   }
 
   /** Oublie le sol peint, les particules et les chutes. */

@@ -18,14 +18,111 @@ const BLOCK_PX = CHUNK * TILE_PX;
 /** Le nombre de cases d'un côté des codes, marge d'une case comprise. */
 const CODES = CHUNK + 2;
 
+/** Le nombre de coins d'un côté du champ de rivage. */
+const CORNER = CHUNK + 1;
+
 /** Le nombre d'images sans être vu après lequel la vie d'un bloc est oubliée. */
 const LIFE_TTL = 120;
 
-/**
- * Le budget de peinture par image, en millisecondes. Il laisse 0,5 ms de marge aux autres
- * travaux du sol (tri des blocs, lecture des codes et vie du sol) dans le budget de 4 ms.
- */
-const GROUND_BUDGET_MS = 3.5;
+/** Le plafond de toute la mise à jour du sol, en millisecondes. */
+export const GROUND_TOTAL_MS = 4;
+
+/** Le budget de peinture par image, en millisecondes : il laisse 1 ms au reste du sol. */
+const GROUND_BUDGET_MS = 3;
+
+/** Le nombre de coûts récents retenus pour estimer la vie d'un bloc. */
+const LIFE_RECENT = 8;
+
+/** L'estimation de départ d'un calcul de vie, en millisecondes. */
+const LIFE_DEFAULT_MS = 1;
+
+/** Le plancher de l'estimation d'un calcul de vie, en millisecondes. */
+const LIFE_FLOOR_MS = 0.5;
+
+/** Le nombre de reports après lequel un calcul de vie est forcé. */
+const MAX_LIFE_DEFER = 60;
+
+/** En dessous de ce temps écoulé, aucune peinture n'a eu lieu, en millisecondes. */
+const IDLE_MS = 0.5;
+
+/** Le nombre de passes de peinture du préchauffage. */
+const WARM_PASSES = 3;
+
+/** Le nombre de calculs de vie du préchauffage. */
+const WARM_LIFE = 8;
+
+/** Le nombre de coûts de préchauffage retenus pour l'estimation. */
+const WARM_RECENT = 3;
+
+/** La graine fixe de la source de préchauffage. */
+const WARM_SEED = 0x5eed;
+
+/** Vrai si un calcul estimé à `estimateMs` tient encore dans le plafond, après `elapsedMs`. */
+export function lifeFits(elapsedMs: number, estimateMs: number, totalMs: number = GROUND_TOTAL_MS): boolean {
+  return elapsedMs + estimateMs <= totalMs;
+}
+
+/** Une source synthétique, pure et déterministe, qui chauffe toutes les branches de la peinture. */
+export function warmGroundSource(): GroundSource {
+  const shore = new Float32Array(CORNER * CORNER);
+  const ford = new Float32Array(CORNER * CORNER);
+  const slab = new Uint8Array(CODES * CODES);
+  const loot = new Uint8Array(CHUNK * CHUNK);
+  for (let j = 0; j < CORNER; j++) {
+    for (let i = 0; i < CORNER; i++) {
+      const k = j * CORNER + i;
+      shore[k] = (CHUNK - j) * 0.5 - 4;
+      const across = Math.min(i - 6, 25 - i);
+      if (j >= 20 && across >= 0) ford[k] = across >= 2 ? 1 : across * 0.5;
+    }
+  }
+  for (let ly = 4; ly < 7; ly++) {
+    for (let lx = 4; lx < 7; lx++) slab[(ly + 1) * CODES + (lx + 1)] = 1;
+  }
+  loot[10 * CHUNK + 10] = 1;
+  loot[16 * CHUNK + 21] = 1;
+  const paths: GroundPathSegment[] = [{ ax: 2, ay: 2, bx: 29, by: 23 }];
+  return { seed: WARM_SEED, originX: 0, originY: 0, shore, ford, paths, slab, loot };
+}
+
+/** Vrai si le centre d'une case est à moins de 0,6 case d'un segment de sentier. */
+function nearPath(paths: readonly GroundPathSegment[], tx: number, ty: number): boolean {
+  const px = tx + 0.5;
+  const py = ty + 0.5;
+  for (const path of paths) {
+    const dx = path.bx - path.ax;
+    const dy = path.by - path.ay;
+    const len2 = dx * dx + dy * dy;
+    let t = 0;
+    if (len2 > 0) {
+      t = ((px - path.ax) * dx + (py - path.ay) * dy) / len2;
+      if (t < 0) t = 0;
+      else if (t > 1) t = 1;
+    }
+    const qx = path.ax + t * dx;
+    const qy = path.ay + t * dy;
+    if (Math.hypot(px - qx, py - qy) < 0.6) return true;
+  }
+  return false;
+}
+
+/** Déduit les cinq codes de sol d'une source : terre, eau, berge, chemin ou gué. */
+export function lifeGround(source: GroundSource): Uint8Array {
+  const ground = new Uint8Array(CHUNK * CHUNK);
+  for (let ly = 0; ly < CHUNK; ly++) {
+    for (let lx = 0; lx < CHUNK; lx++) {
+      const i = ly * CORNER + lx;
+      const shore = (source.shore[i] + source.shore[i + 1] + source.shore[i + CORNER] + source.shore[i + CORNER + 1]) / 4;
+      const ford = (source.ford[i] + source.ford[i + 1] + source.ford[i + CORNER] + source.ford[i + CORNER + 1]) / 4;
+      let code = 0;
+      if (shore < 0) code = ford >= 0.9 ? 4 : 1;
+      else if (nearPath(source.paths, lx, ly)) code = 3;
+      else if (shore < 1.6) code = 2;
+      ground[ly * CHUNK + lx] = code;
+    }
+  }
+  return ground;
+}
 
 /** Une entrée de vie du sol, avec la dernière image où son bloc a été vu. */
 interface LifeEntry {
@@ -49,13 +146,19 @@ export class GroundLayer {
   private readonly nearby: Chunk[] = [];
   private readonly life = new Map<Chunk, LifeEntry>();
   private readonly slab = new Uint8Array(CODES * CODES);
+  private readonly now: () => number;
+  private readonly lifeRecent: number[] = [];
+  private lifeEstimate = LIFE_DEFAULT_MS;
+  private preparedEstimate = LIFE_DEFAULT_MS;
+  private lifeDeferred = 0;
   private paths = new WeakMap<Chunk, readonly GroundPathSegment[]>();
   private world: World | null = null;
 
   /** Le temps réel passé dans la mise à jour du sol à la dernière image. */
   groundMs = 0;
 
-  constructor() {
+  constructor(options: { now?: () => number } = {}) {
+    this.now = options.now ?? (() => performance.now());
     this.cache = new GroundCache<Chunk, HTMLCanvasElement>(
       {
         readCodes: (chunk, out) => {
@@ -71,7 +174,7 @@ export class GroundLayer {
           const image = new ImageData(data as Uint8ClampedArray<ArrayBuffer>, w, h);
           ctx.putImageData(image, x, y);
         },
-        now: () => performance.now(),
+        now: () => this.now(),
       },
       { budgetMs: GROUND_BUDGET_MS },
     );
@@ -84,12 +187,49 @@ export class GroundLayer {
     this.paths = new WeakMap();
     this.visible.length = 0;
     this.nearby.length = 0;
+    this.lifeRecent.length = 0;
+    this.lifeEstimate = this.preparedEstimate;
+    this.lifeDeferred = 0;
     this.groundMs = 0;
+  }
+
+  /** Peint et calcule une source synthétique pour chauffer le code hors partie. */
+  prepare(): void {
+    const source = warmGroundSource();
+    const row = new Uint8ClampedArray(BLOCK_PX * TILE_PX * 4);
+    const recent: number[] = [];
+    const measure = (run: () => void): void => {
+      const before = this.now();
+      run();
+      recent.push(Math.max(0, this.now() - before));
+      if (recent.length > WARM_RECENT) recent.shift();
+    };
+    for (let pass = 0; pass < WARM_PASSES; pass++) {
+      for (let ty = 0; ty < CHUNK; ty++) {
+        measure(() => paintTiles(source, row, 0, ty, CHUNK, ty + 1));
+      }
+    }
+    const lifeSource = {
+      seed: source.seed,
+      originX: source.originX,
+      originY: source.originY,
+      shore: source.shore,
+      ground: lifeGround(source),
+    };
+    for (let i = 0; i < WARM_LIFE; i++) {
+      measure(() => layoutLife(lifeSource));
+    }
+    let max = 0;
+    for (const value of recent) {
+      if (value > max) max = value;
+    }
+    this.preparedEstimate = Math.max(LIFE_DEFAULT_MS, max);
+    this.lifeEstimate = this.preparedEstimate;
   }
 
   /** Avance la peinture des blocs visibles et prépare la vie d'un bloc au plus par image. */
   update(world: World, view: PixelView, frame: number): void {
-    const start = performance.now();
+    const start = this.now();
     this.world = world;
     const cx0 = Math.floor(view.tileX0 / CHUNK);
     const cx1 = Math.floor(view.tileX1 / CHUNK);
@@ -120,8 +260,8 @@ export class GroundLayer {
       }
     }
     this.cache.update(this.visible, this.nearby, frame);
-    this.updateLife(frame);
-    this.groundMs = performance.now() - start;
+    this.updateLife(frame, start);
+    this.groundMs = this.now() - start;
   }
 
   /** Dessine le sol visible : un canevas peint, ou un aplat en attendant. */
@@ -236,8 +376,8 @@ export class GroundLayer {
     return paths;
   }
 
-  /** Marque les blocs vus et calcule la vie d'un seul bloc nouveau par image. */
-  private updateLife(frame: number): void {
+  /** Marque les blocs vus et calcule la vie d'un seul bloc nouveau si le temps le permet. */
+  private updateLife(frame: number, start: number): void {
     let target: Chunk | null = null;
     for (const chunk of this.visible) {
       const entry = this.life.get(chunk);
@@ -249,18 +389,43 @@ export class GroundLayer {
       if (entry) entry.seen = frame;
     }
     if (target && this.world) {
-      const world = this.world;
-      const life = layoutLife({
-        seed: world.seed,
-        originX: target.cx * CHUNK,
-        originY: target.cy * CHUNK,
-        shore: target.shore,
-        ground: target.ground,
-      });
-      this.life.set(target, { life, seen: frame });
+      const elapsed = this.now() - start;
+      const idle = elapsed < IDLE_MS;
+      const forced = this.lifeDeferred >= MAX_LIFE_DEFER;
+      if (idle || lifeFits(elapsed, this.lifeEstimate) || forced) {
+        const before = this.now();
+        const world = this.world;
+        const life = layoutLife({
+          seed: world.seed,
+          originX: target.cx * CHUNK,
+          originY: target.cy * CHUNK,
+          shore: target.shore,
+          ground: target.ground,
+        });
+        this.recordLifeCost(before);
+        this.life.set(target, { life, seen: frame });
+        this.lifeDeferred = 0;
+      } else {
+        const previous = this.lifeEstimate;
+        this.lifeDeferred++;
+        this.lifeEstimate = Math.max(LIFE_DEFAULT_MS, previous * 0.9);
+        if (this.lifeEstimate < previous) this.lifeRecent.length = 0;
+      }
     }
     for (const [chunk, entry] of this.life) {
       if (frame - entry.seen > LIFE_TTL) this.life.delete(chunk);
     }
+  }
+
+  /** Retient le coût d'un calcul de vie et garde le maximum des huit derniers. */
+  private recordLifeCost(before: number): void {
+    const cost = Math.max(0, this.now() - before);
+    this.lifeRecent.push(cost);
+    if (this.lifeRecent.length > LIFE_RECENT) this.lifeRecent.shift();
+    let max = 0;
+    for (const value of this.lifeRecent) {
+      if (value > max) max = value;
+    }
+    this.lifeEstimate = Math.max(LIFE_FLOOR_MS, max);
   }
 }
