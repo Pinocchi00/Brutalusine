@@ -11,6 +11,8 @@ import { finish, fromRows, outline, rim } from '../render/px/finish';
 import { box, chev, courses, crate, cyl, logEnds, moss } from '../render/px/volumes';
 import { build, castShadow, type Light } from '../render/px/sprite';
 import { drawLights } from '../render/px/lights';
+import { towerE1, towerE2 } from '../render/px/artTower';
+import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
 import { TILE_PX } from '../render/px/view';
 
@@ -70,6 +72,7 @@ interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface' | 'beltTileImag
   CHAR: HTMLCanvasElement;
   OREI: HTMLCanvasElement;
   BELTS: readonly MaquetteBelt[];
+  ERA_ARTS: Record<string, (P: Pen, U: number, L: Light[]) => void>;
 }
 
 interface PixelCase {
@@ -168,6 +171,35 @@ function silhouette(api: Api): HTMLCanvasElement {
   P.r(3, 9, 14, 4, C.c2);
   P.disc(15, 5, 3, C.o2);
   return canvas;
+}
+
+/** Un dessin d'ère comparé à la maquette : son emprise, sa hauteur et sa fonction. */
+interface EraArtCase {
+  name: string;
+  footprint: number;
+  up: number;
+  draw(P: Pen, U: number, L: Light[]): void;
+}
+
+/** Les huit dessins de la maquette : Tour, Puits, Charbonnière et Stockage, Bois puis Pierre. */
+const ERA_ART_CASES: readonly EraArtCase[] = [
+  { name: 'towerE1', footprint: 72, up: 16, draw: towerE1 },
+  { name: 'towerE2', footprint: 72, up: 30, draw: towerE2 },
+  { name: 'puitsE1', footprint: 72, up: 10, draw: puitsE1 },
+  { name: 'puitsE2', footprint: 72, up: 42, draw: puitsE2 },
+  { name: 'kilnE1', footprint: 48, up: 2, draw: kilnE1 },
+  { name: 'kilnE2', footprint: 48, up: 4, draw: kilnE2 },
+  { name: 'storeE1', footprint: 48, up: 2, draw: storeE1 },
+  { name: 'storeE2', footprint: 48, up: 20, draw: storeE2 },
+];
+
+/** Compte les lumières différentes de deux listes, plus l'écart de longueur. */
+function compareLightLists(a: readonly Light[], b: readonly Light[]): { diff: number; total: number } {
+  let diff = Math.abs(a.length - b.length);
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) diff++;
+  }
+  return { diff, total: Math.max(a.length, b.length) };
 }
 
 /** Compte les valeurs différentes entre deux suites de 1000 tirages. */
@@ -572,6 +604,36 @@ async function main(): Promise<void> {
       },
     });
   });
+
+  for (const art of ERA_ART_CASES) {
+    const w = art.footprint + 2;
+    const h = art.footprint + art.up + 2;
+    CASES.push({
+      kind: 'pixels',
+      name: `ère · ${art.name} · image`,
+      w,
+      h,
+      draw: (api, ctx) => ctx.drawImage(api.build(art.footprint, art.footprint, art.up, art.draw).img, 0, 0),
+      reference: (ref, ctx) => {
+        const drawArt = (P: Pen, U: number, L: Light[]): void => {
+          ref.raw.ERA_ARTS[art.name](P, U, L);
+        };
+        ctx.drawImage(ref.api.build(art.footprint, art.footprint, art.up, drawArt).img, 0, 0);
+      },
+    });
+    CASES.push({
+      kind: 'values',
+      name: `ère · ${art.name} · lumières`,
+      compare: (refApi, port) => {
+        const drawArt = (P: Pen, U: number, L: Light[]): void => {
+          raw.ERA_ARTS[art.name](P, U, L);
+        };
+        const reference = refApi.build(art.footprint, art.footprint, art.up, drawArt).lights;
+        const ported = port.build(art.footprint, art.footprint, art.up, art.draw).lights;
+        return compareLightLists(reference, ported);
+      },
+    });
+  }
 
   const results: BenchResult[] = [];
   for (const c of CASES) {
