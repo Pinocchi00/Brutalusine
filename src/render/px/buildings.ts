@@ -9,6 +9,8 @@ import { build, type Light, type Sprite } from './sprite';
 import { placeholderSprite } from './placeholders';
 import { towerE1, towerE2 } from './artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from './artWorks';
+import { scierieE1 } from './artFirst';
+import { fourE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
 /** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
@@ -34,6 +36,14 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
   entrepot: [
     { up: 2, draw: storeE1 },
     { up: 20, draw: storeE2 },
+  ],
+  scierie: [
+    { up: 18, draw: scierieE1 },
+    { up: 18, draw: scierieE1 },
+  ],
+  four: [
+    { up: 44, draw: fourE2 },
+    { up: 44, draw: fourE2 },
   ],
 };
 
