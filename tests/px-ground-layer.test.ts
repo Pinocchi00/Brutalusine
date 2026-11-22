@@ -331,6 +331,23 @@ class ScriptClock {
   }
 }
 
+/** Une horloge qui donne deux instants de départ au même temps, puis 3 ms de plus à chaque lecture. */
+class SteadyClock {
+  private step = 0;
+  private base = 0;
+
+  readonly now = (): number => {
+    const value = this.step < 2 ? this.base : this.base + 3;
+    this.step++;
+    return value;
+  };
+
+  restart(): void {
+    this.step = 0;
+    this.base += 10;
+  }
+}
+
 /** Ce que les tests observent de l'état interne de la couche. */
 interface LayerInternals {
   life: Map<Chunk, { life: unknown; seen: number }>;
@@ -403,6 +420,27 @@ describe('budget de la vie du sol', () => {
     clock.script([5, 5, 5, 5, 5, 5]);
     layer.update(world, view, 10);
     expect(internals.life.size).toBe(1);
+  });
+
+  it('ne baisse plus l’estimation quand le calcul est reporté', () => {
+    const clock = new SteadyClock();
+    const world = new World(60);
+    const view = viewOf(0, 0, 31, 31);
+    const layer = new GroundLayer({ now: clock.now });
+    settle(layer, world, view, 0);
+    const internals = internalsOf(layer);
+    internals.life.clear();
+    internals.lifeRecent.length = 0;
+    internals.lifeEstimate = 2.5;
+    for (let i = 0; i < 20; i++) {
+      clock.restart();
+      layer.update(world, view, 10 + i);
+      expect(layer.groundMs).toBe(3);
+    }
+    expect(internals.life.size).toBe(0);
+    expect(internals.lifeDeferred).toBe(20);
+    expect(internals.lifeEstimate).toBe(2.5);
+    expect(internals.lifeRecent.length).toBe(0);
   });
 
   it('clear remet l’estimation à son état initial', () => {
@@ -539,7 +577,7 @@ describe('reports bornés de la vie du sol', () => {
       frames++;
     }
     expect(internals.life.size).toBe(1);
-    expect(frames).toBeLessThanOrEqual(60);
+    expect(frames).toBeLessThanOrEqual(61);
   });
 
   it('force un calcul au plus tard après soixante reports', () => {

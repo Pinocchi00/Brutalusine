@@ -391,6 +391,7 @@ export class GroundLayer {
     if (target && this.world) {
       const elapsed = this.now() - start;
       const idle = elapsed < IDLE_MS;
+      // Ce calcul forcé, comme le cas `idle`, est la seule exception permise au plafond, pour qu'aucun bloc ne reste sans vie.
       const forced = this.lifeDeferred >= MAX_LIFE_DEFER;
       if (idle || lifeFits(elapsed, this.lifeEstimate) || forced) {
         const before = this.now();
@@ -406,10 +407,7 @@ export class GroundLayer {
         this.life.set(target, { life, seen: frame });
         this.lifeDeferred = 0;
       } else {
-        const previous = this.lifeEstimate;
         this.lifeDeferred++;
-        this.lifeEstimate = Math.max(LIFE_DEFAULT_MS, previous * 0.9);
-        if (this.lifeEstimate < previous) this.lifeRecent.length = 0;
       }
     }
     for (const [chunk, entry] of this.life) {
