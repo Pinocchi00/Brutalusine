@@ -28,8 +28,8 @@ const FLASH_TIME = 0.15;
 const PREVIOUS_AGE = 0.05;
 const LAGGED_AGE = 0.175;
 
-/** Le nombre maximal de poses gardées dans l'historique. */
-const HISTORY_SIZE = 32;
+/** Le nombre maximal de poses gardées dans l'historique (couvre le retard à 240 images par seconde). */
+const HISTORY_SIZE = 64;
 
 /** Borne une valeur finie dans un intervalle, en traitant l'infini et `NaN` comme zéro. */
 function clamp(value: number, min: number, max: number): number {
@@ -193,7 +193,7 @@ export class BuilderAnimator {
     this.history = [{ t: 0, pose: this.display }];
   }
 
-  /** Le nombre de poses conservées dans l'historique (au plus 32). */
+  /** Le nombre de poses conservées dans l'historique (au plus 64). */
   get historySize(): number {
     return this.history.length;
   }
@@ -233,8 +233,10 @@ export class BuilderAnimator {
     this.offsetX += (target.x - this.offsetX) * approach;
     this.offsetY += (target.y - this.offsetY) * approach;
 
-    this.history.push({ t: this.clock, pose });
-    if (this.history.length > HISTORY_SIZE) this.history.shift();
+    if (d > 0) {
+      this.history.push({ t: this.clock, pose });
+      if (this.history.length > HISTORY_SIZE) this.history.shift();
+    }
 
     this.facing = nextFacing(this.facing, input.fx);
 
@@ -255,7 +257,7 @@ export class BuilderAnimator {
 
   /** La pose affichée il y a `seconds` secondes, ou la plus ancienne connue. */
   private poseBack(seconds: number): BuilderPose {
-    const target = this.clock - seconds;
+    const target = this.clock - seconds + 1e-9;
     let best = this.history[0];
     for (const entry of this.history) {
       if (entry.t <= target) best = entry;

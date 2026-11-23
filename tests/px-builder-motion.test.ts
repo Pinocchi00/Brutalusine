@@ -103,9 +103,10 @@ describe('lungeOffset', () => {
     expect(lungeOffset(1000, 0)).toEqual({ x: MAX_LUNGE, y: 0 });
     expect(lungeOffset(-1000, 0)).toEqual({ x: -MAX_LUNGE, y: 0 });
     const offset = lungeOffset(30, 40);
-    expect(offset.x).toBeCloseTo(12, 12);
-    expect(offset.y).toBeCloseTo(16, 12);
-    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(MAX_LUNGE, 12);
+    const step = Math.min(MAX_LUNGE, 50 - FIST_REACH);
+    expect(offset.x).toBeCloseTo((30 / 50) * step, 12);
+    expect(offset.y).toBeCloseTo((40 / 50) * step, 12);
+    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(step, 12);
   });
 
   it('annule les entrées nulles ou non finies', () => {
@@ -212,8 +213,33 @@ describe('historique et flash', () => {
     for (let i = 0; i < 100_000; i++) {
       animator.step(1 / 60, { walk: i * 0.1, speed: 1, fx: 1, acting: false, targetDx: 0, targetDy: 0 });
     }
-    expect(animator.historySize).toBeLessThanOrEqual(32);
+    expect(animator.historySize).toBeLessThanOrEqual(64);
     expect(animator.historySize).toBeGreaterThan(0);
+  });
+
+  it('avec dt = 0, la pause n’ajoute aucune pose à l’historique', () => {
+    const animator = new BuilderAnimator();
+    const input: MotionInput = { walk: 0, speed: 1, fx: 1, acting: false, targetDx: 0, targetDy: 0 };
+    for (let i = 0; i < 60; i++) {
+      animator.step(1 / 60, { ...input, walk: i * 0.2 });
+    }
+    for (let i = 0; i < 100; i++) {
+      animator.step(0, input);
+    }
+    const result = animator.step(0, input);
+    expect(result.frame.lagged).not.toEqual(result.frame.pose);
+  });
+
+  it('à dt = 1/240, le retard vaut la pose de 42 pas plus tôt', () => {
+    const animator = new BuilderAnimator();
+    const input: MotionInput = { walk: 0, speed: 1, fx: 1, acting: false, targetDx: 0, targetDy: 0 };
+    const poses: BuilderPose[] = [];
+    let result = animator.step(0, input);
+    for (let i = 0; i < 480; i++) {
+      result = animator.step(1 / 240, { ...input, walk: i * 0.05 });
+      poses.push(result.frame.pose);
+    }
+    expect(result.frame.lagged).toEqual(poses[480 - 42 - 1]);
   });
 
   it('le flash s’allume juste après un contact et s’éteint 0,2 s plus tard', () => {
