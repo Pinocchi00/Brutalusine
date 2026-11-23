@@ -196,8 +196,8 @@ export function drawBuilderFrame(
   const lagY = Math.max(-2, Math.min(2, Math.round(back.ty - ps.ty)));
   const flash = frame.flash;
   P.ell(x + 17 + Math.round(tx / 2), y + 38, 12, 3, C.shade);
-  drawLeg(P, x + 12 + tx, y + 30 + ty, x + 9, y + 37, ps.tw > 1.2, true);
-  drawLeg(P, x + 19 + tx, y + 31 + ty, x + 24, y + 37, false, false);
+  drawLeg(P, x + 12 + tx, y + 30 + ty, x + 9 + Math.round(ps.feet?.rearX ?? 0), y + 37 + Math.round(ps.feet?.rearY ?? 0), ps.tw > 1.2, true);
+  drawLeg(P, x + 19 + tx, y + 31 + ty, x + 24 + Math.round(ps.feet?.frontX ?? 0), y + 37 + Math.round(ps.feet?.frontY ?? 0), false, false);
   const smear = (f: LimbPoint, g: LimbPoint): void => {
     const d = Math.hypot(f[0] - g[0], f[1] - g[1]);
     if (d > 4) {
