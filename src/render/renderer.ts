@@ -10,6 +10,7 @@ import { CHUNK, GROUND_WATER } from '../sim/world';
 import { hash2 } from '../sim/rng';
 import { PAL, TerrainCache, mix } from './terrain';
 import { drawSprite, drawCritter, trees, plinthOf, IDLE, K, type SpriteState, type Critter } from './sprites';
+import type { MotionResult } from './px/builderMotion';
 
 export interface Camera { x: number; y: number; zoom: number; }
 export interface PlayerView extends Critter {
@@ -19,6 +20,8 @@ export interface PlayerView extends Critter {
   beam: number;                        // 0..1 : éclair de construction vers la case visée
   route: RouteView[] | null;           // tracé de convoyeur en cours (posé au relâchement)
   routeInto: boolean;                  // son bout se déverse dans une machine ou un tapis
+  motion?: MotionResult | null;        // l'image du bâtisseur boxeur en rendu pixel
+  strikeFoot?: number | null;          // pied de tri en pixels pendant un coup, pour rester devant sa cible
 }
 export interface RouteView { x: number; y: number; dir: number; ok: boolean; }
 export interface Ring { x: number; y: number; t0: number; color: string; size: number; dur: number; }

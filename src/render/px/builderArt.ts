@@ -6,6 +6,7 @@ import { C } from './palette';
 import { edges, pen, stroke, type Pen } from './pen';
 import { finish } from './finish';
 import { makeSurface } from './surface';
+import { hexToRgb } from './noise';
 import type { BuilderFrame } from './builderTypes';
 
 /** Les trois tons de la lentille : sombre, moyen, reflet. */
@@ -17,6 +18,31 @@ export interface LensColors {
 
 /** La lentille orange de la maquette. */
 export const LENS_ORANGE: LensColors = { deep: C.o3, mid: C.o2, glint: C.o0 };
+
+const LENS_CACHE = new Map<string, LensColors>();
+
+/** Mélange deux couleurs `#rrggbb` : `t` valant 0 garde `a`, `t` valant 1 garde `b`. */
+function mixHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const channel = (from: number, to: number): string =>
+    Math.round(from + (to - from) * t).toString(16).padStart(2, '0');
+  return `#${channel(ar, br)}${channel(ag, bg)}${channel(ab, bb)}`;
+}
+
+/** La lentille d'un joueur d'après sa couleur `#rrggbb` ; l'orange du premier joueur donne celle de la maquette. */
+export function lensForColor(color: string): LensColors {
+  const cached = LENS_CACHE.get(color);
+  if (cached) return cached;
+  if (color.toLowerCase() === '#f08a24' || !/^#[0-9a-fA-F]{6}$/.test(color)) return LENS_ORANGE;
+  const lens: LensColors = {
+    deep: mixHex(color, C.ink, 0.45),
+    mid: color,
+    glint: mixHex(color, C.white, 0.65),
+  };
+  LENS_CACHE.set(color, lens);
+  return lens;
+}
 
 /** Un point en pixels. */
 export type LimbPoint = readonly [number, number];

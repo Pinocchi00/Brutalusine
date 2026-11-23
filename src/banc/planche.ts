@@ -16,12 +16,11 @@ import {
   scierieE2,
 } from '../render/px/artFirst';
 import { fourE2, STONE_PREVIEWS, trieurE2 } from '../render/px/artStone';
-import {
-  placeholderBuilder,
-  placeholderItem,
-  placeholderSprite,
-  type DepositType,
-} from '../render/px/placeholders';
+import { placeholderItem, placeholderSprite, type DepositType } from '../render/px/placeholders';
+import { drawBuilderFrame, lensForColor } from '../render/px/builderArt';
+import { idlePose } from '../render/px/builderMotion';
+import { makeSurface } from '../render/px/surface';
+import { pen } from '../render/px/pen';
 import { TREE_VARIANTS, canopySprite, type TreeKind } from '../render/px/trees';
 import { OUTCROP_VARIANTS, outcropSprite, rockKind } from '../render/px/outcrops';
 
@@ -66,6 +65,15 @@ function imageTile(img: HTMLCanvasElement): HTMLCanvasElement {
   ctx.imageSmoothingEnabled = false;
   grass(ctx, canvas.width, canvas.height);
   ctx.drawImage(img, PAD, PAD / 2);
+  return canvas;
+}
+
+/** Compose une vignette d'herbe autour d'un bâtisseur au repos, de la couleur d'un joueur. */
+function builderTile(color: string): HTMLCanvasElement {
+  const { canvas, ctx } = makeSurface(48, 48);
+  grass(ctx, canvas.width, canvas.height);
+  const pose = idlePose(0);
+  drawBuilderFrame(ctx, pen(ctx), 4, 2, { pose, previous: pose, lagged: pose, flash: false }, lensForColor(color));
   return canvas;
 }
 
@@ -177,14 +185,14 @@ for (const item of ITEMS) {
   if (figure(objects, item.name, imageTile(placeholderItem(item.id)))) count++;
 }
 
-const builders = section('Bâtisseurs provisoires');
+const builders = section('Bâtisseurs');
 for (const [label, color] of [
   ['Orange', C.o2],
   ['Bleu', C.blue],
   ['Vert', C.good],
   ['Rose', C.pink],
 ] as const) {
-  if (figure(builders, `Bâtisseur ${label.toLowerCase()}`, spriteTile(placeholderBuilder(color)))) count++;
+  if (figure(builders, `Bâtisseur ${label.toLowerCase()}`, builderTile(color))) count++;
 }
 
 window.__planche = { done: true, count };

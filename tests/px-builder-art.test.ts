@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { rng } from '../src/render/px/noise';
 import type { Pen } from '../src/render/px/pen';
-import { drawArm, drawLeg, solveLimb, type LimbPoint } from '../src/render/px/builderArt';
+import { LENS_ORANGE, drawArm, drawLeg, lensForColor, solveLimb, type LimbPoint } from '../src/render/px/builderArt';
 
 // =====================================================================================
 // ORACLE — copie fidèle de la maquette.
@@ -223,6 +223,37 @@ describe('drawArm contre l’oracle', () => {
         expect(mine.calls).toEqual(reference.calls);
       }
     });
+  });
+});
+
+describe('lensForColor', () => {
+  it('l’orange du premier joueur donne la lentille de la maquette, quelle que soit la casse', () => {
+    for (const color of ['#F08A24', '#f08a24', '#F08a24', '#f08A24']) {
+      expect(lensForColor(color)).toBe(LENS_ORANGE);
+    }
+  });
+
+  it('une autre couleur garde son ton et reçoit deux tons dérivés', () => {
+    const color = '#3FD0FF';
+    const lens = lensForColor(color);
+    expect(lens.mid).toBe(color);
+    expect(lens.deep).toMatch(/^#[0-9a-f]{6}$/);
+    expect(lens.glint).toMatch(/^#[0-9a-f]{6}$/);
+    expect(lens.deep).not.toBe(lens.glint);
+    expect(lens.deep).not.toBe(lens.mid);
+    expect(lens.glint).not.toBe(lens.mid);
+  });
+
+  it('une couleur invalide retombe sur la lentille orange, sans exception', () => {
+    for (const color of ['', 'orange', '#fff', '#12345', '#gggggg', 'rgb(1,2,3)']) {
+      expect(lensForColor(color)).toBe(LENS_ORANGE);
+    }
+  });
+
+  it('le même objet revient au second appel', () => {
+    const first = lensForColor('#B9F24A');
+    const second = lensForColor('#B9F24A');
+    expect(second).toBe(first);
   });
 });
 

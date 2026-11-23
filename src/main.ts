@@ -12,6 +12,7 @@ import { beltRoute } from './sim/route';
 import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
 import { PxRenderer, coopScale } from './render/px/renderer';
 import { chooseHarvest, type HarvestPick } from './render/px/oreField';
+import { BuilderAnimator, type MotionResult } from './render/px/builderMotion';
 import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
@@ -19,12 +20,14 @@ import { AudioEngine } from './audio/audio';
 
 interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
+/** La cible d'un coup porté : un arbre ou un gisement, à sa case. */
+interface StrikeTarget { kind: 'tree' | 'ore'; x: number; y: number; color: string }
 /** Ce que la boucle attend d'un rendu, quel qu'il soit. */
 interface WorldRenderer {
   render(g: Game, cam: Camera, opts: RenderOpts): void;
   reset(): void;
   burst(kind: 'leaf' | 'dust' | 'spark' | 'chip' | 'star', x: number, y: number, color: string, n: number): void;
-  hit(x: number, y: number): void;
+  hit(x: number, y: number, power?: number): void;
   fell(g: Game, x: number, y: number, size: number): void;
   oreTileAt?(g: Game, x: number, y: number): { x: number; y: number } | null;
 }
@@ -42,6 +45,9 @@ class Player implements PlayerView {
   gx = 0; gy = 0; gprog = 0; beam = 0;
   task: Task | null = null;
   hitTimer = 0;
+  animator = new BuilderAnimator();
+  motion: MotionResult | null = null;
+  strikeFoot: number | null = null;
   aimX = 0; aimY = 1.6;
   dragLast: [number, number] | null = null;
   anchor: [number, number] | null = null;   // convoyeur : case où le tracé a commencé
@@ -567,6 +573,19 @@ class App {
     return !!e && e.def.kind !== 'belt' && e.def.kind !== 'bridge';
   }
 
+  /** Les effets d'un coup porté : tremblement, éclats et son. */
+  private strike(target: StrikeTarget, power: number): void {
+    if (target.kind === 'tree') {
+      this.renderer.hit(target.x, target.y, power);
+      this.renderer.burst('leaf', target.x + 0.5, target.y + 0.2, PAL.leaf[3], 2);
+      this.audio.cut(0.7, 0);
+      return;
+    }
+    this.renderer.hit(target.x, target.y, power);
+    this.renderer.burst('chip', target.x + 0.5, target.y + 0.5, target.color, 3);
+    this.audio.machine(0.8, 0);
+  }
+
   private updatePlayer(p: Player, dt: number): void {
     const g = this.game, w = g.world;
     let mx = 0, my = 0, sprint = false, hold = false;
@@ -620,6 +639,7 @@ class App {
 
     // --- la tâche en cours : y aller, puis agir
     let acting = false;
+    let strikeTarget: StrikeTarget | null = null;
     if (mx || my) { if (p.task) { p.task = null; p.gprog = 0; } }
     else if (p.task) {
       const t = p.task, tx = t.x + 0.5, ty = t.y + 0.5, d = Math.hypot(tx - p.x, ty - p.y);
@@ -637,12 +657,13 @@ class App {
         } else {
           const size = w.canopy(t.x, t.y);
           p.gx = t.x; p.gy = t.y;
+          const color = t.kind === 'tree' ? PAL.leaf[3] : DEPOSITS[w.deposit(t.x, t.y)]!.color;
+          strikeTarget = { kind: t.kind, x: t.x, y: t.y, color };
           p.gprog += dt / (t.kind === 'tree' ? 0.45 + 0.5 * (size / 255) : 0.5);
           p.swing = (p.swing + dt * 3.4) % 1 || 0.001;
-          if ((p.hitTimer -= dt) <= 0) {
+          if (!this.pixel && (p.hitTimer -= dt) <= 0) {
             p.hitTimer = 0.29;
-            if (t.kind === 'tree') { this.renderer.hit(t.x, t.y); this.renderer.burst('leaf', tx, ty - 0.3, PAL.leaf[3], 2); this.audio.cut(0.7, 0); }
-            else { this.renderer.hit(t.x, t.y); this.renderer.burst('chip', tx, ty, DEPOSITS[w.deposit(t.x, t.y)]!.color, 3); this.audio.machine(0.8, 0); }
+            this.strike(strikeTarget, 1);
           }
           if (p.gprog >= 1) {
             p.gprog = 0;
@@ -680,6 +701,22 @@ class App {
     p.lean += (Math.min(1, v / 8) - p.lean) * Math.min(1, dt * 5);
     p.blink = (this.time * 0.31 + p.id * 0.37) % 1;
     p.beam = Math.max(0, p.beam - dt * 5);
+
+    if (this.pixel) {
+      const result = p.animator.step(dt, {
+        walk: p.walk,
+        speed: p.speed,
+        fx: p.fx,
+        acting: strikeTarget !== null,
+        targetDx: strikeTarget ? (strikeTarget.x + 0.5 - p.x) * TILE_PX : 0,
+        targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
+      });
+      p.motion = result;
+      p.strikeFoot = strikeTarget ? (strikeTarget.y + 1) * TILE_PX : null;
+      if (strikeTarget) {
+        for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
+      }
+    }
   }
 
   // ================================================================ boucle

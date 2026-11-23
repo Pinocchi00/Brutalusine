@@ -298,33 +298,3 @@ export function placeholderItem(itemId: number): HTMLCanvasElement {
   return out;
 }
 
-/** Un petit bâtisseur provisoire : robot debout de 28 pixels, sa lentille de la couleur du joueur. */
-export function placeholderBuilder(color: string): Sprite {
-  const key = `builder:${color}`;
-  const cached = sprites.get(key);
-  if (cached) return cached;
-  const sprite = build(16, 8, 20, (P) => {
-    P.r(4, 21, 3, 5, C.s2);
-    P.r(10, 21, 3, 5, C.s2);
-    P.r(3, 25, 4, 2, C.s3);
-    P.r(10, 25, 4, 2, C.s3);
-    P.r(3, 11, 11, 11, C.c2);
-    P.r(4, 12, 9, 8, C.c1);
-    P.r(4, 12, 9, 1, C.c0);
-    P.r(2, 13, 2, 5, C.c2);
-    P.r(13, 13, 2, 5, C.c2);
-    P.r(1, 17, 2, 2, C.s2);
-    P.r(14, 17, 2, 2, C.s2);
-    P.r(3, 4, 11, 9, C.c2);
-    P.r(4, 5, 9, 7, C.c1);
-    P.r(5, 7, 7, 3, C.s4);
-    P.r(6, 8, 2, 2, color);
-    P.r(8, 8, 1, 1, C.c0);
-    P.r(7, 1, 1, 3, C.s2);
-    P.r(10, 1, 1, 3, C.s2);
-    P.p(7, 1, C.o2);
-    P.p(10, 1, C.o2);
-  });
-  sprites.set(key, sprite);
-  return sprite;
-}
