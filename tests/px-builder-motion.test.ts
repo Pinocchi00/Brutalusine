@@ -149,6 +149,24 @@ describe('contacts de récolte', () => {
     }
   });
 
+  it('le poing atteint une cible à 50 px', () => {
+    const animator = new BuilderAnimator();
+    const input: MotionInput = { walk: 0, speed: 0, fx: 1, acting: true, targetDx: 50, targetDy: 0 };
+    let checked = 0;
+    for (let i = 0; i < 120; i++) {
+      const result = animator.step(1 / 60, input);
+      for (const contact of result.contacts) {
+        if (contact.index < 1) continue;
+        const fist = contact.side === 'L' ? result.frame.pose.L : result.frame.pose.R;
+        const edge = result.offsetX + Math.round(fist[0]) + 3 - BUILDER_ANCHOR.x;
+        expect(edge).toBeGreaterThanOrEqual(47);
+        expect(edge).toBeLessThanOrEqual(51);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(5);
+  });
+
   it('arrêter puis reprendre une récolte repart du coup 0', () => {
     const animator = new BuilderAnimator();
     for (let i = 0; i < 20; i++) animator.step(1 / 60, harvestInput());
