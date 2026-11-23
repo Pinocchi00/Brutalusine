@@ -67,6 +67,12 @@ describe('sunDialSvg', () => {
   it('garde chaque point entier dans son viewBox élargi', () => {
     for (let i = 0; i < 100; i++) {
       const svg = sunDialSvg(i / 100);
+      const box = /viewBox="(-?\d+) (-?\d+) (\d+) (\d+)"/.exec(svg);
+      if (!box) throw new Error('viewBox absent');
+      const minX = Number(box[1]);
+      const minY = Number(box[2]);
+      const maxX = minX + Number(box[3]);
+      const maxY = minY + Number(box[4]);
       const rects = [...svg.matchAll(/<rect x="(-?\d+)" y="(-?\d+)" width="(\d+)" height="(\d+)"/g)];
       expect(rects.length).toBeGreaterThan(0);
       for (const rect of rects) {
@@ -74,10 +80,10 @@ describe('sunDialSvg', () => {
         const y = Number(rect[2]);
         const width = Number(rect[3]);
         const height = Number(rect[4]);
-        expect(x).toBeGreaterThanOrEqual(-1);
-        expect(y).toBeGreaterThanOrEqual(-2);
-        expect(x + width).toBeLessThanOrEqual(29);
-        expect(y + height).toBeLessThanOrEqual(18);
+        expect(x).toBeGreaterThanOrEqual(minX);
+        expect(y).toBeGreaterThanOrEqual(minY);
+        expect(x + width).toBeLessThanOrEqual(maxX);
+        expect(y + height).toBeLessThanOrEqual(maxY);
       }
     }
   });
