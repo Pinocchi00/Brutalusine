@@ -161,8 +161,8 @@ export const COMBO_HITS: readonly ComboHit[] = TL.flatMap((slice) => {
 });
 
 /** La garde du poing avant et du poing arrière. */
-const GUARD_L: FistPoint = [32, 19];
-const GUARD_R: FistPoint = [29, 13];
+export const GUARD_L: FistPoint = [32, 19];
+export const GUARD_R: FistPoint = [29, 13];
 
 /** Le sautillement du boxeur, sous tout le reste. */
 function bounceAt(t: number): number {

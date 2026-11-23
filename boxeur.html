@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="data:," />
+  <title>Boxeur pixel — Brutalusine</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 24px; background: #16121a; color: #ead7b8; font: 14px/1.4 ui-monospace, Consolas, monospace; }
+    h1 { margin: 0 0 4px; font-size: 20px; color: #ffcc5c; }
+    p { margin: 0 0 16px; color: #958170; }
+    .case { margin: 0 0 20px; }
+    .case h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #ddd6d0; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    figure { margin: 0; }
+    figcaption { margin: 0 0 3px; font-size: 11px; color: #958170; }
+    canvas { display: block; image-rendering: pixelated; border: 1px solid #2b1d26; background: #9cbf57; }
+  </style>
+</head>
+<body>
+  <h1>Boxeur pixel</h1>
+  <p>Repos, marche, récolte et transitions du bâtisseur, au pas fixe de 1/60 s. La dernière section tourne en boucle.</p>
+  <div id="cases"></div>
+  <script type="module" src="/src/banc/boxeur.ts"></script>
+</body>
+</html>
