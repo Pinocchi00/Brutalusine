@@ -19,7 +19,10 @@ import { PixelFx, type BurstKind } from './fx';
 import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
 import { drawLights } from './lights';
-import { placeholderBuilder, placeholderItem } from './placeholders';
+import { placeholderItem } from './placeholders';
+import { drawBuilderFrame, lensForColor } from './builderArt';
+import { BUILDER_ANCHOR, idlePose } from './builderMotion';
+import type { BuilderFrame } from './builderTypes';
 import { buildingSilhouette, buildingSprite, prepareBuildings } from './buildings';
 import { drawPuitsMotion, isBurning, smokeVent } from './buildingAnims';
 import { readEra, type Era } from './eras';
@@ -209,9 +212,9 @@ export class PxRenderer {
     this.fx.burst(kind, x, y, color, n);
   }
 
-  /** Retient le coup porté à un arbre ; il tremblera à la prochaine image. */
-  hit(x: number, y: number): void {
-    this.fx.hit(x, y, this.now);
+  /** Retient le coup porté à une cible ; elle tremblera à la prochaine image. */
+  hit(x: number, y: number, power = 1): void {
+    this.fx.hit(x, y, this.now, power);
   }
 
   /** Lance un arbre abattu depuis le vrai centre de son houppier debout. */
@@ -637,20 +640,34 @@ export class PxRenderer {
     this.lastSmokeTick = g.tick;
   }
 
-  /** Ajoute les bâtisseurs, triés avec le reste par leur pied. */
+  /** Ajoute les bâtisseurs boxeurs, triés avec le reste par leur pied. */
   private addPlayers(f: Frame): void {
     for (const p of f.opts.players) {
-      const sprite = placeholderBuilder(p.color);
-      const foot = p.y * TILE_PX;
-      const bounce = Math.round(Math.abs(Math.sin(p.walk * Math.PI)) * Math.min(2, p.speed * 2.5));
-      const X = Math.round(p.x * TILE_PX);
+      const motion = p.motion ?? null;
+      let frame: BuilderFrame;
+      if (motion) {
+        frame = motion.frame;
+      } else {
+        const pose = idlePose(0);
+        frame = { pose, previous: pose, lagged: pose, flash: false };
+      }
+      const facing = motion ? motion.facing : p.fx < 0 ? -1 : 1;
+      const offsetX = motion ? motion.offsetX : 0;
+      const offsetY = motion ? motion.offsetY : 0;
+      const lens = lensForColor(p.color);
+      const X = Math.round(p.x * TILE_PX) + offsetX;
+      const foot = Math.round(p.y * TILE_PX) + offsetY;
       this.queue.addTall(foot, X, () => {
         const ctx = f.ctx;
-        ctx.save();
-        ctx.translate(X, Math.round(foot - bounce));
-        if (p.fx < 0) ctx.scale(-1, 1);
-        ctx.drawImage(sprite.img, -Math.round(sprite.img.width / 2), -sprite.img.height);
-        ctx.restore();
+        if (facing < 0) {
+          ctx.save();
+          ctx.translate(X, foot);
+          ctx.scale(-1, 1);
+          drawBuilderFrame(ctx, f.P, -BUILDER_ANCHOR.x, -BUILDER_ANCHOR.y, frame, lens);
+          ctx.restore();
+          return;
+        }
+        drawBuilderFrame(ctx, f.P, X - BUILDER_ANCHOR.x, foot - BUILDER_ANCHOR.y, frame, lens);
       });
     }
   }
