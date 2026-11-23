@@ -47,6 +47,7 @@ class Player implements PlayerView {
   hitTimer = 0;
   animator = new BuilderAnimator();
   motion: MotionResult | null = null;
+  strikeFoot: number | null = null;
   aimX = 0; aimY = 1.6;
   dragLast: [number, number] | null = null;
   anchor: [number, number] | null = null;   // convoyeur : case où le tracé a commencé
@@ -708,9 +709,10 @@ class App {
         fx: p.fx,
         acting: strikeTarget !== null,
         targetDx: strikeTarget ? (strikeTarget.x + 0.5 - p.x) * TILE_PX : 0,
-        targetDy: strikeTarget ? (strikeTarget.y + 0.5 - p.y) * TILE_PX : 0,
+        targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
       });
       p.motion = result;
+      p.strikeFoot = strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 1 : 2)) * TILE_PX : null;
       if (strikeTarget) {
         for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
       }

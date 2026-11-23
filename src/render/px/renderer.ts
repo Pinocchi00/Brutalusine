@@ -657,7 +657,7 @@ export class PxRenderer {
       const lens = lensForColor(p.color);
       const X = Math.round(p.x * TILE_PX) + offsetX;
       const foot = Math.round(p.y * TILE_PX) + offsetY;
-      this.queue.addTall(foot, X, () => {
+      this.queue.addTall(Math.max(foot, p.strikeFoot ?? foot), X, () => {
         const ctx = f.ctx;
         if (facing < 0) {
           ctx.save();
