@@ -712,7 +712,7 @@ class App {
         targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
       });
       p.motion = result;
-      p.strikeFoot = strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 1 : 2)) * TILE_PX : null;
+      p.strikeFoot = strikeTarget ? (strikeTarget.y + 1) * TILE_PX : null;
       if (strikeTarget) {
         for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
       }
