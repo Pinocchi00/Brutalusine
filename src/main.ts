@@ -3,6 +3,7 @@
 // Avec un bâtiment en main : on pose. Clic droit : on lâche l'outil, ou on démolit.
 
 import './ui/style.css';
+import './ui/px/theme.css';
 import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_FER, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
 import type { Ent } from './sim/ent';
 import { CHUNK, GROUND_WATER } from './sim/world';
@@ -93,6 +94,7 @@ class App {
   constructor() {
     this.game = new Game((Math.random() * 1e9) | 0);
     this.pixel = new URLSearchParams(location.search).get('rendu') === 'pixel';
+    if (this.pixel) document.documentElement.dataset.rendu = 'pixel';
     this.renderer = this.pixel ? new PxRenderer(this.canvas) : new Renderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
