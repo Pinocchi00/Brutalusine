@@ -14,6 +14,8 @@ import { drawLights } from '../render/px/lights';
 import { towerE1, towerE2 } from '../render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
+import { drawBuilderFrame } from '../render/px/builderArt';
+import type { BuilderFrame, BuilderPose } from '../render/px/builderTypes';
 import { TILE_PX } from '../render/px/view';
 
 /** L'API commune aux deux côtés : la maquette et le portage exposent les mêmes fonctions. */
@@ -73,6 +75,14 @@ interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface' | 'beltTileImag
   OREI: HTMLCanvasElement;
   BELTS: readonly MaquetteBelt[];
   ERA_ARTS: Record<string, (P: Pen, U: number, L: Light[]) => void>;
+  /** La pose du bâtisseur à un instant. */
+  poseAt(t: number): BuilderPose;
+  /** Dessine le bâtisseur à l'horloge réglée et au dernier coup mémorisé. */
+  drawBuilder(ctx: CanvasRenderingContext2D, P: Pen): void;
+  /** Le coin de référence du bâtisseur dans la scène de la maquette. */
+  BUILDER: { x: number; y: number };
+  /** Règle l'instant du dernier coup, pour l'éclair des antennes. */
+  setLastHit(t: number): void;
 }
 
 interface PixelCase {
@@ -631,6 +641,46 @@ async function main(): Promise<void> {
         const reference = refApi.build(art.footprint, art.footprint, art.up, drawArt).lights;
         const ported = port.build(art.footprint, art.footprint, art.up, art.draw).lights;
         return compareLightLists(reference, ported);
+      },
+    });
+  }
+
+  // --- le bâtisseur --------------------------------------------------------------------
+  const BUILDER_X = 16;
+  const BUILDER_Y = 16;
+  const builderInstants = Array.from({ length: 28 }, (_, i) => (28 * i) / 27);
+  const flashInstants = [2, 9, 16, 23];
+  const builderCases: readonly { t: number; flash: boolean }[] = [
+    ...builderInstants.map((t) => ({ t, flash: false })),
+    ...flashInstants.map((t) => ({ t, flash: true })),
+  ];
+  for (const { t, flash } of builderCases) {
+    CASES.push({
+      kind: 'pixels',
+      name: `${flash ? 'bâtisseur éclair' : 'bâtisseur'} · t=${t}`,
+      w: 80,
+      h: 70,
+      tolerance: 0,
+      draw: (api, ctx) => {
+        const frame: BuilderFrame = {
+          pose: raw.poseAt(t),
+          lagged: raw.poseAt(t - 0.35),
+          previous: raw.poseAt(t - 0.1),
+          flash,
+        };
+        drawBuilderFrame(ctx, api.pen(ctx), BUILDER_X, BUILDER_Y, frame);
+      },
+      reference: (ref, ctx) => {
+        const builder = ref.raw.BUILDER;
+        const saveX = builder.x;
+        const saveY = builder.y;
+        builder.x = BUILDER_X;
+        builder.y = BUILDER_Y;
+        ref.raw.setNow(t);
+        ref.raw.setLastHit(flash ? t : -9);
+        ref.raw.drawBuilder(ctx, ref.api.pen(ctx));
+        builder.x = saveX;
+        builder.y = saveY;
       },
     });
   }
