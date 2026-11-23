@@ -14,6 +14,8 @@ import { drawLights } from '../render/px/lights';
 import { towerE1, towerE2 } from '../render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
+import { drawBuilderFrame } from '../render/px/builderArt';
+import type { BuilderFrame, BuilderPose } from '../render/px/builderTypes';
 import { TILE_PX } from '../render/px/view';
 
 /** L'API commune aux deux côtés : la maquette et le portage exposent les mêmes fonctions. */
@@ -73,6 +75,14 @@ interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface' | 'beltTileImag
   OREI: HTMLCanvasElement;
   BELTS: readonly MaquetteBelt[];
   ERA_ARTS: Record<string, (P: Pen, U: number, L: Light[]) => void>;
+  /** La pose du bâtisseur à un instant. */
+  poseAt(t: number): BuilderPose;
+  /** Dessine le bâtisseur à l'horloge réglée et au dernier coup mémorisé. */
+  drawBuilder(ctx: CanvasRenderingContext2D, P: Pen): void;
+  /** Le coin de référence du bâtisseur dans la scène de la maquette. */
+  BUILDER: { x: number; y: number };
+  /** Règle l'instant du dernier coup, pour l'éclair des antennes. */
+  setLastHit(t: number): void;
 }
 
 interface PixelCase {
@@ -82,6 +92,8 @@ interface PixelCase {
   h: number;
   /** Écart maximal toléré par canal (0 par défaut : pixels identiques exigés). */
   tolerance?: number;
+  /** Peint sur un canevas normal, comme le jeu, au lieu d'une surface à lecture fréquente. */
+  plainSurface?: boolean;
   /** Agrandissement d'affichage (×4 par défaut). */
   zoom?: number;
   draw(api: Api, ctx: CanvasRenderingContext2D): void;
@@ -517,8 +529,8 @@ CASES.push({
  * on compare la logique, pas le moteur de rendu. Un canevas accéléré mélange l'alpha 0,28
  * légèrement autrement, ce qui ferait diverger les ombres sans changer leur dessin.
  */
-function paint(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
-  const { canvas, ctx } = makeSurface(w, h, { read: true });
+function paint(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void, plainSurface = false): HTMLCanvasElement {
+  const { canvas, ctx } = plainSurface ? makeSurface(w, h) : makeSurface(w, h, { read: true });
   draw(ctx);
   return canvas;
 }
@@ -635,6 +647,47 @@ async function main(): Promise<void> {
     });
   }
 
+  // --- le bâtisseur --------------------------------------------------------------------
+  const BUILDER_X = 16;
+  const BUILDER_Y = 16;
+  const builderInstants = Array.from({ length: 28 }, (_, i) => (28 * i) / 27);
+  const flashInstants = [2, 9, 16, 23];
+  const builderCases: readonly { t: number; flash: boolean }[] = [
+    ...builderInstants.map((t) => ({ t, flash: false })),
+    ...flashInstants.map((t) => ({ t, flash: true })),
+  ];
+  for (const { t, flash } of builderCases) {
+    CASES.push({
+      kind: 'pixels',
+      name: `${flash ? 'bâtisseur éclair' : 'bâtisseur'} · t=${t}`,
+      w: 80,
+      h: 70,
+      tolerance: 0,
+      plainSurface: true,
+      draw: (api, ctx) => {
+        const frame: BuilderFrame = {
+          pose: raw.poseAt(t),
+          lagged: raw.poseAt(t - 0.35),
+          previous: raw.poseAt(t - 0.1),
+          flash,
+        };
+        drawBuilderFrame(ctx, api.pen(ctx), BUILDER_X, BUILDER_Y, frame);
+      },
+      reference: (ref, ctx) => {
+        const builder = ref.raw.BUILDER;
+        const saveX = builder.x;
+        const saveY = builder.y;
+        builder.x = BUILDER_X;
+        builder.y = BUILDER_Y;
+        ref.raw.setNow(t);
+        ref.raw.setLastHit(flash ? t : -9);
+        ref.raw.drawBuilder(ctx, ref.api.pen(ctx));
+        builder.x = saveX;
+        builder.y = saveY;
+      },
+    });
+  }
+
   const results: BenchResult[] = [];
   for (const c of CASES) {
     const section = document.createElement('section');
@@ -649,8 +702,8 @@ async function main(): Promise<void> {
       const refCanvas = paint(c.w, c.h, (ctx) => {
         if (c.reference) c.reference({ api: reference, raw }, ctx);
         else c.draw(reference, ctx);
-      });
-      const portCanvas = paint(c.w, c.h, (ctx) => c.draw(PORT, ctx));
+      }, c.plainSurface);
+      const portCanvas = paint(c.w, c.h, (ctx) => c.draw(PORT, ctx), c.plainSurface);
       const tolerance = c.tolerance ?? 0;
       const { canvas: diffCanvas, diff, exact } = differenceMap(refCanvas, portCanvas, c.w, c.h, tolerance);
       result = { name: c.name, diff, total: c.w * c.h };
