@@ -53,6 +53,17 @@ const MOVES_O: Record<string, MoveO> = {
 };
 const COMBO_O = ['garde', 'direct', 'direct', 'croise', 'garde', 'esquive', 'crochet', 'uppercut', 'garde', 'retrait', 'croise', 'crochet', 'garde',
   'direct', 'uppercut', 'esquive', 'direct', 'croise', 'crochet', 'garde', 'garde'];
+
+/** La correspondance entre les noms de la maquette et les identifiants anglais du module. */
+const ENGLISH_NAMES: Record<string, string> = {
+  garde: 'guard',
+  direct: 'direct',
+  croise: 'cross',
+  crochet: 'hook',
+  uppercut: 'uppercut',
+  esquive: 'dodge',
+  retrait: 'retreat',
+};
 const TL_O: { m: MoveO; t0: number; d: number }[] = [];
 let COMBO_T_O = 0;
 for (const name of COMBO_O) {
@@ -109,6 +120,7 @@ function expectedContact(n: number): number {
 describe('poses de l’enchaînement', () => {
   it('égale l’oracle de la maquette sur 2000 instants et deux boucles, temps négatifs compris', () => {
     expect(COMBO).toHaveLength(COMBO_O.length);
+    expect(COMBO).toEqual(COMBO_O.map((name) => ENGLISH_NAMES[name]));
     expect(COMBO_T).toBe(COMBO_T_O);
     expect(COMBO_HITS).toEqual(HITS_O.map((hit) => ({ t: hit.t, side: hit.side, pow: hit.pow })));
     for (let i = 0; i < 2000; i++) {
@@ -126,7 +138,7 @@ describe('poses de l’enchaînement', () => {
 
 describe('rythme de récolte', () => {
   it('place chaque contact dans son battement, du bon côté et à la bonne puissance', () => {
-    expect(HARVEST_SEQUENCE).toEqual(['direct', 'direct', 'croise', 'crochet', 'uppercut']);
+    expect(HARVEST_SEQUENCE).toEqual(['direct', 'direct', 'cross', 'hook', 'uppercut']);
     for (let n = 0; n < 5; n++) {
       const beat = SEQUENCE_HITS[n];
       const contact = expectedContact(n);

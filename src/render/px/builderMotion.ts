@@ -13,7 +13,13 @@ export const BUILDER_ANCHOR = { x: 17, y: 38 } as const;
 export const FIST_REACH = 24;
 
 /** Le pas d'élan maximal, en pixels. */
-export const MAX_LUNGE = 26;
+export const MAX_LUNGE = 34;
+
+/** La hauteur du poing au-dessus des pieds, en pixels. */
+const FIST_HEIGHT = 19;
+
+/** La hauteur visée sur la cible, au-dessus de son pied, en pixels. */
+const TARGET_HEIGHT = 12;
 
 /** La période du va-et-vient du repos, en secondes. */
 const IDLE_PERIOD = 1.6;
@@ -107,13 +113,16 @@ export function nextFacing(current: 1 | -1, fx: number): 1 | -1 {
   return current;
 }
 
-/** Le pas d'élan en pixels vers une cible située à (dx, dy) pixels du corps. */
-export function lungeOffset(dx: number, dy: number): { readonly x: number; readonly y: number } {
+/** Le pas d'élan qui amène le poing sur une cible située à (dx, dy) pixels du corps. */
+export function lungeOffset(dx: number, dy: number, facing: 1 | -1 = 1): { readonly x: number; readonly y: number } {
   if (!Number.isFinite(dx) || !Number.isFinite(dy)) return { x: 0, y: 0 };
-  const d = Math.hypot(dx, dy);
-  if (d === 0) return { x: 0, y: 0 };
-  const step = Math.min(MAX_LUNGE, Math.max(0, d - FIST_REACH));
-  return { x: (dx / d) * step, y: (dy / d) * step };
+  if (Math.hypot(dx, dy) <= FIST_REACH) return { x: 0, y: 0 };
+  const wantX = dx - facing * FIST_REACH;
+  const wantY = dy - TARGET_HEIGHT + FIST_HEIGHT;
+  const length = Math.hypot(wantX, wantY);
+  if (length <= MAX_LUNGE) return { x: wantX, y: wantY };
+  const k = MAX_LUNGE / length;
+  return { x: wantX * k, y: wantY * k };
 }
 
 /** Mélange linéairement deux poses, pieds compris (`undefined` valant zéro). */
@@ -152,10 +161,14 @@ export interface MotionInput {
   readonly fx: number;
   /** Vrai pendant une récolte. */
   readonly acting: boolean;
+  /** Vrai si une tâche de récolte est en cours, même entre deux coups (absent : vaut `acting`). */
+  readonly harvesting?: boolean;
   /** La cible de la récolte, en pixels depuis le corps. */
   readonly targetDx: number;
   /** La cible de la récolte, en pixels depuis le corps. */
   readonly targetDy: number;
+  /** Dit si un décalage d'élan est libre ; absent, tout est libre. */
+  readonly isFree?: (offsetX: number, offsetY: number) => boolean;
 }
 
 /** L'image et les événements d'un pas d'animation. */
@@ -170,6 +183,8 @@ export interface MotionResult {
   readonly offsetY: number;
   /** Les coups portés pendant ce pas. */
   readonly contacts: readonly HarvestContact[];
+  /** Vrai si l'élan a été arrêté par un obstacle. */
+  readonly blocked: boolean;
 }
 
 /** L'animation d'un bâtisseur : une instance par joueur. */
@@ -205,6 +220,15 @@ export class BuilderAnimator {
 
     const changed = input.acting !== this.acting;
     this.acting = input.acting;
+    const harvesting = input.harvesting ?? input.acting;
+
+    if (input.acting) {
+      if (Number.isFinite(input.targetDx) && Math.abs(input.targetDx) >= 4) {
+        this.facing = input.targetDx >= 0 ? 1 : -1;
+      }
+    } else {
+      this.facing = nextFacing(this.facing, input.fx);
+    }
 
     let raw: BuilderPose;
     let contacts: readonly HarvestContact[] = [];
@@ -215,7 +239,7 @@ export class BuilderAnimator {
       if (contacts.length > 0) this.flashUntil = this.clock + FLASH_TIME;
       raw = harvestPose(this.elapsed);
     } else {
-      this.elapsed = 0;
+      if (!harvesting) this.elapsed = 0;
       raw = walkPose(input.walk, input.speed, this.clock);
     }
 
@@ -228,17 +252,33 @@ export class BuilderAnimator {
     const pose = f >= 1 ? raw : mixPose(this.fromPose, raw, f);
     this.display = pose;
 
-    const target = input.acting ? lungeOffset(input.targetDx, input.targetDy) : { x: 0, y: 0 };
-    const approach = Math.min(1, d * 16);
-    this.offsetX += (target.x - this.offsetX) * approach;
-    this.offsetY += (target.y - this.offsetY) * approach;
+    let goalX = 0;
+    let goalY = 0;
+    let blocked = false;
+    if (input.acting) {
+      const goal = lungeOffset(input.targetDx, input.targetDy, this.facing);
+      goalX = goal.x;
+      goalY = goal.y;
+      const isFree = input.isFree;
+      if (isFree) {
+        for (let k = 1; k <= 8; k++) {
+          if (!isFree((goalX * k) / 8, (goalY * k) / 8)) {
+            goalX = (goalX * (k - 1)) / 8;
+            goalY = (goalY * (k - 1)) / 8;
+            blocked = true;
+            break;
+          }
+        }
+      }
+    }
+    const approach = 1 - Math.exp(-16 * d);
+    this.offsetX += (goalX - this.offsetX) * approach;
+    this.offsetY += (goalY - this.offsetY) * approach;
 
     if (d > 0) {
       this.history.push({ t: this.clock, pose });
       if (this.history.length > HISTORY_SIZE) this.history.shift();
     }
-
-    this.facing = nextFacing(this.facing, input.fx);
 
     const frame: BuilderFrame = {
       pose,
@@ -252,6 +292,7 @@ export class BuilderAnimator {
       offsetX: Math.round(this.offsetX),
       offsetY: Math.round(this.offsetY),
       contacts,
+      blocked,
     };
   }
 

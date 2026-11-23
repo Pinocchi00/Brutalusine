@@ -17,7 +17,7 @@ import {
 } from '../render/px/artFirst';
 import { fourE2, STONE_PREVIEWS, trieurE2 } from '../render/px/artStone';
 import { placeholderItem, placeholderSprite, type DepositType } from '../render/px/placeholders';
-import { drawBuilderFrame, lensForColor } from '../render/px/builderArt';
+import { drawBuilderFrame, lensForColor, PLAYER_COLORS } from '../render/px/builderArt';
 import { idlePose } from '../render/px/builderMotion';
 import { makeSurface } from '../render/px/surface';
 import { pen } from '../render/px/pen';
@@ -186,13 +186,10 @@ for (const item of ITEMS) {
 }
 
 const builders = section('Bâtisseurs');
-for (const [label, color] of [
-  ['Orange', C.o2],
-  ['Bleu', C.blue],
-  ['Vert', C.good],
-  ['Rose', C.pink],
-] as const) {
+const BUILDER_NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'] as const;
+PLAYER_COLORS.forEach((color, index) => {
+  const label = BUILDER_NAMES[index];
   if (figure(builders, `Bâtisseur ${label.toLowerCase()}`, builderTile(color))) count++;
-}
+});
 
 window.__planche = { done: true, count };

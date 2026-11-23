@@ -99,13 +99,16 @@ describe('lungeOffset', () => {
     expect(lungeOffset(10, 10)).toEqual({ x: 0, y: 0 });
   });
 
-  it('plafonne à MAX_LUNGE dans la bonne direction', () => {
-    expect(lungeOffset(1000, 0)).toEqual({ x: MAX_LUNGE, y: 0 });
-    expect(lungeOffset(-1000, 0)).toEqual({ x: -MAX_LUNGE, y: 0 });
-    const offset = lungeOffset(30, 40);
-    expect(offset.x).toBeCloseTo(0.6 * MAX_LUNGE, 12);
-    expect(offset.y).toBeCloseTo(0.8 * MAX_LUNGE, 12);
-    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(MAX_LUNGE, 12);
+  it('amène le poing sur la cible, du bon côté', () => {
+    expect(lungeOffset(50, 0, 1)).toEqual({ x: 26, y: 7 });
+    expect(lungeOffset(-50, 0, -1)).toEqual({ x: -26, y: 7 });
+  });
+
+  it('raccourcit le vecteur visé à MAX_LUNGE', () => {
+    const offset = lungeOffset(1000, 0, 1);
+    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(MAX_LUNGE, 10);
+    expect(offset.x).toBeGreaterThan(0);
+    expect(offset.y).toBeGreaterThan(0);
   });
 
   it('annule les entrées nulles ou non finies', () => {
@@ -115,6 +118,72 @@ describe('lungeOffset', () => {
 
   it('vise le milieu des pieds', () => {
     expect(BUILDER_ANCHOR).toEqual({ x: 17, y: 38 });
+  });
+});
+
+describe('élan vers la cible', () => {
+  it('suit 16 directions à 50 px et pose le poing sur la cible', () => {
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2;
+      const dx = Math.cos(angle) * 50;
+      const dy = Math.sin(angle) * 50;
+      const animator = new BuilderAnimator();
+      let result = animator.step(1 / 60, { walk: 0, speed: 0, fx: 1, acting: true, targetDx: dx, targetDy: dy });
+      for (let step = 1; step < 120; step++) {
+        result = animator.step(1 / 60, { walk: 0, speed: 0, fx: 1, acting: true, targetDx: dx, targetDy: dy });
+      }
+      if (Math.abs(dx) >= 4) {
+        expect(result.facing).toBe(dx >= 0 ? 1 : -1);
+      }
+      const fistX = result.offsetX + result.facing * FIST_REACH;
+      const fistY = result.offsetY - 19;
+      expect(Math.hypot(fistX - dx, fistY - (dy - 12))).toBeLessThan(30);
+      const goal = lungeOffset(dx, dy, result.facing);
+      expect(Math.hypot(goal.x, goal.y)).toBeLessThanOrEqual(MAX_LUNGE + 1e-9);
+    }
+  });
+
+  it('se tourne vers une cible à gauche même en regardant à droite', () => {
+    const animator = new BuilderAnimator();
+    const result = animator.step(1 / 60, { walk: 0, speed: 0, fx: 1, acting: true, targetDx: -10, targetDy: -48 });
+    expect(result.facing).toBe(-1);
+  });
+
+  it('arrête l’élan devant un obstacle', () => {
+    const blockedInput: MotionInput = {
+      walk: 0,
+      speed: 0,
+      fx: 1,
+      acting: true,
+      targetDx: 50,
+      targetDy: 0,
+      isFree: (ox, oy) => Math.hypot(ox, oy) < 10,
+    };
+    const animator = new BuilderAnimator();
+    let result = animator.step(1 / 60, blockedInput);
+    for (let i = 0; i < 120; i++) result = animator.step(1 / 60, blockedInput);
+    expect(result.blocked).toBe(true);
+    expect(Math.hypot(result.offsetX, result.offsetY)).toBeLessThan(10);
+
+    const open = new BuilderAnimator();
+    let free = open.step(1 / 60, harvestInput());
+    for (let i = 0; i < 120; i++) free = open.step(1 / 60, harvestInput());
+    expect(free.blocked).toBe(false);
+    expect(Math.hypot(free.offsetX, free.offsetY)).toBeGreaterThan(20);
+  });
+
+  it('avance à la même vitesse à 30 et 144 images par seconde', () => {
+    const input: MotionInput = { walk: 0, speed: 0, fx: 1, acting: true, targetDx: 50, targetDy: 0 };
+    const fast = new BuilderAnimator();
+    let fastResult = fast.step(0, input);
+    for (let i = 0; i < 36; i++) fastResult = fast.step(1 / 144, input);
+
+    const slow = new BuilderAnimator();
+    let slowResult = slow.step(0, input);
+    for (let i = 0; i < 7; i++) slowResult = slow.step(1 / 30, input);
+    slowResult = slow.step(0.25 - 7 / 30, input);
+
+    expect(Math.hypot(fastResult.offsetX - slowResult.offsetX, fastResult.offsetY - slowResult.offsetY)).toBeLessThan(1);
   });
 });
 
@@ -171,6 +240,37 @@ describe('contacts de récolte', () => {
     const animator = new BuilderAnimator();
     for (let i = 0; i < 20; i++) animator.step(1 / 60, harvestInput());
     animator.step(1 / 60, { ...harvestInput(), acting: false, speed: 0, walk: 0 });
+    let first = -1;
+    for (let i = 0; i < 60 && first < 0; i++) {
+      const result = animator.step(1 / 60, harvestInput());
+      if (result.contacts.length > 0) first = result.contacts[0].index;
+    }
+    expect(first).toBe(0);
+  });
+
+  it('une récolte hachée garde son rythme, sans doublon ni trou', () => {
+    const animator = new BuilderAnimator();
+    const found: number[] = [];
+    const dt = 1 / 60;
+    let elapsed = 0;
+    for (let i = 0; i < 180; i++) {
+      const acting = i % 2 === 0;
+      const result = animator.step(dt, { walk: 0, speed: 0, fx: 1, acting, harvesting: true, targetDx: 50, targetDy: 0 });
+      for (const contact of result.contacts) found.push(contact.index);
+      if (acting) elapsed += dt;
+    }
+    const expected = harvestContacts(0, elapsed).map((contact) => contact.index);
+    expect(found).toEqual(expected);
+    expect(found.length).toBeGreaterThan(0);
+    for (let i = 1; i < found.length; i++) {
+      expect(found[i]).toBe(found[i - 1] + 1);
+    }
+  });
+
+  it('sans action ni récolte, la reprise repart du coup 0', () => {
+    const animator = new BuilderAnimator();
+    for (let i = 0; i < 20; i++) animator.step(1 / 60, { ...harvestInput(), harvesting: true });
+    animator.step(1 / 60, { ...harvestInput(), acting: false, harvesting: false });
     let first = -1;
     for (let i = 0; i < 60 && first < 0; i++) {
       const result = animator.step(1 / 60, harvestInput());
