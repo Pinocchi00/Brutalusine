@@ -92,6 +92,8 @@ interface PixelCase {
   h: number;
   /** Écart maximal toléré par canal (0 par défaut : pixels identiques exigés). */
   tolerance?: number;
+  /** Peint sur un canevas normal, comme le jeu, au lieu d'une surface à lecture fréquente. */
+  plainSurface?: boolean;
   /** Agrandissement d'affichage (×4 par défaut). */
   zoom?: number;
   draw(api: Api, ctx: CanvasRenderingContext2D): void;
@@ -527,8 +529,8 @@ CASES.push({
  * on compare la logique, pas le moteur de rendu. Un canevas accéléré mélange l'alpha 0,28
  * légèrement autrement, ce qui ferait diverger les ombres sans changer leur dessin.
  */
-function paint(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
-  const { canvas, ctx } = makeSurface(w, h, { read: true });
+function paint(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void, plainSurface = false): HTMLCanvasElement {
+  const { canvas, ctx } = plainSurface ? makeSurface(w, h) : makeSurface(w, h, { read: true });
   draw(ctx);
   return canvas;
 }
@@ -661,6 +663,7 @@ async function main(): Promise<void> {
       w: 80,
       h: 70,
       tolerance: 0,
+      plainSurface: true,
       draw: (api, ctx) => {
         const frame: BuilderFrame = {
           pose: raw.poseAt(t),
@@ -699,8 +702,8 @@ async function main(): Promise<void> {
       const refCanvas = paint(c.w, c.h, (ctx) => {
         if (c.reference) c.reference({ api: reference, raw }, ctx);
         else c.draw(reference, ctx);
-      });
-      const portCanvas = paint(c.w, c.h, (ctx) => c.draw(PORT, ctx));
+      }, c.plainSurface);
+      const portCanvas = paint(c.w, c.h, (ctx) => c.draw(PORT, ctx), c.plainSurface);
       const tolerance = c.tolerance ?? 0;
       const { canvas: diffCanvas, diff, exact } = differenceMap(refCanvas, portCanvas, c.w, c.h, tolerance);
       result = { name: c.name, diff, total: c.w * c.h };
