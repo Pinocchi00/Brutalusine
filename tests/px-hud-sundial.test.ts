@@ -63,4 +63,22 @@ describe('sunDialSvg', () => {
       expect(svg).not.toContain('NaN');
     }
   });
+
+  it('garde chaque point entier dans son viewBox élargi', () => {
+    for (let i = 0; i < 100; i++) {
+      const svg = sunDialSvg(i / 100);
+      const rects = [...svg.matchAll(/<rect x="(-?\d+)" y="(-?\d+)" width="(\d+)" height="(\d+)"/g)];
+      expect(rects.length).toBeGreaterThan(0);
+      for (const rect of rects) {
+        const x = Number(rect[1]);
+        const y = Number(rect[2]);
+        const width = Number(rect[3]);
+        const height = Number(rect[4]);
+        expect(x).toBeGreaterThanOrEqual(-1);
+        expect(y).toBeGreaterThanOrEqual(-2);
+        expect(x + width).toBeLessThanOrEqual(29);
+        expect(y + height).toBeLessThanOrEqual(18);
+      }
+    }
+  });
 });

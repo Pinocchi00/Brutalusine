@@ -2,7 +2,7 @@
    Tout est gardé derrière `:root[data-rendu='pixel']` : sans ce drapeau, l'ancien rendu ne change pas. */
 
 /* Masqué à l'œil, lu par les lecteurs d'écran. */
-:root[data-rendu='pixel'] .sr {
+:root[data-rendu='pixel'] :is(.sr, #quota h2) {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -20,17 +20,6 @@
   left: 16px;
   width: 312px;
   padding: 10px 12px;
-}
-:root[data-rendu='pixel'] #quota h2 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
 }
 :root[data-rendu='pixel'] #quota .eyebrow {
   font-size: 14px;
@@ -88,6 +77,9 @@
 :root[data-rendu='pixel'] #quota .steps.open li {
   display: grid;
 }
+:root[data-rendu='pixel'] #quota .steps:not(.open):not(:has(li.now)) {
+  display: none;
+}
 
 /* L'état global : le cadran et l'énergie. */
 :root[data-rendu='pixel'] #topbar {
@@ -112,7 +104,7 @@
   background: var(--px-ui2);
 }
 :root[data-rendu='pixel'] .chip .meter i {
-  background: linear-gradient(var(--px-good) 0 2px, var(--px-good) 2px 8px, var(--px-good) 8px 10px);
+  background: var(--px-good);
   mask-image: repeating-linear-gradient(90deg, #000 0 10px, transparent 10px 12px);
 }
 :root[data-rendu='pixel'] .chip.bad .meter i {
@@ -123,7 +115,7 @@
 :root[data-rendu='pixel'] #stock {
   top: 16px;
   right: 16px;
-  width: 216px;
+  width: 284px;
   padding: 8px 10px;
 }
 :root[data-rendu='pixel'] #stock .eyebrow {
@@ -136,11 +128,15 @@
   font-size: 15px;
   color: var(--px-c1);
 }
+:root[data-rendu='pixel'] #stock .rate {
+  font-size: 11px;
+  white-space: nowrap;
+}
 :root[data-rendu='pixel'] #stock .row b {
   font-size: 15px;
   font-weight: 600;
   color: var(--px-white);
-  min-width: 34px;
+  min-width: 40px;
 }
 
 /* Les alertes : un carré orange au lieu de la bordure colorée. */

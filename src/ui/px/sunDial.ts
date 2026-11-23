@@ -29,7 +29,7 @@ export function sunDialSvg(t: number): string {
     const y = Math.round(CY + Math.sin(angle) * R);
     parts.push(rect(x, y, C.ui1));
   }
-  parts.push(`<rect x="1" y="${CY}" width="26" height="1" fill="${C.c4}"/>`);
+  parts.push(`<rect x="1" y="${CY}" width="27" height="1" fill="${C.c4}"/>`);
   const discColor = point.day ? C.o1 : C.s1;
   for (let dy = -3; dy <= 3; dy++) {
     for (let dx = -3; dx <= 3; dx++) {
@@ -37,7 +37,7 @@ export function sunDialSvg(t: number): string {
     }
   }
   parts.push(rect(point.x - 1, point.y - 1, point.day ? C.o0 : C.s0));
-  return `<svg class="sundial" width="56" height="32" viewBox="0 0 28 16" shape-rendering="crispEdges" aria-hidden="true">${parts.join('')}</svg>`;
+  return `<svg class="sundial" width="60" height="40" viewBox="-1 -2 30 20" shape-rendering="crispEdges" aria-hidden="true">${parts.join('')}</svg>`;
 }
 
 function rect(x: number, y: number, fill: string): string {

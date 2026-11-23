@@ -82,7 +82,11 @@ export class Hud {
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
-    if (d.stepsToggle !== undefined) { this.stepsOpen = !this.stepsOpen; this.renderQuota(g); }
+    if (d.stepsToggle !== undefined) {
+      this.stepsOpen = !this.stepsOpen;
+      this.renderQuota(g);
+      if (ev.detail === 0) document.querySelector<HTMLElement>('[data-steps-toggle]')?.focus();
+    }
     else if (d.alertToggle !== undefined) { this.alertsOpen = !this.alertsOpen; this.renderAlerts(g); }
     else if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
     else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
