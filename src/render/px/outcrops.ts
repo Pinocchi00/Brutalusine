@@ -44,7 +44,7 @@ export interface OutcropSprite extends OutcropPlan {
 }
 
 /** Chaque roche a sa pierre : arête, dessus clair, dessus, face, pied. */
-const ROCK: Record<RockKind, readonly [string, string, string, string, string]> = {
+export const ROCK: Record<RockKind, readonly [string, string, string, string, string]> = {
   st: [C.st0, C.st1, C.st2, C.st3, C.st4],
   fe: ['#dcc6b6', '#ae9282', '#866c60', '#5f4b45', '#41332f'],
   cu: ['#dedcce', '#b1b0a0', '#888a7a', '#5f6258', '#41443d'],
@@ -77,7 +77,7 @@ function normalizeAlt(alt: number): number {
 }
 
 /** Un rocher en volume : dessus éclairé, face avant dans l'ombre et facettes. */
-function boulder(
+export function boulder(
   P: Pen,
   cx: number,
   cy: number,

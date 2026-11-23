@@ -23,6 +23,7 @@ import { makeSurface } from '../render/px/surface';
 import { pen } from '../render/px/pen';
 import { TREE_VARIANTS, canopySprite, type TreeKind } from '../render/px/trees';
 import { OUTCROP_VARIANTS, outcropSprite, rockKind } from '../render/px/outcrops';
+import { HUD_ICON_KEYS, paintHudIcon } from '../render/px/hudIcons';
 
 declare global {
   interface Window {
@@ -93,12 +94,12 @@ function groundTile(): HTMLCanvasElement {
 }
 
 /** Ajoute une vignette légendée à la planche et renvoie vrai pour compter le volume. */
-function figure(section: HTMLElement, label: string, canvas: HTMLCanvasElement, counted = true): boolean {
+function figure(section: HTMLElement, label: string, canvas: HTMLCanvasElement, counted = true, zoom = ZOOM): boolean {
   const box = document.createElement('figure');
   const caption = document.createElement('figcaption');
   caption.textContent = label;
-  canvas.style.width = `${canvas.width * ZOOM}px`;
-  canvas.style.height = `${canvas.height * ZOOM}px`;
+  canvas.style.width = `${canvas.width * zoom}px`;
+  canvas.style.height = `${canvas.height * zoom}px`;
   box.append(canvas, caption);
   section.appendChild(box);
   return counted;
@@ -191,5 +192,14 @@ PLAYER_COLORS.forEach((color, index) => {
   const label = BUILDER_NAMES[index];
   if (figure(builders, `Bâtisseur ${label.toLowerCase()}`, builderTile(color))) count++;
 });
+
+const icons = section('Icônes du HUD');
+for (const key of HUD_ICON_KEYS) {
+  const { canvas, ctx } = makeSurface(40, 36);
+  ctx.fillStyle = C.ui2;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(paintHudIcon(key), 4, 4);
+  if (figure(icons, key, canvas, true, 2)) count++;
+}
 
 window.__planche = { done: true, count };

@@ -16,6 +16,15 @@ import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
 import { drawBuilderFrame } from '../render/px/builderArt';
 import type { BuilderFrame, BuilderPose } from '../render/px/builderTypes';
+import {
+  CHAR_PAL,
+  CHAR_ROWS,
+  LOG_PAL,
+  LOG_ROWS,
+  OREI_PAL,
+  OREI_ROWS,
+  paintHudIcon,
+} from '../render/px/hudIcons';
 import { TILE_PX } from '../render/px/view';
 
 /** L'API commune aux deux côtés : la maquette et le portage exposent les mêmes fonctions. */
@@ -73,6 +82,7 @@ interface MaquetteRaw extends Omit<Api, 'smooth' | 'makeSurface' | 'beltTileImag
   LOG: HTMLCanvasElement;
   CHAR: HTMLCanvasElement;
   OREI: HTMLCanvasElement;
+  ICONS: Record<string, HTMLCanvasElement>;
   BELTS: readonly MaquetteBelt[];
   ERA_ARTS: Record<string, (P: Pen, U: number, L: Light[]) => void>;
   /** La pose du bâtisseur à un instant. */
@@ -155,13 +165,6 @@ function adapt(raw: MaquetteRaw): Api {
   };
   return api;
 }
-
-const LOG_ROWS = ['..........', '.a11111112', 'abc2222223', 'ab22222223', 'abc2223333', '.a33333333'] as const;
-const LOG_PAL = { a: C.e0, b: C.e1, c: C.e2, 1: C.e1, 2: C.e2, 3: C.e3 } as const;
-const CHAR_ROWS = ['..aa1....', '.a1112...', '.1s12233.', '122223333', '.2223334.', '..33344..'] as const;
-const CHAR_PAL = { a: C.st1, 1: C.ch0, 2: C.ch1, 3: C.ch2, 4: '#141117', s: C.chs } as const;
-const OREI_ROWS = ['...0011...', '..011122..', '.01k2m223.', '0112k23333', '.12222333.', '..22333...'] as const;
-const OREI_PAL = { 0: '#dcc6b6', 1: '#ae9282', 2: '#866c60', 3: '#5f4b45', m: C.irm, k: C.ir1 } as const;
 
 const BUILD_W = 44, BUILD_H = 42, BUILD_UP = 20;
 
@@ -344,6 +347,15 @@ for (const [name, rows, pal, spriteWidth, spriteHeight] of [
     kind: 'pixels', name: `fromRows · ${name} contre le sprite exposé`, w: spriteWidth, h: spriteHeight,
     reference: (ref, ctx) => ctx.drawImage(ref.raw[name], 0, 0),
     draw: (api, ctx) => ctx.drawImage(api.fromRows(rows, pal), 0, 0),
+  });
+}
+
+// --- les icônes du HUD -----------------------------------------------------------------
+for (const key of ['belt', 'puits', 'kiln', 'crate', 'fist'] as const) {
+  CASES.push({
+    kind: 'pixels', name: `icône HUD · ${key}`, w: 32, h: 28,
+    reference: (ref, ctx) => ctx.drawImage(ref.raw.ICONS[key], 0, 0),
+    draw: (_api, ctx) => ctx.drawImage(paintHudIcon(key), 0, 0),
   });
 }
 
