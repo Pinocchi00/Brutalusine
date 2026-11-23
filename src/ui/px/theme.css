@@ -1,0 +1,75 @@
+/* Brutalusine — thème du HUD pixel : la police Rubik, les couleurs de la palette et le cadre de la maquette.
+   Tout est gardé derrière `:root[data-rendu='pixel']` : sans ce drapeau, l'ancien rendu ne change pas. */
+@import '@fontsource/rubik/latin-400.css';
+@import '@fontsource/rubik/latin-500.css';
+@import '@fontsource/rubik/latin-600.css';
+@import '@fontsource/rubik/latin-700.css';
+
+/* Les variables, avec les valeurs exactes de `C` dans `palette.ts`. */
+:root[data-rendu='pixel'] {
+  --px-ink: #1a1018;
+  --px-ui0: #241b21;
+  --px-ui1: #4b3d45;
+  --px-ui2: #150f13;
+  --px-ui3: #3a2e35;
+  --px-c0: #fff3dc;
+  --px-c1: #ead7b8;
+  --px-c2: #cdb592;
+  --px-c3: #a68c6d;
+  --px-c4: #7c6550;
+  --px-o0: #fff3b8;
+  --px-o1: #ffcc5c;
+  --px-o2: #f78f22;
+  --px-o3: #cc5a14;
+  --px-white: #fffbf0;
+  --px-good: #9be07a;
+  --px-red: #ff6a4a;
+
+  --bg: var(--px-ui0);
+  --bg-solid: var(--px-ui0);
+  --raise: var(--px-ui2);
+  --raise-2: var(--px-ui3);
+  --line: var(--px-ui3);
+  --text: var(--px-c0);
+  --soft: var(--px-c2);
+  --signal: var(--px-o2);
+  --signal-hi: var(--px-o1);
+  --good: var(--px-good);
+  --warn: var(--px-o1);
+  --bad: var(--px-red);
+  --glow: var(--px-o1);
+  --display: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* le panneau de la maquette : 5 × 5 points, découpé en 9, coins entaillés */
+  --px-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5' shape-rendering='crispEdges'%3E%3Cpath fill='%231a1018' d='M1 0h3v1h1v3h-1v1h-3v-1h-1v-3h1z'/%3E%3Cpath fill='%23241b21' d='M1 1h3v3h-3z'/%3E%3Cpath fill='%234b3d45' d='M2 1h1v1h-1zM1 2h1v1h-1z'/%3E%3Cpath fill='%23150f13' d='M2 3h1v1h-1zM3 2h1v1h-1z'/%3E%3C/svg%3E");
+}
+
+/* Le cadre pixel remplace les fonds et les bordures de l'interface. */
+:root[data-rendu='pixel'] :is(.card, .chip, #tools, .alert, #sidebtns button) {
+  background: none;
+  backdrop-filter: none;
+  border: 4px solid transparent;
+  border-image: var(--px-frame) 2 fill / 4px stretch;
+  image-rendering: pixelated;
+}
+
+/* Les titres : Rubik en demi-gras, sans interlettrage. */
+:root[data-rendu='pixel'] :is(h1, h2, h3) {
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Les intitulés : l'accent orange de la maquette. */
+:root[data-rendu='pixel'] .eyebrow {
+  color: var(--px-o2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Le titre BRUTALUSINE tient dans l'écran en Rubik, quelle que soit la largeur. */
+:root[data-rendu='pixel'] .titlecard h1 {
+  font-size: clamp(34px, 11.5vw, 86px);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
