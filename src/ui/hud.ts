@@ -9,6 +9,8 @@ import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
 import { prettyFormula } from '../sim/chem';
 import { buildingIcon } from '../render/sprites';
+import './px/top.css';
+import { sunDialSvg } from './px/sunDial';
 
 export interface HudHost {
   game(): Game;
@@ -54,6 +56,8 @@ export function recipeWords(r: Recipe): string {
 export class Hud {
   selected: Ent | null = null;
   cat: Category = 'extraction';
+  private readonly pixel = document.documentElement.dataset.rendu === 'pixel';
+  private stepsOpen = false;
   private codexHistory: string[] = [];
   private seenUnlock = 0;
   private fresh = new Set<string>();
@@ -74,11 +78,16 @@ export class Hud {
   }
 
   private onClick(ev: MouseEvent): void {
-    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-close],[data-go]');
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-steps-toggle],[data-close],[data-go]');
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
-    if (d.alertToggle !== undefined) { this.alertsOpen = !this.alertsOpen; this.renderAlerts(g); }
+    if (d.stepsToggle !== undefined) {
+      this.stepsOpen = !this.stepsOpen;
+      this.renderQuota(g);
+      if (ev.detail === 0) document.querySelector<HTMLElement>('[data-steps-toggle]')?.focus();
+    }
+    else if (d.alertToggle !== undefined) { this.alertsOpen = !this.alertsOpen; this.renderAlerts(g); }
     else if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
     else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
     else if (d.go !== undefined) this.host.locate(d.go as Place);
@@ -141,16 +150,27 @@ export class Hud {
       const have = Math.min(n, g.delivered[id]);
       return `<div class="need">${itemTag(id)}<span class="count">${fmt(have)} / ${fmt(n)}</span><div class="bar"><i style="width:${(100 * have / n).toFixed(1)}%"></i></div></div>`;
     }).join('');
+    const html = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${this.quotaSteps(q)}`;
+    if (html !== this.quotaKey) { this.quotaKey = html; $('quota').innerHTML = html; }
+  }
+
+  /** Les étapes : en pixel, un pli qui montre l'étape en cours et déplie le reste. */
+  private quotaSteps(q: ReturnType<typeof quotaAt>): string {
+    const total = q.steps.length;
+    if (!total) return '';
     let seenNow = false;
-    const steps = q.steps.map((s) => {
+    const rows = q.steps.map((s) => {
       const done = this.host.stepDone(s);
       const now = !done && !seenNow;
       if (now) seenNow = true;
       const go = now && (s.t === 'build' || s.t === 'gather') && s.go ? `<button class="go" data-go="${s.go}">Y aller</button>` : '';
       return `<li class="${done ? 'done' : now ? 'now' : ''}"><span>${esc(s.text)}</span>${go}</li>`;
     }).join('');
-    const html = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${steps ? `<ul class="steps">${steps}</ul>` : ''}`;
-    if (html !== this.quotaKey) { this.quotaKey = html; $('quota').innerHTML = html; }
+    if (!this.pixel) return `<ul class="steps">${rows}</ul>`;
+    const index = q.steps.findIndex((s) => !this.host.stepDone(s));
+    const current = index < 0 ? total : index + 1;
+    const toggle = `<button class="steps-toggle" data-steps-toggle="1" aria-expanded="${this.stepsOpen}">Étape ${current} / ${total}</button>`;
+    return `${toggle}<ul class="steps${this.stepsOpen ? ' open' : ''}">${rows}</ul>`;
   }
 
   private renderTop(g: Game): void {
@@ -158,8 +178,13 @@ export class Hud {
     const hh = Math.floor(s.hour), mm = Math.floor((s.hour % 1) * 60);
     const low = p.sat < 0.999 && p.lastDemand > 0;
     const use = p.capacity > 0 ? Math.min(1, p.lastDemand / p.capacity) : 0;
+    const time = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    const title = 'Un jour dure 10 minutes. Les Héliostats ne produisent que le jour.';
+    const dial = this.pixel
+      ? `<div class="chip dial" title="${title}">${sunDialSvg(s.t)}<b>${time}</b><span class="sr">${s.day ? 'jour' : 'nuit'}</span></div>`
+      : `<div class="chip" title="${title}"><b>${time}</b>${s.day ? 'jour' : 'nuit'}</div>`;
     $('topbar').innerHTML = `
-      <div class="chip" title="Un jour dure 10 minutes. Les Héliostats ne produisent que le jour."><b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b>${s.day ? 'jour' : 'nuit'}</div>
+      ${dial}
       <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}${p.storeMax ? ` · réserve ${Math.round((100 * p.stored) / p.storeMax)} %` : ''}</div>`;
   }
 
@@ -171,7 +196,7 @@ export class Hud {
       if (n < 1 && Math.abs(rate) < 0.5) continue;
       html += `<button class="row" data-codex="i:${i}">${itemIcon(ITEMS[i])}<span class="name">${esc(ITEMS[i].name)}</span><span class="rate ${rate < -0.5 ? 'neg' : ''}">${Math.abs(rate) >= 0.5 ? (rate > 0 ? '+' : '−') + Math.abs(Math.round(rate)) + '/min' : ''}</span><b>${fmt(n)}</b></button>`;
     }
-    $('stock').innerHTML = `<div class="eyebrow">Ton stock</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
+    $('stock').innerHTML = `<div class="eyebrow">${this.pixel ? 'Stock' : 'Ton stock'}</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
   }
 
   private renderAlerts(g: Game): void {
