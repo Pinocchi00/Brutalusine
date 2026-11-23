@@ -170,6 +170,7 @@ export class PxRenderer {
   private readonly ground: GroundLayer;
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
+  private readonly strikeFeet = new Map<PlayerView, number>();
   private readonly lit: LitBuilding[] = [];
   private readonly scraps = new Map<string, { data: Uint8ClampedArray; img: HTMLCanvasElement }>();
   private buffer: HTMLCanvasElement | null = null;
@@ -333,6 +334,7 @@ export class PxRenderer {
   /** Parcourt les carrés 2 × 2 qui touchent la vue et pose chaque affleurement avec ce qui passe devant. */
   private addOres(f: Frame): void {
     const { g, view } = f;
+    this.strikeFeet.clear();
     const read = (tx: number, ty: number): number => this.oreRead(g, tx, ty);
     const cellX0 = Math.floor((view.tileX0 - 2) / 2);
     const cellX1 = Math.floor((view.tileX1 + 2) / 2);
@@ -504,6 +506,11 @@ export class PxRenderer {
     for (const tile of cell.tiles) {
       const value = this.fx.hitSince(tile.x, tile.y, f.now);
       if (value !== null && (since === null || value < since)) since = value;
+      for (const p of f.opts.players) {
+        if (p.strikeTile && p.strikeTile.x === tile.x && p.strikeTile.y === tile.y) {
+          this.strikeFeet.set(p, footPx + 1);
+        }
+      }
     }
     const shifted = X + (since === null ? 0 : rockShake(since));
     const phase = hash(entry.cellX, entry.cellY, g.seed + 214) * 8;
@@ -657,7 +664,9 @@ export class PxRenderer {
       const lens = lensForColor(p.color);
       const X = Math.round(p.x * TILE_PX) + offsetX;
       const foot = Math.round(p.y * TILE_PX) + offsetY;
-      this.queue.addTall(Math.max(foot, p.strikeFoot ?? foot), X, () => {
+      const strikeFoot = p.strikeTile ? this.strikeFeet.get(p) ?? (p.strikeTile.y + 1) * TILE_PX : foot;
+      const order = motion?.blocked ? foot : Math.max(foot, strikeFoot);
+      this.queue.addTall(order, X, () => {
         const ctx = f.ctx;
         if (facing < 0) {
           ctx.save();

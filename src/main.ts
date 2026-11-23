@@ -13,6 +13,7 @@ import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, typ
 import { PxRenderer, coopScale } from './render/px/renderer';
 import { chooseHarvest, type HarvestPick } from './render/px/oreField';
 import { BuilderAnimator, type MotionResult } from './render/px/builderMotion';
+import { PLAYER_COLORS } from './render/px/builderArt';
 import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
 import { Hud } from './ui/hud';
@@ -32,7 +33,7 @@ interface WorldRenderer {
   oreTileAt?(g: Game, x: number, y: number): { x: number; y: number } | null;
 }
 
-const COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'];
+const COLORS = PLAYER_COLORS;
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
 const MIN_ZOOM = 16, MAX_ZOOM = 76, REACH = 2.1;
 
@@ -47,7 +48,7 @@ class Player implements PlayerView {
   hitTimer = 0;
   animator = new BuilderAnimator();
   motion: MotionResult | null = null;
-  strikeFoot: number | null = null;
+  strikeTile: { x: number; y: number } | null = null;
   aimX = 0; aimY = 1.6;
   dragLast: [number, number] | null = null;
   anchor: [number, number] | null = null;   // convoyeur : case où le tracé a commencé
@@ -270,7 +271,7 @@ class App {
     this.renderer.reset();
     this.hud.select(null);
     this.rings.length = 0;
-    for (const p of this.players) { p.undo.length = 0; p.tool = null; p.gesture = null; p.task = null; p.vx = p.vy = 0; }
+    for (const p of this.players) { p.undo.length = 0; p.tool = null; p.gesture = null; p.task = null; p.vx = p.vy = 0; p.animator = new BuilderAnimator(); p.motion = null; p.strikeTile = null; }
   }
 
   async save(): Promise<void> { await writeSave('auto', serialize(this.game, { players: this.players.map((p) => ({ x: p.x, y: p.y })), zoom: this.zoom })); }
@@ -708,11 +709,13 @@ class App {
         speed: p.speed,
         fx: p.fx,
         acting: strikeTarget !== null,
+        harvesting: p.task?.kind === 'tree' || p.task?.kind === 'ore',
         targetDx: strikeTarget ? (strikeTarget.x + 0.5 - p.x) * TILE_PX : 0,
         targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
+        isFree: strikeTarget ? (ox, oy) => !this.solid(p.x + ox / TILE_PX, p.y + oy / TILE_PX) : undefined,
       });
       p.motion = result;
-      p.strikeFoot = strikeTarget ? (strikeTarget.y + 1) * TILE_PX : null;
+      p.strikeTile = strikeTarget ? { x: strikeTarget.x, y: strikeTarget.y } : null;
       if (strikeTarget) {
         for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
       }

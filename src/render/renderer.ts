@@ -21,7 +21,7 @@ export interface PlayerView extends Critter {
   route: RouteView[] | null;           // tracé de convoyeur en cours (posé au relâchement)
   routeInto: boolean;                  // son bout se déverse dans une machine ou un tapis
   motion?: MotionResult | null;        // l'image du bâtisseur boxeur en rendu pixel
-  strikeFoot?: number | null;          // pied de tri en pixels pendant un coup, pour rester devant sa cible
+  strikeTile?: { readonly x: number; readonly y: number } | null;   // case frappée pendant un coup, pour rester devant sa cible
 }
 export interface RouteView { x: number; y: number; dir: number; ok: boolean; }
 export interface Ring { x: number; y: number; t0: number; color: string; size: number; dur: number; }

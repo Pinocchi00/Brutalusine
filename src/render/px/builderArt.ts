@@ -16,6 +16,9 @@ export interface LensColors {
   readonly glint: string;
 }
 
+/** Les couleurs des quatre joueurs, dans l'ordre. */
+export const PLAYER_COLORS = ['#F08A24', '#3FD0FF', '#B9F24A', '#F0559A'] as const;
+
 /** La lentille orange de la maquette. */
 export const LENS_ORANGE: LensColors = { deep: C.o3, mid: C.o2, glint: C.o0 };
 
@@ -34,7 +37,7 @@ function mixHex(a: string, b: string, t: number): string {
 export function lensForColor(color: string): LensColors {
   const cached = LENS_CACHE.get(color);
   if (cached) return cached;
-  if (color.toLowerCase() === '#f08a24' || !/^#[0-9a-fA-F]{6}$/.test(color)) return LENS_ORANGE;
+  if (color.toLowerCase() === PLAYER_COLORS[0].toLowerCase() || !/^#[0-9a-fA-F]{6}$/.test(color)) return LENS_ORANGE;
   const lens: LensColors = {
     deep: mixHex(color, C.ink, 0.45),
     mid: color,

@@ -9,7 +9,7 @@ import { EASE } from './noise';
 export const PACE = 2;
 
 /** Les sept mouvements de la maquette. */
-export type MoveName = 'garde' | 'direct' | 'croise' | 'crochet' | 'uppercut' | 'esquive' | 'retrait';
+export type MoveName = 'guard' | 'direct' | 'cross' | 'hook' | 'uppercut' | 'dodge' | 'retreat';
 
 /** Les courbes qui mènent d'une clé à la suivante. */
 type EaseName = 'io' | 'out' | 'back';
@@ -72,7 +72,7 @@ function mk(u: number, o: Partial<Omit<MoveKey, 'u'>> = {}): MoveKey {
 
 /** Les sept mouvements de la maquette, valeurs identiques. */
 export const MOVES: Readonly<Record<MoveName, Move>> = {
-  garde: { d: 0.9, k: [mk(0), mk(1)] },
+  guard: { d: 0.9, k: [mk(0), mk(1)] },
   direct: {
     d: 0.4,
     hit: [0.4, 'L', 1],
@@ -84,7 +84,7 @@ export const MOVES: Readonly<Record<MoveName, Move>> = {
       mk(1),
     ],
   },
-  croise: {
+  cross: {
     d: 0.5,
     hit: [0.44, 'R', 1.4],
     k: [
@@ -95,7 +95,7 @@ export const MOVES: Readonly<Record<MoveName, Move>> = {
       mk(1),
     ],
   },
-  crochet: {
+  hook: {
     d: 0.56,
     hit: [0.5, 'L', 1.8],
     k: [
@@ -117,17 +117,17 @@ export const MOVES: Readonly<Record<MoveName, Move>> = {
       mk(1),
     ],
   },
-  esquive: {
+  dodge: {
     d: 0.9,
     k: [mk(0), mk(0.36, { x: -2, y: 3, tw: -1, sq: 1 }), mk(0.7, { x: 1, y: 2, tw: 1, sq: 1 }), mk(1)],
   },
-  retrait: { d: 0.62, k: [mk(0), mk(0.3, { x: -3, y: 1, tw: -1, e: 'out' }), mk(1)] },
+  retreat: { d: 0.62, k: [mk(0), mk(0.3, { x: -3, y: 1, tw: -1, e: 'out' }), mk(1)] },
 };
 
 /** L'enchaînement de la maquette, dans le même ordre. */
 export const COMBO: readonly MoveName[] = [
-  'garde', 'direct', 'direct', 'croise', 'garde', 'esquive', 'crochet', 'uppercut', 'garde', 'retrait',
-  'croise', 'crochet', 'garde', 'direct', 'uppercut', 'esquive', 'direct', 'croise', 'crochet', 'garde', 'garde',
+  'guard', 'direct', 'direct', 'cross', 'guard', 'dodge', 'hook', 'uppercut', 'guard', 'retreat',
+  'cross', 'hook', 'guard', 'direct', 'uppercut', 'dodge', 'direct', 'cross', 'hook', 'guard', 'guard',
 ];
 
 /** Une tranche de l'enchaînement : son mouvement, son début et sa durée. */
@@ -220,7 +220,7 @@ export function comboPose(t: number): BuilderPose {
 export const HARVEST_BEAT = 0.29;
 
 /** L'ordre des coups pendant la récolte. */
-export const HARVEST_SEQUENCE: readonly MoveName[] = ['direct', 'direct', 'croise', 'crochet', 'uppercut'];
+export const HARVEST_SEQUENCE: readonly MoveName[] = ['direct', 'direct', 'cross', 'hook', 'uppercut'];
 
 /** Un mouvement de récolte, accompagné de son contact obligatoire. */
 interface HarvestMove {
