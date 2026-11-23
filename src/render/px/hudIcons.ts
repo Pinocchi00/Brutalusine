@@ -99,7 +99,7 @@ function paintBelt(P: Pen, ctx: CanvasRenderingContext2D, items: IconItems): voi
 }
 
 /** Le symbole de la mine : un tas de minerai de fer, la pioche posée en travers. */
-function paintPuits(P: Pen, _ctx: CanvasRenderingContext2D, _items: IconItems): void {
+function paintPuits(P: Pen): void {
   const r = rng(5);
   boulder(P, 19, 16, 9, 6, r, ROCK.fe, false);
   boulder(P, 10, 19, 9, 6, r, ROCK.fe, true);
@@ -142,7 +142,7 @@ function paintCrate(P: Pen, ctx: CanvasRenderingContext2D, items: IconItems): vo
 }
 
 /** Un poing d'acier fermé, vu de face, et l'étincelle du coup. */
-function paintFist(P: Pen, _ctx: CanvasRenderingContext2D, _items: IconItems): void {
+function paintFist(P: Pen): void {
   const FIST = [
     '.KKK.KKK.KKK.KKK.',
     'KLLMKLLMKLLMKLLMK',
@@ -241,9 +241,9 @@ function paintSawmill(P: Pen, ctx: CanvasRenderingContext2D, items: IconItems): 
   P.disc(15, 10, 5, C.s1);
   P.disc(15, 10, 2, C.s2);
   P.p(15, 10, C.s3);
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2;
-    P.p(15 + Math.round(Math.cos(a) * 6), 10 + Math.round(Math.sin(a) * 6), C.s2);
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    P.p(15 + Math.round(Math.cos(a) * 7), 10 + Math.round(Math.sin(a) * 7), C.s0);
   }
   P.p(13, 8, C.s0);
   P.p(14, 8, C.s0);
@@ -252,8 +252,11 @@ function paintSawmill(P: Pen, ctx: CanvasRenderingContext2D, items: IconItems): 
 
 /** Un four carré de pierre, une gueule rouge et orange, une haute cheminée. */
 function paintFurnace(P: Pen): void {
-  box(P, 18, 0, 7, 4, 10, STONE, false);
   box(P, 3, 8, 22, 7, 9, STONE, false);
+  P.r(19, 0, 5, 9, C.st2);
+  P.r(19, 0, 5, 1, C.st0);
+  P.r(19, 1, 1, 8, C.st1);
+  P.r(23, 1, 1, 8, C.st3);
   P.r(2, 7, 24, 2, C.st1);
   P.r(2, 7, 24, 1, C.st0);
   P.r(8, 17, 12, 7, C.s3);
@@ -269,20 +272,22 @@ function paintFurnace(P: Pen): void {
 function paintBurner(P: Pen): void {
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
-    const x = 15 + Math.cos(a) * 8;
-    const y = 16 + Math.sin(a) * 5;
-    P.disc(x, y, 2, C.e3);
-    P.disc(x - 0.3, y - 0.3, 1.4, C.e1);
-    P.p(x, y, C.e3);
+    const x = 15 + Math.cos(a) * 11;
+    const y = 17 + Math.sin(a) * 6;
+    P.disc(x, y, 2.5, C.e3);
+    P.disc(x - 0.4, y - 0.4, 1.7, C.e1);
+    P.p(x, y, C.e0);
   }
-  P.ell(15, 16, 6, 3.5, C.ink2);
-  P.ell(15, 16, 5, 2.8, C.s3);
-  P.ell(15, 16, 3, 1.6, C.o4);
-  P.ell(15, 13, 4, 6, C.o2);
-  P.ell(15, 14, 2.5, 4, C.o1);
-  P.ell(15, 16, 1.5, 2.5, C.o0);
-  P.p(13, 10, C.o1);
-  P.p(17, 11, C.o1);
+  P.ell(15, 17, 8, 4, C.ink2);
+  P.ell(15, 17, 6.5, 3, C.s3);
+  P.ell(15, 17, 4, 2, C.o4);
+  P.ell(15, 11, 5.5, 9, C.o3);
+  P.ell(15, 12, 4.5, 7.5, C.o2);
+  P.ell(15, 14, 3, 5, C.o1);
+  P.ell(15, 16, 1.6, 2.6, C.o0);
+  P.p(10, 7, C.o1);
+  P.p(20, 5, C.o1);
+  P.p(15, 1, C.o2);
 }
 
 /** La capsule grise avec son œil orange sur un plancher de rondins, un mât, un fanion orange. */
@@ -316,20 +321,22 @@ function paintTower(P: Pen): void {
 
 /** Une masse d'acier à manche de bois en travers, un bloc de béton fendu, un éclat orange. */
 function paintDemolish(P: Pen): void {
-  box(P, 3, 15, 16, 6, 4, M.conc, true);
-  P.line(9, 16, 11, 19, C.ink2);
-  P.line(11, 19, 10, 22, C.ink2);
+  box(P, 2, 16, 18, 5, 5, M.conc, true);
+  P.line(10, 16, 12, 19, C.ink2);
+  P.line(12, 19, 10, 22, C.ink2);
   P.line(10, 22, 13, 25, C.ink2);
-  P.line(6, 21, 25, 5, C.e3, 3);
-  P.line(6, 21, 25, 5, C.e1, 1);
-  P.r(21, 1, 7, 7, C.s3);
-  P.r(22, 2, 5, 5, C.s1);
-  P.r(23, 3, 3, 3, C.s0);
-  P.p(22, 6, C.s2);
-  P.p(8, 13, C.o1);
-  P.p(10, 12, C.o1);
-  P.p(11, 14, C.o2);
-  P.p(7, 15, C.o2);
+  P.line(8, 20, 22, 7, C.e3, 3);
+  P.line(8, 19, 21, 7, C.e1);
+  P.r(18, 1, 10, 9, C.s3);
+  P.r(18, 1, 10, 7, C.s1);
+  P.r(18, 1, 10, 1, C.s0);
+  P.r(18, 2, 2, 5, C.s0);
+  P.r(26, 2, 2, 7, C.s2);
+  P.p(6, 13, C.o1);
+  P.p(9, 11, C.o0);
+  P.p(12, 13, C.o1);
+  P.p(4, 15, C.o2);
+  P.p(15, 14, C.o2);
 }
 
 /** Un engrenage d'acier à huit dents, un moyeu sombre. */
