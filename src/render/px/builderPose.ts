@@ -260,19 +260,6 @@ function firstIndexAfter(time: number): number {
   return lo;
 }
 
-/** Le plus grand numéro de coup dont le contact est au plus `time`, ou -1. */
-function lastIndexAtOrBefore(time: number): number {
-  if (contactTime(0) > time) return -1;
-  let lo = 0;
-  let hi = Math.max(1, Math.floor(time / HARVEST_BEAT) + 2);
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi + 1) / 2);
-    if (contactTime(mid) <= time) lo = mid;
-    else hi = mid - 1;
-  }
-  return lo;
-}
-
 /** La pose de récolte après `elapsed` secondes d'action (elapsed >= 0). */
 export function harvestPose(elapsed: number): BuilderPose {
   const seconds = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0;
@@ -284,9 +271,10 @@ export function harvestPose(elapsed: number): BuilderPose {
 
 /** Les contacts dont l'instant est dans l'intervalle ]from, to], du plus ancien au plus récent. */
 export function harvestContacts(from: number, to: number): readonly HarvestContact[] {
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return [];
   if (!(to > from)) return [];
   const first = firstIndexAfter(from);
-  const last = lastIndexAtOrBefore(to);
+  const last = firstIndexAfter(to) - 1;
   const contacts: HarvestContact[] = [];
   for (let n = first; n <= last; n++) {
     const { hit } = HARVEST_MOVES[n % HARVEST_MOVES.length];

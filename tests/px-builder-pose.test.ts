@@ -199,10 +199,14 @@ describe('rythme de récolte', () => {
     }
   });
 
-  it('renvoie un tableau vide quand l’intervalle est vide ou inversé', () => {
+  it('renvoie un tableau vide quand l’intervalle est vide, inversé ou non fini', () => {
     expect(harvestContacts(1, 1)).toEqual([]);
     expect(harvestContacts(2, 1)).toEqual([]);
     expect(harvestContacts(0, 0)).toEqual([]);
+    for (const bad of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      expect(harvestContacts(bad, 10)).toEqual([]);
+      expect(harvestContacts(0, bad)).toEqual([]);
+    }
   });
 });
 
