@@ -103,10 +103,9 @@ describe('lungeOffset', () => {
     expect(lungeOffset(1000, 0)).toEqual({ x: MAX_LUNGE, y: 0 });
     expect(lungeOffset(-1000, 0)).toEqual({ x: -MAX_LUNGE, y: 0 });
     const offset = lungeOffset(30, 40);
-    const step = Math.min(MAX_LUNGE, 50 - FIST_REACH);
-    expect(offset.x).toBeCloseTo((30 / 50) * step, 12);
-    expect(offset.y).toBeCloseTo((40 / 50) * step, 12);
-    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(step, 12);
+    expect(offset.x).toBeCloseTo(0.6 * MAX_LUNGE, 12);
+    expect(offset.y).toBeCloseTo(0.8 * MAX_LUNGE, 12);
+    expect(Math.hypot(offset.x, offset.y)).toBeCloseTo(MAX_LUNGE, 12);
   });
 
   it('annule les entrées nulles ou non finies', () => {

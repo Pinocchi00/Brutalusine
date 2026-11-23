@@ -13,7 +13,7 @@ export const BUILDER_ANCHOR = { x: 17, y: 38 } as const;
 export const FIST_REACH = 24;
 
 /** Le pas d'élan maximal, en pixels. */
-export const MAX_LUNGE = 20;
+export const MAX_LUNGE = 26;
 
 /** La période du va-et-vient du repos, en secondes. */
 const IDLE_PERIOD = 1.6;
