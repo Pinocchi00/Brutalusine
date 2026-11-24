@@ -589,6 +589,15 @@ class App {
     this.audio.machine(0.8, 0);
   }
 
+  /** Ce que rapporte un geste à la main : un texte qui monte au-dessus de la case en rendu pixel, une bulle sinon. */
+  private gain(text: string, x: number, y: number): void {
+    if (!this.pixel) { this.hud.toast(text); return; }
+    const z = this.cam.zoom / this.dpr;
+    const sx = (x + 0.5 - this.cam.x) * z + window.innerWidth / 2;
+    const sy = (y - 0.4 - this.cam.y) * z + window.innerHeight / 2;
+    this.hud.float(text, sx, sy);
+  }
+
   private updatePlayer(p: Player, dt: number): void {
     const g = this.game, w = g.world;
     let mx = 0, my = 0, sprint = false, hold = false;
@@ -656,7 +665,7 @@ class App {
         p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
         if (this.gatherable(t.x, t.y) !== t.kind) { p.task = null; p.gprog = 0; }
         else if (t.kind === 'loot') {
-          g.pickLoot(t.x, t.y); p.task = null; this.hud.toast(`+${LOOT_FER} Fer`);
+          g.pickLoot(t.x, t.y); p.task = null; this.gain(`+${LOOT_FER} Fer`, t.x, t.y);
         } else {
           const size = w.canopy(t.x, t.y);
           p.gx = t.x; p.gy = t.y;
@@ -670,7 +679,7 @@ class App {
           }
           if (p.gprog >= 1) {
             p.gprog = 0;
-            if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.hud.toast(`+${n.toFixed(1).replace('.', ',')} Bois`); }
+            if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.gain(`+${n.toFixed(1).replace('.', ',')} Bois`, t.x, t.y); }
             else g.handMine(t.x, t.y);
             // bouton maintenu : on enchaîne sur ce que vise le curseur
             const nk = hold ? this.harvestTarget(p) : null;
