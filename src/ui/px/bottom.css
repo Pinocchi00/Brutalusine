@@ -4,6 +4,7 @@
 
 /* La barre : plus large que l'ancienne, sans largeur imposée qui déborde. */
 :root[data-rendu='pixel'] #build {
+  width: max-content;
   min-width: 0;
   max-width: calc(100vw - 32px);
 }
@@ -143,10 +144,18 @@
   color: var(--px-c0);
 }
 
+/* Quand la barre laisse la place, les boutons de côté restent collés en bas. */
+@media (max-width: 1500px) and (min-width: 1260px) {
+  :root[data-rendu='pixel'] #sidebtns {
+    bottom: 16px;
+  }
+}
+
 /* Le panneau d'une machine. */
 :root[data-rendu='pixel'] #panel {
   width: 340px;
   padding: 12px 14px;
+  max-height: calc(62vh - 218px);
 }
 :root[data-rendu='pixel'] #panel h2 {
   font-size: 20px;
@@ -175,8 +184,7 @@
 }
 :root[data-rendu='pixel'] .act.on,
 :root[data-rendu='pixel'] .recipes button.on,
-:root[data-rendu='pixel'] .filters button.on,
-:root[data-rendu='pixel'] .x.on {
+:root[data-rendu='pixel'] .filters button.on {
   background: var(--px-o2);
   color: var(--px-ink);
 }

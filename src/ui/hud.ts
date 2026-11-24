@@ -249,6 +249,14 @@ export class Hud {
     if (html !== this.alertsKey) { this.alertsKey = html; $('alerts').innerHTML = html; }
   }
 
+  /** La bulle d'aide d'une case de bâtiment : nom, description, recette, courant et coût. */
+  private toolTipbox(b: BuildingDef, g: Game): string {
+    const cost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
+    const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
+    const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
+    return `<span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span>`;
+  }
+
   private renderBar(g: Game): void {
     const tool = this.host.tool();
     if (g.quota !== this.seenUnlock) {
@@ -274,12 +282,9 @@ export class Hud {
       const cost = toolDef && toolDef.cost.length ? ` · ${toolDef.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
       const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
       const tools = list.map((b, i) => {
-        const tipCost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
-        const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
-        const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
         return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
         <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${hudIconUrl(b.key)}" alt="" width="64" height="56"><span class="nm">${esc(b.name)}</span>
-        <span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${tipCost}</span></span></button>`;
+        ${this.toolTipbox(b, g)}</button>`;
       }).join('');
       const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
       const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
@@ -287,12 +292,9 @@ export class Hud {
       return;
     }
     $('tools').innerHTML = list.map((b, i) => {
-      const cost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
-      const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
-      const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
       return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
         <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${buildingIcon(b.key)}" alt=""><span class="nm">${esc(b.name)}</span>
-        <span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span></button>`;
+        ${this.toolTipbox(b, g)}</button>`;
     }).join('') + `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M17 17 41 41M41 17 17 41" stroke="#ff6a5a" stroke-width="6" stroke-linecap="square"/></svg><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
   }
 
