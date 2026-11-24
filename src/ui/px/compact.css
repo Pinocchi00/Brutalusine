@@ -38,6 +38,10 @@
   :root[data-rendu='pixel'] #sidebtns {
     bottom: 200px;
   }
+  :root[data-rendu='pixel'] #alerts {
+    max-height: calc(100vh - 200px - 400px);
+    overflow-y: auto;
+  }
 }
 
 /* Fenêtre basse et large : le panneau monte sous le bord et gagne la hauteur perdue. */

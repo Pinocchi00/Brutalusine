@@ -15,6 +15,7 @@ import './px/bottom.css';
 import './px/compact.css';
 import { sunDialSvg } from './px/sunDial';
 import { toolHint } from './px/barHint';
+import { stepsToggleLabel } from './px/stepsLabel';
 
 export interface HudHost {
   game(): Game;
@@ -74,6 +75,7 @@ export class Hud {
   private alertsOpen = false;
   private alertsKey = '';
   private floats: HTMLElement[] = [];
+  private live: HTMLElement | null = null;
 
   constructor(private host: HudHost) {
     document.addEventListener('click', (ev) => this.onClick(ev));
@@ -125,6 +127,14 @@ export class Hud {
 
   /** Un gain qui monte au-dessus d'un point de l'écran, clignote et disparaît (rendu pixel). */
   float(text: string, x: number, y: number): void {
+    if (!this.live) {
+      this.live = document.createElement('span');
+      this.live.className = 'sr';
+      this.live.setAttribute('role', 'status');
+      this.live.setAttribute('aria-live', 'polite');
+      $('hud').append(this.live);
+    }
+    this.live.textContent = text;
     const el = document.createElement('span');
     el.className = 'float';
     el.textContent = text;
@@ -195,8 +205,7 @@ export class Hud {
     }).join('');
     if (!this.pixel) return `<ul class="steps">${rows}</ul>`;
     const index = q.steps.findIndex((s) => !this.host.stepDone(s));
-    const current = index < 0 ? total : index + 1;
-    const toggle = `<button class="steps-toggle" data-steps-toggle="1" aria-expanded="${this.stepsOpen}">Étape ${current} / ${total}</button>`;
+    const toggle = `<button class="steps-toggle" data-steps-toggle="1" aria-expanded="${this.stepsOpen}">${stepsToggleLabel(index, total)}</button>`;
     return `${toggle}<ul class="steps${this.stepsOpen ? ' open' : ''}">${rows}</ul>`;
   }
 
