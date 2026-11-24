@@ -9,8 +9,11 @@ import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
 import { prettyFormula } from '../sim/chem';
 import { buildingIcon } from '../render/sprites';
+import { hudIconUrl } from '../render/px/hudIcons';
 import './px/top.css';
+import './px/bottom.css';
 import { sunDialSvg } from './px/sunDial';
+import { toolHint } from './px/barHint';
 
 export interface HudHost {
   game(): Game;
@@ -69,6 +72,7 @@ export class Hud {
   private lastTool: string | null = null;
   private alertsOpen = false;
   private alertsKey = '';
+  private floats: HTMLElement[] = [];
 
   constructor(private host: HudHost) {
     document.addEventListener('click', (ev) => this.onClick(ev));
@@ -78,7 +82,7 @@ export class Hud {
   }
 
   private onClick(ev: MouseEvent): void {
-    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-steps-toggle],[data-close],[data-go]');
+    const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-hands],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-steps-toggle],[data-close],[data-go]');
     if (!t) return;
     const d = t.dataset;
     const g = this.host.game();
@@ -88,6 +92,7 @@ export class Hud {
       if (ev.detail === 0) document.querySelector<HTMLElement>('[data-steps-toggle]')?.focus();
     }
     else if (d.alertToggle !== undefined) { this.alertsOpen = !this.alertsOpen; this.renderAlerts(g); }
+    else if (d.hands !== undefined) { this.host.selectTool(null); this.lastTool = null; this.barKey = ''; }
     else if (d.tool !== undefined) { this.fresh.delete(d.tool); this.host.selectTool(this.host.tool() === d.tool ? null : d.tool); this.lastTool = this.host.tool(); this.barKey = ''; }
     else if (d.cat !== undefined) { this.cat = d.cat as Category; this.barKey = ''; this.renderBar(g); }
     else if (d.go !== undefined) this.host.locate(d.go as Place);
@@ -115,6 +120,27 @@ export class Hud {
     el.textContent = text; el.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => el.classList.remove('show'), ms);
+  }
+
+  /** Un gain qui monte au-dessus d'un point de l'écran, clignote et disparaît (rendu pixel). */
+  float(text: string, x: number, y: number): void {
+    const el = document.createElement('span');
+    el.className = 'float';
+    el.textContent = text;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    $('hud').append(el);
+    void el.offsetWidth;
+    el.classList.add('rise');
+    this.floats.push(el);
+    while (this.floats.length > 8) this.floats.shift()!.remove();
+    window.setTimeout(() => el.classList.add('blink'), 900);
+    window.setTimeout(() => el.classList.remove('blink'), 1050);
+    window.setTimeout(() => {
+      el.remove();
+      const i = this.floats.indexOf(el);
+      if (i >= 0) this.floats.splice(i, 1);
+    }, 1300);
   }
 
   /** Infobulle au curseur : ce qu'on survole, ou pourquoi on ne peut pas poser. */
@@ -238,10 +264,28 @@ export class Hud {
     }
     const cats = CATEGORIES.filter((c) => BUILDINGS.some((b) => b.cat === c.key && g.unlocked(b)));
     const list = BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b));
-    const key = [this.cat, tool, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0)).join(), [...this.fresh].join()].join('|');
+    const toolDef = tool && tool !== 'demolir' ? B[tool] ?? null : null;
+    const pays = this.pixel && toolDef ? toolDef.cost.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
+    const key = [this.cat, tool, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0)).join(), [...this.fresh].join(), pays].join('|');
     if (key === this.barKey) return;
     this.barKey = key;
     $('cats').innerHTML = cats.map((c) => `<button class="${c.key === this.cat ? 'on' : ''} ${BUILDINGS.some((b) => b.cat === c.key && this.fresh.has(b.key)) ? 'fresh' : ''}" data-cat="${c.key}">${c.name}</button>`).join('');
+    if (this.pixel) {
+      const cost = toolDef && toolDef.cost.length ? ` · ${toolDef.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
+      const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
+      const tools = list.map((b, i) => {
+        const tipCost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
+        const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
+        const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
+        return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
+        <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${hudIconUrl(b.key)}" alt="" width="64" height="56"><span class="nm">${esc(b.name)}</span>
+        <span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${tipCost}</span></span></button>`;
+      }).join('');
+      const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
+      const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
+      $('tools').innerHTML = hint + tools + hands + demolish;
+      return;
+    }
     $('tools').innerHTML = list.map((b, i) => {
       const cost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
       const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
@@ -356,7 +400,9 @@ export class Hud {
     // on ne montre que ce qui a été découvert : pas de divulgâchage
     const seen = (id: number) => id < 3 || id === I.bois || g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
     const items = ITEMS.filter((it) => seen(it.id) && (match(it.name) || match(it.formula))).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></button>`);
-    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
+    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => this.pixel
+      ? `<button data-codex="b:${b.key}"><img src="${hudIconUrl(b.key)}" alt="" width="32" height="28"> ${esc(b.name)}</button>`
+      : `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
     const recs = RECIPES.filter((r) => g.quota >= r.unlock && match(r.name)).map((r) => `<button data-codex="r:${r.key}">${esc(r.name)}</button>`);
     $('codex-list').innerHTML = `<div class="eyebrow">Objets</div>${items.join('')}<div class="eyebrow">Bâtiments</div>${builds.join('')}<div class="eyebrow">Recettes</div>${recs.join('')}`;
   }
@@ -379,7 +425,10 @@ export class Hud {
     } else if (type === 'b') {
       const b = B[id];
       const recs = b.recipes.filter(known);
-      html = `<h2><img src="${buildingIcon(b.key)}" alt="" width="52" height="52"> ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
+      const icon = this.pixel
+        ? `<img src="${hudIconUrl(b.key)}" alt="" width="64" height="56">`
+        : `<img src="${buildingIcon(b.key)}" alt="" width="52" height="52">`;
+      html = `<h2>${icon} ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
         <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${b.cost.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ${b.power} W` : ''}</p>
         ${recs.length ? `<div class="eyebrow">Recettes</div>${recs.map(recipeCard).join('')}` : ''}`;
     } else {

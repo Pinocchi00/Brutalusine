@@ -1,0 +1,204 @@
+/* Brutalusine — le bas de l'écran du HUD pixel : catégories, barre de construction, panneau,
+   infobulles, bulle de message et boutons de côté. Tout est gardé derrière `:root[data-rendu='pixel']` :
+   sans ce drapeau, l'ancien rendu ne change pas. */
+
+/* La barre : plus large que l'ancienne, sans largeur imposée qui déborde. */
+:root[data-rendu='pixel'] #build {
+  min-width: 0;
+  max-width: calc(100vw - 32px);
+}
+
+/* Les catégories : onglets sombres, l'actif en orange. */
+:root[data-rendu='pixel'] #cats button {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  background: var(--px-ui2);
+  color: var(--px-c3);
+  border: 2px solid var(--px-ink);
+  border-bottom: 0;
+  min-height: 32px;
+}
+:root[data-rendu='pixel'] #cats button.on {
+  background: var(--px-o2);
+  color: var(--px-ink);
+}
+
+/* Les cases : la phrase d'aide occupe la première ligne. */
+:root[data-rendu='pixel'] #tools {
+  gap: 6px;
+  padding: 8px 10px 10px;
+  justify-content: center;
+}
+:root[data-rendu='pixel'] .hint {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--px-c3);
+  text-align: left;
+}
+:root[data-rendu='pixel'] .hint b {
+  font-weight: 600;
+  color: var(--px-c0);
+}
+:root[data-rendu='pixel'] .hint .lack {
+  color: var(--px-red);
+}
+
+/* Une case : l'icône pixel en haut, le nom en bas, le numéro au coin. */
+:root[data-rendu='pixel'] .tool {
+  flex: 0 0 80px;
+  width: 80px;
+  height: 80px;
+  padding: 0;
+  background: var(--px-ui2);
+  border: 0;
+}
+:root[data-rendu='pixel'] .tool img {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 64px;
+  height: 56px;
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+}
+:root[data-rendu='pixel'] .tool .nm {
+  position: absolute;
+  right: 0;
+  bottom: 4px;
+  left: 0;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--px-c2);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+:root[data-rendu='pixel'] .tool kbd {
+  top: 2px;
+  left: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--px-c4);
+}
+:root[data-rendu='pixel'] .tool.poor img {
+  opacity: 0.35;
+}
+:root[data-rendu='pixel'] .tool.demolish .nm {
+  color: var(--px-red);
+}
+:root[data-rendu='pixel'] .tool:hover {
+  box-shadow: inset 0 0 0 2px var(--px-c4);
+}
+:root[data-rendu='pixel'] .tool.on {
+  background: var(--px-ui3);
+  box-shadow: inset 0 0 0 2px var(--px-o2);
+}
+:root[data-rendu='pixel'] .tool.on .nm,
+:root[data-rendu='pixel'] .tool.on kbd {
+  color: var(--px-o1);
+  font-weight: 600;
+}
+
+/* L'infobulle d'une case : le cadre pixel, sans fond propre. */
+:root[data-rendu='pixel'] .tipbox {
+  border: 4px solid transparent;
+  border-image: var(--px-frame) 2 fill / 4px stretch;
+  background: none;
+  font-size: 13px;
+}
+:root[data-rendu='pixel'] .tipbox b {
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: none;
+}
+
+/* L'infobulle au curseur et la bulle de message : même cadre. */
+:root[data-rendu='pixel'] #tip,
+:root[data-rendu='pixel'] #toast {
+  border: 4px solid transparent;
+  border-image: var(--px-frame) 2 fill / 4px stretch;
+  background: none;
+  font-size: 13px;
+}
+:root[data-rendu='pixel'] #tip b {
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: none;
+}
+
+/* Les boutons de côté : Guide, Atlas et Menu. */
+:root[data-rendu='pixel'] #sidebtns button {
+  width: 64px;
+  height: 60px;
+  font-size: 11px;
+  color: var(--px-c2);
+}
+:root[data-rendu='pixel'] #sidebtns button b {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--px-c0);
+}
+
+/* Le panneau d'une machine. */
+:root[data-rendu='pixel'] #panel {
+  width: 340px;
+  padding: 12px 14px;
+}
+:root[data-rendu='pixel'] #panel h2 {
+  font-size: 20px;
+  font-weight: 600;
+  text-transform: none;
+}
+:root[data-rendu='pixel'] .status {
+  background: var(--px-ui2);
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+:root[data-rendu='pixel'] .eq {
+  background: var(--px-ui2);
+  border: 2px solid var(--px-ink);
+}
+
+/* Les boutons pixel de la maquette : relief à deux tons. */
+:root[data-rendu='pixel'] .act,
+:root[data-rendu='pixel'] .recipes button,
+:root[data-rendu='pixel'] .filters button,
+:root[data-rendu='pixel'] .x {
+  font-weight: 600;
+  background: #2a2226;
+  border: 2px solid #0a0809;
+  box-shadow: inset 2px 2px 0 #4a3d42, inset -2px -2px 0 #160f12;
+}
+:root[data-rendu='pixel'] .act.on,
+:root[data-rendu='pixel'] .recipes button.on,
+:root[data-rendu='pixel'] .filters button.on,
+:root[data-rendu='pixel'] .x.on {
+  background: var(--px-o2);
+  color: var(--px-ink);
+}
+
+/* « +1 Bois » : monte de 28 px, clignote dans les 0,4 dernières secondes, puis disparaît. */
+:root[data-rendu='pixel'] #hud > .float {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--px-white);
+  text-shadow: 2px 0 0 var(--px-ink), -2px 0 0 var(--px-ink), 0 2px 0 var(--px-ink), 0 -2px 0 var(--px-ink);
+  transition: transform 1.2s steps(8, end);
+  will-change: transform;
+}
+:root[data-rendu='pixel'] #hud > .float.rise {
+  transform: translate(-50%, calc(-100% - 28px));
+}
+:root[data-rendu='pixel'] #hud > .float.blink {
+  visibility: hidden;
+}
