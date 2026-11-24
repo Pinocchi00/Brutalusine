@@ -181,7 +181,7 @@ export const B: Record<string, BuildingDef> = Object.fromEntries(BUILDINGS.map((
 
 // ---------------------------------------------------------------- livraisons
 /** Lieu que le jeu peut montrer au joueur (bouton « Y aller »). */
-export type Place = 'roche' | 'berge' | 'eau' | 'debris';
+export type Place = 'roche' | 'berge' | 'eau' | 'debris' | 'arbre';
 
 /** Une étape guidée : le jeu sait vérifier seul si elle est faite. */
 export type Step =
@@ -214,7 +214,7 @@ export const QUOTAS: Quota[] = [
   quota('Premier flux', 'Livrer du bois à la Tour', { bois: 20 },
     'La capsule s’est posée. Une clairière, la jungle, et rien d’autre.',
     'Un arbre, une Scierie, un tapis, la Tour : c’est toute l’automatisation, en petit.',
-    [gather('Déracine un arbre : clique dessus'),
+    [gather('Déracine un arbre : clique dessus', 'arbre'),
      tool('scierie', 'Choisis la Scierie (Extraction, en bas)'),
      build('scierie', 'Pose-la au milieu des arbres'),
      link('scierie', 'Glisse un Convoyeur de sa flèche jusqu’à la Tour')], 1),

@@ -155,18 +155,23 @@ export class Game {
     const w = this.world;
     const [fw, fh] = this.footprint(def, rot);
     const res: PlaceResult = { ok: false, reason: '' };
-    let ore = false, shore = false, bank = false;
+    let ore = false, deadOre = false, shore = false, bank = false;
     for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
       const cx = x + i, cy = y + j;
       if (w.ground(cx, cy) === GROUND_WATER) { res.reason = 'Impossible sur l’eau'; return res; }
       const o = this.entAt(cx, cy);
       if (o && !(def.kind === 'belt' && o.def.kind === 'belt')) { res.reason = 'Case occupée'; return res; }
       if (def.kind === 'slab' && w.slab(cx, cy)) { res.reason = 'Déjà dallé'; return res; }
-      if (w.amount(cx, cy) > 0) ore = true;
+      const type = w.deposit(cx, cy);
+      if (type && w.amount(cx, cy) > 0) {
+        const d = DEPOSITS[type];
+        if (d && d.item >= 0) ore = true;
+        else deadOre = true;
+      }
       if (w.ground(cx, cy) === GROUND_BANK) bank = true;
     }
     for (let j = -1; j <= fh && !shore; j++) for (let i = -1; i <= fw; i++) if (w.ground(x + i, y + j) === GROUND_WATER) { shore = true; break; }
-    if (def.kind === 'miner' && !ore) { res.reason = 'À poser sur un gisement (rochers colorés)'; return res; }
+    if (def.kind === 'miner' && !ore) { res.reason = deadOre ? 'Ce gisement ne s’exploite pas encore' : 'À poser sur un gisement (rochers colorés)'; return res; }
     if (def.kind === 'clay' && !bank) { res.reason = 'À poser sur la berge (la terre humide au bord de l’eau)'; return res; }
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
     if (!free) {

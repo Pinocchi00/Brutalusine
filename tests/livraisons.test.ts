@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
 import { B, BUILDINGS, DAY_TICKS, I, ITEMS, LOOT_WOOD, QUOTAS, TREE_MIN } from '../src/sim/data';
-import { Status } from '../src/sim/ent';
 import { serialize, deserialize } from '../src/sim/save';
 import { GROUND_BANK } from '../src/sim/world';
 
@@ -156,17 +155,13 @@ describe('les livraisons', () => {
     expect(g.entAt(spot!.x, spot!.y)!.out![I.argile]).toBeGreaterThan(0);
   });
 
-  it('un Puits sur un gisement pas encore exploitable ne sort rien', () => {
+  it('un Puits refuse un gisement pas encore exploitable, avec la raison', () => {
     const g = sandbox();
     const b = g.world.blobs.find((q) => q.type === 2)!;
     g.world.ensureArea(b.x - 8, b.y - 8, b.x + 8, b.y + 8);
-    expect(g.place('puits', b.x - 1, b.y - 1, 0, { free: true }).ok).toBe(true);
-    const e = g.entAt(b.x - 1, b.y - 1)!;
-    run(g, 600);
-    expect(e.outCount).toBe(0);
-    expect(e.out![I.pierre]).toBe(0);
-    expect(e.out![I.argile]).toBe(0);
-    expect(e.status).toBe(Status.NoResource);
+    const res = g.place('puits', b.x - 1, b.y - 1, 0, { free: true });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('Ce gisement ne s’exploite pas encore');
   });
 });
 

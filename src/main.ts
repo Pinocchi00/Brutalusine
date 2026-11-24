@@ -312,6 +312,17 @@ class App {
       const b = w.blobs.find((q) => q.type === 1);
       return b ? { x: b.x + 0.5, y: b.y + 0.5 } : null;
     }
+    if (pl === 'arbre') {
+      let best: { x: number; y: number } | null = null, bd = 1e9;
+      const px = Math.floor(p.x), py = Math.floor(p.y);
+      for (let y = -20; y <= 20; y++) for (let x = -20; x <= 20; x++) {
+        const cx = px + x, cy = py + y;
+        if (w.canopy(cx, cy) < TREE_MIN || w.ent(cx, cy)) continue;
+        const d = Math.hypot(cx + 0.5 - p.x, cy + 0.5 - p.y);
+        if (d < bd) { bd = d; best = { x: cx + 0.5, y: cy + 0.5 }; }
+      }
+      return best;
+    }
     let best: { x: number; y: number } | null = null, bd = 1e9;
     const px = Math.floor(p.x), py = Math.floor(p.y);
     for (let y = -40; y <= 40; y++) for (let x = -40; x <= 40; x++) {
@@ -374,7 +385,8 @@ class App {
     if (w.ent(x, y)) return null;
     if (w.loot(x, y)) return 'loot';
     if (w.canopy(x, y) >= TREE_MIN) return 'tree';
-    if (w.amount(x, y) > 0 && !w.slab(x, y)) return 'ore';
+    const type = w.deposit(x, y);
+    if (type && DEPOSITS[type] && DEPOSITS[type].item >= 0 && w.amount(x, y) > 0 && !w.slab(x, y)) return 'ore';
     return null;
   }
 
@@ -858,6 +870,11 @@ class App {
       if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_WOOD} Bois</span>`;
       else if (target?.kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(target.x, target.y) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
       else if (target?.kind === 'ore') { const d = DEPOSITS[w.deposit(target.x, target.y)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
+      else {
+        const type = w.deposit(p.cx, p.cy);
+        const d = type ? DEPOSITS[type] : null;
+        if (d && d.item < 0) html = `<b>${d.name}</b><span class="k">ne s’exploite pas encore</span>`;
+      }
     }
     this.hud.tip(html, m.x, m.y);
   }

@@ -104,6 +104,24 @@ describe('convoyeurs', () => {
     for (let i = side.head; i < side.types.length; i++) expect(side.types[i]).toBe(I.pierre);
   });
 
+  it('un pont fait passer un flux au-dessus d’un autre', () => {
+    const g = sandbox();
+    clear(g, 8, 4, 24, 16);
+    line(g, 10, 10, 2);
+    const bridge = { ...B.convoyeur, key: 'essai', kind: 'bridge' as const };
+    g.spawn(bridge, 12, 10, 0);
+    const exit = g.spawn(bridge, 15, 10, 0);
+    exit.isOut = true;
+    line(g, 16, 10, 2);
+    for (let y = 6; y < 14; y++) g.place('convoyeur', 13, y, 1, { free: true });   // flux croisé, sous le pont
+    run(g, 1);
+    expect(g.entAt(15, 10)!.isOut).toBe(true);
+    const main = g.paths.find((q) => q.tiles[0].x === 10)!;
+    expect(main.tiles.length).toBe(6);
+    expect(main.length).toBe(TILE_U * 8);
+    expect(g.paths.find((q) => q.tiles[0].x === 13)!.tiles.length).toBe(8);
+  });
+
   it('un entrepôt garde les objets puis les ressort par sa flèche', () => {
     const g = sandbox();
     clear(g, 8, 6, 24, 16);
