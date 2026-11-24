@@ -626,7 +626,7 @@ export class Game {
     const q = quotaAt(this.quota);
     if (q.need.length === 0) return;
     if (q.rebuild) {
-      for (const [id, n] of q.need) if (this.stock[id] < n) return;
+      for (const [id, n] of q.need) if (this.delivered[id] < n || this.stock[id] < n) return;
       for (const [id, n] of q.need) this.stock[id] -= n;
     } else {
       for (const [id, n] of q.need) if (this.delivered[id] < n) return;

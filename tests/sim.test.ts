@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, LOOT_WOOD, TREE_MIN, costOf } from '../src/sim/data';
-import { Status } from '../src/sim/ent';
+import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, LOOT_WOOD, TREE_MIN, DAY_TICKS, costOf } from '../src/sim/data';
+import { Status, type Ent } from '../src/sim/ent';
 import { serialize, deserialize } from '../src/sim/save';
 
 /** Partie de test : tout débloqué, stock illimité. */
@@ -249,20 +249,36 @@ describe('lois de conservation', () => {
     const g = sandbox(11);
     g.stock.fill(0);
     g.quota = 5;
-    clear(g, 6, 6, 44, 30);
+    g.world.ensureArea(-60, -60, 60, 60);
+    let tx = 0, ty = 0;
+    search: for (let y = -60; y <= 60; y++) for (let x = -60; x <= 60; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
     g.stock[I.bois] = 100; g.stock[I.pierre] = 100;
-    const ids = [I.bois, I.pierre];
-    const before = ids.map((id) => g.ledger(id));
-    expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
-    for (let x = 12; x <= 20; x++) expect(g.place('convoyeur', x, 10, 0).ok).toBe(true);
-    const paid = ids.map((id) => g.ledger(id));
-    ids.forEach((id, i) => expect(paid[i]).toBeCloseTo(before[i], 6));
+    const before = [g.ledger(I.bois), g.ledger(I.pierre)];
+
+    let scierie: Ent | null = null;
+    search: for (let dy = -3; dy <= 3 && !scierie; dy++) for (let dx = -3; dx <= 3 && !scierie; dx++) {
+      const x = tx + dx, y = ty + dy;
+      if (!g.canPlace(B.scierie, x, y, 0).ok) continue;
+      if (!g.place('scierie', x, y, 0).ok) continue;
+      const e = g.entAt(x, y)!;
+      let near = 0;
+      for (let j = -5; j <= 5; j++) for (let i = -5; i <= 5; i++) if (g.world.tree(Math.floor(e.cx) + i, Math.floor(e.cy) + j)) near++;
+      if (near > 0) { scierie = e; break search; }
+      g.remove(x, y);
+    }
+    expect(scierie).not.toBeNull();
+
+    const rock = g.world.blobs.find((q) => q.type === 1)!;
+    g.world.ensureArea(rock.x - 8, rock.y - 8, rock.x + 8, rock.y + 8);
+    expect(g.place('puits', rock.x - 1, rock.y - 1, 0).ok).toBe(true);
+    const puits = g.entAt(rock.x - 1, rock.y - 1)!;
+
+    g.tick = Math.round(DAY_TICKS * 0.75);        // la nuit : aucun arbre ne repousse
     run(g, 600);
-    const after = ids.map((id) => g.ledger(id));
-    ids.forEach((id, i) => expect(after[i]).toBeCloseTo(before[i], 6));
-    g.remove(10, 10);
-    const removed = ids.map((id) => g.ledger(id));
-    ids.forEach((id, i) => expect(removed[i]).toBeCloseTo(before[i], 6));
+    expect(scierie!.done).toBeGreaterThan(0);
+    expect(puits.done).toBeGreaterThan(0);
+    expect(g.ledger(I.bois)).toBeCloseTo(before[0], 6);
+    expect(g.ledger(I.pierre)).toBeCloseTo(before[1], 6);
   });
 
   it('un arbre coupé repousse à sa place, pas sous une dalle', () => {

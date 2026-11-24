@@ -56,7 +56,7 @@ function findTree(g: Game): { x: number; y: number } | null {
 describe('les livraisons', () => {
   it('chaque livraison, sauf la chasse à l’étape 8, est atteignable avec ce qui est débloqué', () => {
     QUOTAS.forEach((q, index) => {
-      if (q.title === 'Cuir') return;                 // le cuir demandera la chasse, à l'étape 8 du projet
+      if (index === 3) return;                        // le cuir demandera la chasse, à l'étape 8 du projet
       for (const [id] of q.need) expect(producedBy(id, index), `${q.title} · ${ITEMS[id].name}`).toBe(true);
     });
   });
@@ -97,20 +97,27 @@ describe('les livraisons', () => {
     expect(g.unlocked(B.charbonniere)).toBe(true);
   });
 
-  it('la tour de pierre retire 60 pierres et ouvre l’ère de la Pierre ; sinon elle attend', () => {
-    const g = new Game(6);
+  it('la tour de pierre exige la livraison et le stock ; elle retire 60 pierres et ouvre l’ère de la Pierre', () => {
+    const stoneOnly = new Game(6);
+    stoneOnly.quota = 2;
+    stoneOnly.stock[I.pierre] = 60;
+    run(stoneOnly, 61);
+    expect(stoneOnly.quota).toBe(2);                 // piocher à la main ne suffit pas
+
+    const deliveredOnly = new Game(7);
+    deliveredOnly.quota = 2;
+    for (let i = 0; i < 60; i++) deliveredOnly.accept(deliveredOnly.hub, I.pierre, 0);
+    deliveredOnly.stock[I.pierre] = 59;              // la pierre a été dépensée après livraison
+    run(deliveredOnly, 61);
+    expect(deliveredOnly.quota).toBe(2);
+
+    const g = new Game(8);
     g.quota = 2;
-    g.stock[I.pierre] = 60;
+    for (let i = 0; i < 60; i++) g.accept(g.hub, I.pierre, 0);
     run(g, 61);
     expect(g.quota).toBe(3);
     expect(g.stock[I.pierre]).toBe(0);
     expect(g.era).toBe(2);
-
-    const h = new Game(7);
-    h.quota = 2;
-    h.stock[I.pierre] = 59;
-    run(h, 61);
-    expect(h.quota).toBe(2);
   });
 
   it('une Charbonnière fait 1 charbon avec 2 bois, un Four fait 2 briques avec 2 argiles et 1 charbon', () => {
@@ -224,7 +231,7 @@ describe('conservation pendant la nuit', () => {
     const g = new Game(12);
     g.quota = 2;
     g.tick = Math.round(DAY_TICKS * 0.75);
-    g.stock[I.pierre] = 60;
+    for (let i = 0; i < 60; i++) g.accept(g.hub, I.pierre, 0);   // la pierre entre par la Tour
     const before = snap(g);
     run(g, 61);
     expect(g.quota).toBe(3);

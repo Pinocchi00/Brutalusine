@@ -349,7 +349,7 @@ export class Hud {
       let left = 0;
       const cells = e.cells!;
       for (let i = 0; i < cells.length; i += 2) left += g.world.amount(cells[i], cells[i + 1]);
-      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · ${Math.round(60)} par minute · consomme ${e.def.power} W</p>`;
+      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · 60 par minute · consomme ${e.def.power} W</p>`;
     } else if (k === 'sawmill') {
       body += `<p class="meta">Jusqu’à 40 bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
     } else if (k === 'generator') {
