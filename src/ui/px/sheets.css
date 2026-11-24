@@ -1,0 +1,155 @@
+/* Brutalusine — les feuilles plein écran du HUD pixel : écran-titre, guide, Atlas, pause et bannière.
+   Tout est gardé derrière `:root[data-rendu='pixel']` : sans ce drapeau, l'ancien rendu ne change pas. */
+
+/* Le voile des feuilles et le fond de l'écran-titre, dans les tons de la maquette. */
+:root[data-rendu='pixel'] .overlay {
+  background: rgba(26, 16, 24, 0.72);
+}
+:root[data-rendu='pixel'] #title {
+  background: radial-gradient(ellipse at 50% 60%, rgba(26, 16, 24, 0.3), rgba(26, 16, 24, 0.88));
+}
+
+/* La feuille : un cadre plus serré et des titres en Rubik demi-gras. */
+:root[data-rendu='pixel'] .sheet {
+  padding: 18px 20px;
+}
+:root[data-rendu='pixel'] .sheet h2 {
+  font-size: 30px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--px-c0);
+}
+
+/* Le guide : des articles sombres, un numéro orange. */
+:root[data-rendu='pixel'] .guidegrid article {
+  background: var(--px-ui2);
+  border: 2px solid var(--px-ink);
+}
+:root[data-rendu='pixel'] .guidegrid h3 {
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--px-c0);
+}
+:root[data-rendu='pixel'] .guidegrid h3 i {
+  background: var(--px-o2);
+  color: var(--px-ink);
+  font-size: 16px;
+}
+:root[data-rendu='pixel'] .guidegrid p {
+  color: var(--px-c2);
+}
+:root[data-rendu='pixel'] .guidegrid p b {
+  color: var(--px-c0);
+}
+
+/* Le tableau des commandes. */
+:root[data-rendu='pixel'] .keys td {
+  border-bottom: 1px solid var(--px-ui3);
+  color: var(--px-c2);
+}
+:root[data-rendu='pixel'] .keys td:first-child {
+  color: var(--px-c0);
+}
+
+/* Les boutons pixel : relief à deux tons, l'orange de la maquette pour l'action principale. */
+:root[data-rendu='pixel'] button.big {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  background: var(--px-o2);
+  color: var(--px-ink);
+  border: 2px solid var(--px-ink);
+  box-shadow: inset 2px 2px 0 var(--px-o1), inset -2px -2px 0 var(--px-o3);
+  min-height: 44px;
+}
+:root[data-rendu='pixel'] button.big:hover {
+  background: var(--px-o1);
+}
+:root[data-rendu='pixel'] button.big.ghost {
+  background: #2a2226;
+  color: var(--px-c0);
+  border: 2px solid #0a0809;
+  box-shadow: inset 2px 2px 0 #4a3d42, inset -2px -2px 0 #160f12;
+}
+:root[data-rendu='pixel'] button.big.ghost:hover {
+  background: #2a2226;
+  color: var(--px-o1);
+}
+
+/* L'écran-titre : l'accroche en orange, le texte en crème. */
+:root[data-rendu='pixel'] .titlecard .eyebrow {
+  color: var(--px-o2);
+  font-size: 16px;
+}
+:root[data-rendu='pixel'] .titlecard p {
+  color: var(--px-c1);
+  font-size: 16px;
+}
+:root[data-rendu='pixel'] .titlecard button.big {
+  font-size: 22px;
+  padding: 12px 32px;
+}
+:root[data-rendu='pixel'] #save-note {
+  border-left: 3px solid var(--px-o2);
+  background: rgba(247, 143, 34, 0.08);
+  color: var(--px-c0);
+}
+
+/* L'Atlas : la recherche et les listes dans le cadre pixel. */
+:root[data-rendu='pixel'] #codex-search {
+  background: var(--px-ui2);
+  border: 2px solid var(--px-ink);
+  color: var(--px-c0);
+  font-family: var(--display);
+  font-size: 15px;
+}
+:root[data-rendu='pixel'] #codex-search:focus {
+  outline: 2px solid var(--px-o1);
+}
+:root[data-rendu='pixel'] #codex-list button:hover {
+  background: var(--px-ui3);
+}
+:root[data-rendu='pixel'] .rcard {
+  background: var(--px-ui2);
+  border: 2px solid var(--px-ink);
+}
+:root[data-rendu='pixel'] .rcard:hover {
+  border-color: var(--px-o2);
+}
+:root[data-rendu='pixel'] .link {
+  color: var(--px-o1);
+}
+
+/* Les réglages du menu. */
+:root[data-rendu='pixel'] .opt input[type=range] {
+  accent-color: var(--px-o2);
+}
+
+/* La bannière « Quota accompli ». */
+:root[data-rendu='pixel'] #banner {
+  padding: 18px 24px;
+}
+:root[data-rendu='pixel'] #banner h1 {
+  font-size: 44px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--px-o1);
+}
+:root[data-rendu='pixel'] #banner .metrics b {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--px-c0);
+}
+:root[data-rendu='pixel'] #banner .metrics span {
+  color: var(--px-c3);
+}
+:root[data-rendu='pixel'] #banner .lore {
+  color: var(--px-c1);
+}
+:root[data-rendu='pixel'] #banner .unlock {
+  color: var(--px-o1);
+  border-top: 2px solid var(--px-ui3);
+}
