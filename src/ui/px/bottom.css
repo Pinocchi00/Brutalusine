@@ -25,19 +25,28 @@
   color: var(--px-ink);
 }
 
-/* Les cases : la phrase d'aide occupe la première ligne. */
+/* Les cases : la phrase d'aide est posée au-dessus, hors du calcul de largeur. */
 :root[data-rendu='pixel'] #tools {
-  gap: 6px;
+  position: relative;
+  min-width: 520px;
   padding: 8px 10px 10px;
+  padding-top: 32px;
+  gap: 6px;
   justify-content: center;
 }
 :root[data-rendu='pixel'] .hint {
-  flex-basis: 100%;
-  margin: 0 0 4px;
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  left: 10px;
+  margin: 0;
   font-size: 13px;
   font-weight: 400;
   color: var(--px-c3);
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 :root[data-rendu='pixel'] .hint b {
   font-weight: 600;
@@ -148,6 +157,9 @@
 @media (max-width: 1500px) and (min-width: 1260px) {
   :root[data-rendu='pixel'] #sidebtns {
     bottom: 16px;
+  }
+  :root[data-rendu='pixel'] #alerts {
+    bottom: 190px;
   }
 }
 
