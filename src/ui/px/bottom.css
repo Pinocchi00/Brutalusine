@@ -164,7 +164,7 @@
 @media (min-width: 1260px) {
   :root[data-rendu='pixel'] #alerts {
     bottom: 190px;
-    max-height: calc(100vh - 190px - 400px);
+    max-height: max(56px, calc(100vh - 190px - 400px));
     overflow-y: auto;
   }
 }
