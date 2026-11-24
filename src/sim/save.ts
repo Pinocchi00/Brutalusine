@@ -17,7 +17,7 @@ export interface SaveData {
 }
 
 interface EntSave {
-  id: number; key: string; x: number; y: number; rot: number;
+  id: number; key: string; x: number; y: number; rot: number; era: number;
   isOut?: boolean; held?: number; rr?: number; filter?: number; recipe?: string;
   buf?: number[]; out?: number[]; progress?: number; working?: boolean; outRR?: number;
   energy?: number; ptr?: number; level?: number; done?: number; light?: number;
@@ -40,7 +40,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
   const ents: EntSave[] = [];
   for (const e of [...g.tickers, ...g.belts]) {
     if (e.dead) continue;
-    const s: EntSave = { id: e.id, key: e.def.key, x: e.x, y: e.y, rot: e.rot };
+    const s: EntSave = { id: e.id, key: e.def.key, x: e.x, y: e.y, rot: e.rot, era: e.era };
     if (e.isOut) s.isOut = true;
     if (e.held >= 0) s.held = e.held;
     if (e.rr) s.rr = e.rr;
@@ -82,7 +82,7 @@ export function deserialize(d: SaveData): Game {
   }
   for (const s of d.ents) {
     g.nextId = s.id;
-    const e = g.spawn(B[s.key], s.x, s.y, s.rot as Dir);
+    const e = g.spawn(B[s.key], s.x, s.y, s.rot as Dir, s.era ?? B[s.key].era);
     e.isOut = !!s.isOut; e.held = s.held ?? -1; e.rr = s.rr ?? 0; e.filter = s.filter ?? -1;
     e.recipe = s.recipe ? R[s.recipe] : e.recipe;
     if (s.buf && e.buf) { e.buf.set(s.buf); e.out!.set(s.out!); e.outCount = s.out!.reduce((a, b) => a + b, 0); }

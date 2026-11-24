@@ -41,6 +41,8 @@ export class Ent {
   flow = 0;                          // W produits (+) ou absorbés (-) au dernier pas
   light = 1;                         // éclairement (héliostat)
   // divers
+  era = 1;                           // version du bâtiment : son ère
+  searchAt = 0;                      // prochain pas où la Scierie cherche un arbre
   cells: number[] | null = null;     // cases exploitables (puits)
   ptr = 0;
   tx = 0; ty = 0;                    // dernier arbre coupé (scierie) : pour l'animation

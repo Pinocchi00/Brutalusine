@@ -1,7 +1,7 @@
 // Convoyeurs : des « chemins » (suites de cases) où les objets sont stockés par écarts.
 // Coût par pas : O(1) par chemin, quel que soit le nombre d'objets transportés.
 
-import { TILE_U, SPACING, BRIDGE_MAX, DX, DY } from './data';
+import { TILE_U, SPACING, BRIDGE_MAX, DX, DY, beltSpeed } from './data';
 import type { Ent } from './ent';
 import type { Game } from './game';
 
@@ -9,6 +9,8 @@ export interface Target { path: BeltPath | null; ent: Ent | null; dir: number; }
 export const NO_TARGET: Target = { path: null, ent: null, dir: 0 };
 
 export class BeltPath {
+  era = 1;
+  speed = beltSpeed(1);
   tiles: Ent[] = [];
   starts: number[] = [];      // décalage de début de chaque case
   lens: number[] = [];
@@ -110,7 +112,7 @@ export function outputPorts(e: Ent): [number, number, number][] {
   if (k === 'splitter') {
     return [3, 0, 1].map((turn) => { const d = (e.rot + turn) & 3; return [e.x + DX[d], e.y + DY[d], d] as [number, number, number]; });
   }
-  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'storage') {
+  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage') {
     const d = e.rot;
     const mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1);
     if (d === 0) return [[e.x + e.w, my, d]];
@@ -172,6 +174,8 @@ export function rebuildBelts(g: Game): void {
   const paths: BeltPath[] = [];
   const build = (start: Ent) => {
     const p = new BeltPath();
+    p.era = start.era;
+    p.speed = beltSpeed(p.era);
     let cur: Ent | null = start;
     let prevDir = start.nfeed === 1 && start.feedDir >= 0 ? start.feedDir : start.rot;
     p.minx = p.maxx = start.x; p.miny = p.maxy = start.y;
@@ -187,7 +191,7 @@ export function rebuildBelts(g: Game): void {
       if (cur.y < p.miny) p.miny = cur.y; if (cur.y > p.maxy) p.maxy = cur.y;
       prevDir = cur.rot;
       const nx: Ent | null = cur.next;
-      if (!nx || !continues(nx)) break;
+      if (!nx || !continues(nx) || nx.era !== cur.era) break;
       cur = nx;
     }
     paths.push(p);

@@ -5,7 +5,7 @@
 export const UPS = 60;                 // pas de simulation par seconde
 export const TILE_U = 240;             // unités de convoyeur par case
 export const SPACING = 80;             // écart minimal entre deux objets
-export const BELT_SPEED = 8;           // unités par pas (2 cases/s)
+export const BELT_SPEED = 4;           // unités par pas d'un tapis de rondins : une case par seconde
 export const CANOPY_UNIT = 32;         // densité (0-255) équivalant à 1 bois
 export const TREE_MIN = 60;            // en dessous, ce n'est qu'une pousse
 export const DAY_TICKS = UPS * 60 * 10; // un jour = 10 minutes
@@ -99,6 +99,16 @@ export const ERAS: EraDef[] = [
   { name: 'Pierre', material: I.pierre, band: I.cuir },
   { name: 'Brique', material: I.brique, band: I.brique },
 ];
+
+/** Vitesse des machines et des tapis, par ère (indice ère − 1). */
+export const ERA_SPEED = [1, 1.4, 2, 2.7, 3.8, 5.4, 7.5, 10.5];
+/** Courant consommé par une machine, par ère (indice ère − 1). */
+export const ERA_POWER = [1, 1.5, 2.3, 3.4, 5.1, 7.6, 11.4, 17];
+
+/** Unités par pas d'un tapis de cette ère : 4 en Bois (une case par seconde), arrondi à l'entier. */
+export function beltSpeed(era: number): number {
+  return Math.round(BELT_SPEED * ERA_SPEED[era - 1]);
+}
 
 /** Ce que coûte la version `era` d'un bâtiment. */
 export function costOf(def: BuildingDef, era: number): [number, number][] {

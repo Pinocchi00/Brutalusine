@@ -113,11 +113,10 @@ describe('pathPos contre l’oracle', () => {
   });
 });
 
-/** Partie de test : tout débloqué, stock illimité. */
+/** Partie de test à l'ère du Bois, stock illimité ; les poses gratuites ignorent le déblocage. */
 function sandbox(seed = 7): Game {
   const g = new Game(seed);
   g.stock.fill(1e6);
-  g.quota = 99;
   return g;
 }
 
@@ -189,14 +188,14 @@ function expectContinuous(p: BeltPath, points: { x: number; y: number; k: number
 }
 
 describe('position des objets du jeu', () => {
-  it('un tapis droit : la position avance de 0,8 px par pas, sans quitter la case', () => {
+  it('un tapis droit : la position avance de 0,4 px par pas, sans quitter la case', () => {
     const g = sandbox();
     clear(g, 8, 8, 24, 12);
     for (let i = 0; i < 10; i++) place(g, 10 + i, 10, 0);
     run(g, 1);
     const p = pathAt(g, 10, 10);
     expect(p.insertAtStart(I.pierre)).toBe(true);
-    const points = samples(g, p, 140);
+    const points = samples(g, p, 280);
     expect(points[0].k).toBe(0);
     expect(points[points.length - 1].k).toBeGreaterThan(3);
     expectContinuous(p, points);
