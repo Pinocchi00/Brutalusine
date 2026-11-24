@@ -195,7 +195,7 @@ describe('position des objets du jeu', () => {
     for (let i = 0; i < 10; i++) place(g, 10 + i, 10, 0);
     run(g, 1);
     const p = pathAt(g, 10, 10);
-    expect(p.insertAtStart(I.fer)).toBe(true);
+    expect(p.insertAtStart(I.pierre)).toBe(true);
     const points = samples(g, p, 140);
     expect(points[0].k).toBe(0);
     expect(points[points.length - 1].k).toBeGreaterThan(3);
@@ -210,7 +210,7 @@ describe('position des objets du jeu', () => {
     for (let y = 11; y <= 14; y++) place(g, 13, y, 1);
     run(g, 1);
     const p = pathAt(g, 10, 10);
-    expect(p.insertAtStart(I.fer)).toBe(true);
+    expect(p.insertAtStart(I.pierre)).toBe(true);
     const points = samples(g, p, 200);
     expect(points.some((q) => q.k === 3)).toBe(true);
     expectContinuous(p, points);

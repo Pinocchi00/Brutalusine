@@ -2,12 +2,11 @@
 // reconnaître plutôt que se souvenir (icône + mot), montrer la cause, dévoiler par couches, erreur récupérable.
 
 import {
-  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, I, quotaAt,
+  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, quotaAt,
   type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
 import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
-import { prettyFormula } from '../sim/chem';
 import { buildingIcon } from '../render/sprites';
 import { hudIconUrl } from '../render/px/hudIcons';
 import './px/top.css';
@@ -44,12 +43,11 @@ export function itemIcon(it: ItemDef, size = 18): string {
 }
 const itemTag = (id: number, n?: number | string) => `<button class="item" data-codex="i:${id}">${itemIcon(ITEMS[id])}${n !== undefined ? `<b>${n}</b> ` : ''}${esc(ITEMS[id].name)}</button>`;
 
-function equation(r: Recipe): string {
-  const side = (items: [number, number][], gases: [string, number][]) => [
-    ...items.map(([id, n]) => `<span class="term">${n > 1 ? n + ' ' : ''}${itemIcon(ITEMS[id], 15)}${prettyFormula(ITEMS[id].formula)}</span>`),
-    ...gases.map(([g, n]) => `<span class="term gas">${n > 1 ? n + ' ' : ''}${prettyFormula(g)}</span>`),
-  ].join(' + ');
-  return `${side(r.inputs, r.gasIn)} <span class="arrow">→</span> ${side(r.outputs, r.gasOut) || '<span class="term gas">énergie</span>'}`;
+function recipeIcons(r: Recipe): string {
+  const side = (items: [number, number][]) => items
+    .map(([id, n]) => `<span class="term">${n > 1 ? n + ' ' : ''}${itemIcon(ITEMS[id], 15)}</span>`)
+    .join(' + ');
+  return `${side(r.inputs)} <span class="arrow">→</span> ${side(r.outputs) || '<span class="term gas">énergie</span>'}`;
 }
 
 /** Phrase simple : « 2 Hématite + 3 Charbon → 4 Fer ». */
@@ -341,17 +339,17 @@ export class Hud {
       const list = e.def.recipes.filter((x) => g.quota >= x.unlock);
       if (list.length > 1) body += `<div class="recipes">${list.map((x) => `<button class="${x === r ? 'on' : ''}" data-recipe="${x.key}">${esc(x.name)}</button>`).join('')}</div>`;
       if (r) {
-        body += `<div class="eq">${equation(r)}</div><p class="note">${esc(recipeWords(r))}. ${esc(r.note)}</p>`;
+        body += `<div class="eq">${recipeIcons(r)}</div><p class="note">${esc(recipeWords(r))}. ${esc(r.note)}</p>`;
         body += `<div class="bar big"><i style="width:${(e.working ? (100 * e.progress) / r.time : 0).toFixed(0)}%"></i></div>`;
         body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${give}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}${grab}</div></div>`;
-        const perMin = (3600 / r.time) * e.def.speed;
+        const perMin = 3600 / r.time;
         body += `<p class="meta">À plein régime : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} par minute · consomme ${e.def.power} W</p>`;
       }
     } else if (k === 'miner') {
       let left = 0;
       const cells = e.cells!;
       for (let i = 0; i < cells.length; i += 2) left += g.world.amount(cells[i], cells[i + 1]);
-      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · ${Math.round(60 * e.def.speed)} par minute · consomme ${e.def.power} W</p>`;
+      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · ${Math.round(60)} par minute · consomme ${e.def.power} W</p>`;
     } else if (k === 'sawmill') {
       body += `<p class="meta">Jusqu’à 40 bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
     } else if (k === 'generator') {
@@ -410,8 +408,8 @@ export class Hud {
     const q = (document.getElementById('codex-search') as HTMLInputElement).value.trim().toLowerCase();
     const match = (s: string) => !q || s.toLowerCase().includes(q);
     // on ne montre que ce qui a été découvert : pas de divulgâchage
-    const seen = (id: number) => id < 3 || id === I.bois || g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
-    const items = ITEMS.filter((it) => seen(it.id) && (match(it.name) || match(it.formula))).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></button>`);
+    const seen = (id: number) => g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
+    const items = ITEMS.filter((it) => seen(it.id) && match(it.name)).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)}</button>`);
     const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => this.pixel
       ? `<button data-codex="b:${b.key}"><img src="${hudIconUrl(b.key)}" alt="" width="32" height="28"> ${esc(b.name)}</button>`
       : `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
@@ -423,7 +421,7 @@ export class Hud {
     const g = this.host.game();
     const [type, id] = entry.split(':');
     const where = (r: Recipe) => BUILDINGS.find((b) => b.recipes.includes(r) || (b.kind === 'generator' && r.key.startsWith('combustion') && r.inputs.some(([x]) => b.fuels.includes(x))));
-    const recipeCard = (r: Recipe) => `<button class="rcard" data-codex="r:${r.key}"><b>${esc(r.name)}</b> <small>${esc(where(r)?.name ?? '')}</small><div class="eq">${equation(r)}</div></button>`;
+    const recipeCard = (r: Recipe) => `<button class="rcard" data-codex="r:${r.key}"><b>${esc(r.name)}</b> <small>${esc(where(r)?.name ?? '')}</small><div class="eq">${recipeIcons(r)}</div></button>`;
     const known = (r: Recipe) => g.quota >= r.unlock;
     let html = '';
     if (type === 'i') {
@@ -431,7 +429,7 @@ export class Hud {
       const made = RECIPES.filter((r) => known(r) && r.outputs.some(([x]) => x === it.id));
       const used = RECIPES.filter((r) => known(r) && r.inputs.some(([x]) => x === it.id));
       const builds = BUILDINGS.filter((b) => g.unlocked(b) && b.cost.some(([x]) => x === it.id));
-      html = `<h2>${itemIcon(it, 28)} ${esc(it.name)} <small>${prettyFormula(it.formula)}</small></h2><p>${esc(it.desc)}</p>
+      html = `<h2>${itemIcon(it, 28)} ${esc(it.name)}</h2><p>${esc(it.desc)}</p>
         <div class="eyebrow">D’où ça vient</div>${made.map(recipeCard).join('') || '<p class="meta">Se récolte dans le monde : à la main, ou avec un Puits ou une Scierie.</p>'}
         <div class="eyebrow">À quoi ça sert</div>${used.map(recipeCard).join('')}${builds.length ? `<p class="meta">Pour construire : ${builds.map((b) => `<button class="link" data-codex="b:${b.key}">${esc(b.name)}</button>`).join(', ')}</p>` : ''}${!used.length && !builds.length ? '<p class="meta">Rien de connu pour l’instant.</p>' : ''}`;
     } else if (type === 'b') {
@@ -446,7 +444,7 @@ export class Hud {
     } else {
       const r = RECIPES.find((x) => x.key === id)!;
       const b = where(r);
-      html = `<h2>${esc(r.name)}</h2><div class="eq big">${equation(r)}</div><p>${esc(recipeWords(r))}. ${esc(r.note)}</p>
+      html = `<h2>${esc(r.name)}</h2><div class="eq big">${recipeIcons(r)}</div><p>${esc(recipeWords(r))}. ${esc(r.note)}</p>
         <p class="meta">${b ? `Dans : <button class="link" data-codex="b:${b.key}">${esc(b.name)}</button> · ` : ''}${(r.time / 60).toFixed(1)} s par cycle</p>
         <div class="eyebrow">Objets</div><p>${[...r.inputs, ...r.outputs].map(([x]) => itemTag(x)).join(' ')}</p>`;
     }

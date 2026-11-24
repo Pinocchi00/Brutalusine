@@ -3,11 +3,12 @@
 import { B, R, type Dir } from './data';
 import { Game } from './game';
 
+export const SAVE_VERSION = 4;
+
 export interface SaveData {
-  v: 3; seed: number; tick: number; nextId: number;
+  v: 4; seed: number; tick: number; nextId: number;
   stock: Float64Array; delivered: Float64Array;
   quota: number; quotaStart: number; gathered: number;
-  atmo: { co2: number };
   made: Uint8Array; wind: number;
   records: Game['records'];
   chunks: { cx: number; cy: number; canopy: Uint8Array; deposit: Uint8Array; amount: Uint16Array; slab: Uint8Array; loot: Uint8Array; cap: Uint8Array }[];
@@ -59,17 +60,17 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     ents.push(s);
   }
   return {
-    v: 3, seed: g.seed, tick: g.tick, nextId: g.nextId,
+    v: SAVE_VERSION, seed: g.seed, tick: g.tick, nextId: g.nextId,
     stock: g.stock.slice(), delivered: g.delivered.slice(),
     quota: g.quota, quotaStart: g.quotaStart, gathered: g.gathered,
-    atmo: { ...g.atmo }, made: g.made.slice(), wind: g.wind, records: g.records.slice(),
+    made: g.made.slice(), wind: g.wind, records: g.records.slice(),
     chunks: g.world.list.map((c) => ({ cx: c.cx, cy: c.cy, canopy: c.canopy.slice(), deposit: c.deposit.slice(), amount: c.amount.slice(), slab: c.slab.slice(), loot: c.loot.slice(), cap: c.cap.slice() })),
     ents, extra,
   };
 }
 
 export function deserialize(d: SaveData): Game {
-  if (d.v !== 3) throw new Error('Sauvegarde d’une ancienne version');
+  if (d.v !== SAVE_VERSION) throw new Error('Sauvegarde d’une ancienne version');
   const g = new Game(d.seed, false);
   g.loading = true;
   for (const cd of d.chunks) {
@@ -94,7 +95,7 @@ export function deserialize(d: SaveData): Game {
   g.nextId = d.nextId; g.tick = d.tick;
   g.stock.set(d.stock); g.delivered.set(d.delivered);
   g.quota = d.quota; g.quotaStart = d.quotaStart; g.gathered = d.gathered;
-  Object.assign(g.atmo, d.atmo); g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice();
+  g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice();
   g.loading = false;
   g.topoDirty = true;
   g.refresh();          // les objets en transit retrouvent leur convoyeur dès le chargement

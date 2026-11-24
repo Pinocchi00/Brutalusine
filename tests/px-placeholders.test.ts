@@ -40,10 +40,11 @@ describe('placeholderSpec', () => {
   });
 
   it('suit les dimensions effectives d’un bâtiment tourné', () => {
-    const rotated = placeholderSpec(B.betonniere, 2, 3);
+    const def = { ...B.entrepot, key: 'essai', w: 3, h: 2 };
+    const rotated = placeholderSpec(def, 2, 3);
     expect(rotated?.w).toBe(48);
     expect(rotated?.h).toBe(72);
-    const straight = placeholderSpec(B.betonniere);
+    const straight = placeholderSpec(def);
     expect(straight?.w).toBe(72);
     expect(straight?.h).toBe(48);
   });

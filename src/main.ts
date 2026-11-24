@@ -4,10 +4,10 @@
 
 import './ui/style.css';
 import './ui/px/theme.css';
-import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_FER, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
+import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_WOOD, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
 import type { Ent } from './sim/ent';
-import { CHUNK, GROUND_WATER } from './sim/world';
-import { serialize, deserialize, writeSave, readSave } from './sim/save';
+import { CHUNK, GROUND_WATER, GROUND_BANK } from './sim/world';
+import { serialize, deserialize, writeSave, readSave, SAVE_VERSION } from './sim/save';
 import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
 import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
@@ -117,7 +117,7 @@ class App {
     this.resize();
     void readSave('auto').then((s) => {
       if (!s) return;
-      if (s.v === 3) {
+      if (s.v === SAVE_VERSION) {
         document.getElementById('btn-continue')!.hidden = false;
         return;
       }
@@ -281,7 +281,7 @@ class App {
   async load(): Promise<boolean> {
     const d = await readSave('auto').catch(() => null);
     if (!d) { this.loadMessage = 'Aucune sauvegarde'; return false; }
-    if (d.v !== 3) { this.loadMessage = 'Sauvegarde d’une ancienne version : commence une nouvelle partie'; return false; }
+    if (d.v !== SAVE_VERSION) { this.loadMessage = 'Sauvegarde d’une ancienne version : commence une nouvelle partie'; return false; }
     this.game = deserialize(d);
     this.resetWorld();
     const ex = d.extra as { players?: { x: number; y: number }[]; zoom?: number } | undefined;
@@ -308,9 +308,18 @@ class App {
       for (let y = -11; y <= 11; y++) for (let x = -11; x <= 11; x++) if (w.loot(x, y)) { const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y); if (d < bd) { bd = d; best = { x: x + 0.5, y: y + 0.5 }; } }
       return best;
     }
-    const type = DEPOSITS.findIndex((d) => d && ITEMS[d.item].key === pl);
-    const b = w.blobs.find((q) => q.type === type) ?? w.blobs[0];
-    return { x: b.x + 0.5, y: b.y + 0.5 };
+    if (pl === 'roche') {
+      const b = w.blobs.find((q) => q.type === 1);
+      return b ? { x: b.x + 0.5, y: b.y + 0.5 } : null;
+    }
+    let best: { x: number; y: number } | null = null, bd = 1e9;
+    const px = Math.floor(p.x), py = Math.floor(p.y);
+    for (let y = -40; y <= 40; y++) for (let x = -40; x <= 40; x++) {
+      if (w.ground(px + x, py + y) !== GROUND_BANK) continue;
+      const d = Math.hypot(px + x + 0.5 - p.x, py + y + 0.5 - p.y);
+      if (d < bd) { bd = d; best = { x: px + x + 0.5, y: py + y + 0.5 }; }
+    }
+    return best ?? w.river;
   }
 
   /** « Y aller » : le bâtisseur s'y rend tout seul. */
@@ -330,7 +339,6 @@ class App {
     if (!s) return null;
     let t: { x: number; y: number } | null = null;
     if (s.t === 'gather') t = this.placeOf(s.go ?? 'debris');
-    else if ((s.t === 'tool' || s.t === 'build') && s.key === 'puits' && g.quota === 0) t = this.placeOf('hematite');
     else if (s.t === 'build' && s.go) t = this.placeOf(s.go);
     else if (s.t === 'link') {
       const e = g.tickers.find((x) => x.def.key === s.key && !x.outT.path && !x.outT.ent);
@@ -665,7 +673,7 @@ class App {
         p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
         if (this.gatherable(t.x, t.y) !== t.kind) { p.task = null; p.gprog = 0; }
         else if (t.kind === 'loot') {
-          g.pickLoot(t.x, t.y); p.task = null; this.gain(`+${LOOT_FER} Fer`, t.x, t.y);
+          g.pickLoot(t.x, t.y); p.task = null; this.gain(`+${LOOT_WOOD} Bois`, t.x, t.y);
         } else {
           const size = w.canopy(t.x, t.y);
           p.gx = t.x; p.gy = t.y;
@@ -847,7 +855,7 @@ class App {
       html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir${rotatable(this.hover.def) ? ' · R : pivoter' : ''}</span>`;
     } else {
       const target = this.harvestTarget(p);
-      if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_FER} Fer</span>`;
+      if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_WOOD} Bois</span>`;
       else if (target?.kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(target.x, target.y) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
       else if (target?.kind === 'ore') { const d = DEPOSITS[w.deposit(target.x, target.y)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
     }
