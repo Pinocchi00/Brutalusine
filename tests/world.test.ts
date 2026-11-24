@@ -3,7 +3,7 @@ import {
   World, Chunk, CHUNK, GROUND_SOIL, GROUND_WATER, GROUND_BANK, GROUND_PATH, GROUND_FORD, BANK_FIELD, PATH_TILE, FORD_TILE,
   type PathSegment,
 } from '../src/sim/world';
-import { serialize, deserialize, type SaveData } from '../src/sim/save';
+import { serialize, deserialize, SAVE_VERSION, type SaveData } from '../src/sim/save';
 import { Game } from '../src/sim/game';
 import { TREE_MIN } from '../src/sim/data';
 
@@ -442,7 +442,7 @@ describe('monde : sauvegarde et vitesse', () => {
     expect(() => deserialize(old)).toThrow('ancienne version');
     const g = new Game(1);
     const fresh = serialize(g);
-    expect(fresh.v).toBe(3);
+    expect(fresh.v).toBe(SAVE_VERSION);
     expect(deserialize(structuredClone(fresh)).seed).toBe(1);
   });
 

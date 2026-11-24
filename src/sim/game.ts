@@ -2,10 +2,10 @@
 // Le brut de l'automatisation : extraire, transporter, transformer, livrer. Rien ne disparaît.
 
 import {
-  B, BELT_SPEED, CANOPY_UNIT, DEPOSITS, FUEL, I, ITEMS, LOOT_FER, NITEMS, R, START_STOCK, TREE_MIN,
-  quotaAt, type BuildingDef, type Dir, type Recipe,
+  B, BELT_SPEED, CANOPY_UNIT, DEPOSITS, FUEL, I, ITEMS, LOOT_WOOD, NITEMS, R, QUOTAS, TREE_MIN,
+  costOf, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
-import { World, GROUND_WATER, CHUNK, type Chunk } from './world';
+import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
 import { Ent, Status } from './ent';
 import { rebuildBelts, type BeltPath } from './belts';
 import { sunAt, type Sun } from './sun';
@@ -13,13 +13,12 @@ import { valueNoise } from './rng';
 
 export const ACCU_CAP = 60000;         // J
 export const STORE_CAP = 240;
-export const CO2_START = 200000;
 export const SAW_RANGE = 5;
 
 /** Le réseau électrique : un seul pour toute l'usine. */
 export interface Power {
   demand: number; lastDemand: number; capacity: number; sat: number; stored: number; storeMax: number;
-  base: number; solars: Ent[]; winds: Ent[]; hydros: Ent[]; gens: Ent[]; accus: Ent[];
+  base: number; hydros: Ent[]; gens: Ent[];
 }
 
 export interface GameEvent {
@@ -30,10 +29,10 @@ export interface PlaceResult { ok: boolean; reason: string; }
 export interface PlaceOpts { recipe?: string; filter?: number; isOut?: boolean; free?: boolean; }
 export interface RemoveInfo { key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
 
-/** Ce qui a une direction : une sortie (machines, puits, entrepôt), un sens (convoyeur, répartiteur). */
+/** Ce qui a une direction : une sortie (machines, puits, argilière, entrepôt), un sens (convoyeur, répartiteur). */
 export function rotatable(def: BuildingDef): boolean {
   const k = def.kind;
-  return k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'storage' || k === 'splitter' || k === 'belt';
+  return k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage' || k === 'splitter' || k === 'belt';
 }
 
 export class Stats {
@@ -63,15 +62,14 @@ export class Game {
   tickers: Ent[] = [];       // tout ce qui agit à chaque pas (hors convoyeurs)
   paths: BeltPath[] = [];
   topoDirty = true;
-  power: Power = { demand: 0, lastDemand: 0, capacity: 0, sat: 1, stored: 0, storeMax: 0, base: 0, solars: [], winds: [], hydros: [], gens: [], accus: [] };
+  power: Power = { demand: 0, lastDemand: 0, capacity: 0, sat: 1, stored: 0, storeMax: 0, base: 0, hydros: [], gens: [] };
   wind = 0.6;
   stock = new Float64Array(NITEMS);
-  quota = 0;
+  quota = 0;                 // nombre de livraisons accomplies
   delivered = new Float64Array(NITEMS);
   made = new Uint8Array(NITEMS);   // objets déjà obtenus au moins une fois (étapes guidées, Atlas)
   gathered = 0;                    // gestes de récolte à la main (étapes guidées)
   quotaStart = 0;
-  atmo = { co2: CO2_START };       // le carbone de l'air : il ferme le cycle, sans rien demander au joueur
   sun: Sun = sunAt(0);
   stats = new Stats();
   events: GameEvent[] = [];
@@ -84,11 +82,13 @@ export class Game {
     if (fresh) this.init();
   }
 
+  /** L'ère en cours : une ère dure trois livraisons. */
+  get era(): number { return 1 + Math.floor(Math.min(this.quota, QUOTAS.length) / 3); }
+
   private init(): void {
     this.world.ensureArea(-48, -48, 48, 48);
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) this.pave(x, y);
     this.hub = this.spawn(B.tour, -1, -1, 3 as Dir);
-    for (const k in START_STOCK) this.stock[I[k]] = START_STOCK[k];
   }
 
   // ============================================================== entités
@@ -113,7 +113,7 @@ export class Game {
   private pave(x: number, y: number): void {
     const w = this.world;
     if (w.slab(x, y)) return;
-    if (w.takeLoot(x, y)) this.stock[I.fer] += LOOT_FER;
+    if (w.takeLoot(x, y)) this.stock[I.bois] += LOOT_WOOD;
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) this.clearTree(x + i, y + j, 0);   // une case de lisière dégagée
     w.setSlab(x, y, 1);
   }
@@ -129,7 +129,7 @@ export class Game {
     if (k === 'belt' || k === 'bridge') this.belts.push(e);
     else {
       this.tickers.push(e);
-      if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'storage' || k === 'generator') {
+      if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage' || k === 'generator') {
         e.buf = new Int32Array(NITEMS); e.out = new Int32Array(NITEMS);
       }
       if (def.recipes.length) e.recipe = def.recipes[0];
@@ -155,17 +155,24 @@ export class Game {
     const w = this.world;
     const [fw, fh] = this.footprint(def, rot);
     const res: PlaceResult = { ok: false, reason: '' };
-    let ore = false, shore = false;
+    let ore = false, deadOre = false, shore = false, bank = false;
     for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
       const cx = x + i, cy = y + j;
       if (w.ground(cx, cy) === GROUND_WATER) { res.reason = 'Impossible sur l’eau'; return res; }
       const o = this.entAt(cx, cy);
       if (o && !(def.kind === 'belt' && o.def.kind === 'belt')) { res.reason = 'Case occupée'; return res; }
       if (def.kind === 'slab' && w.slab(cx, cy)) { res.reason = 'Déjà dallé'; return res; }
-      if (w.amount(cx, cy) > 0) ore = true;
+      const type = w.deposit(cx, cy);
+      if (type && w.amount(cx, cy) > 0) {
+        const d = DEPOSITS[type];
+        if (d && d.item >= 0) ore = true;
+        else deadOre = true;
+      }
+      if (w.ground(cx, cy) === GROUND_BANK) bank = true;
     }
     for (let j = -1; j <= fh && !shore; j++) for (let i = -1; i <= fw; i++) if (w.ground(x + i, y + j) === GROUND_WATER) { shore = true; break; }
-    if (def.kind === 'miner' && !ore) { res.reason = 'À poser sur un gisement (rochers colorés)'; return res; }
+    if (def.kind === 'miner' && !ore) { res.reason = deadOre ? 'Ce gisement ne s’exploite pas encore' : 'À poser sur un gisement (rochers colorés)'; return res; }
+    if (def.kind === 'clay' && !bank) { res.reason = 'À poser sur la berge (la terre humide au bord de l’eau)'; return res; }
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
     if (!free) {
       if (!this.unlocked(def)) { res.reason = 'Pas encore débloqué'; return res; }
@@ -285,9 +292,9 @@ export class Game {
   }
 
   // =================================================== récolte à la main
-  /** Tout ce qui rejoint le stock compte pour le quota, que ce soit par convoyeur ou à la main. */
+  /** Tout gain rejoint le stock ; seule l'entrée dans la Tour compte pour la livraison. */
   private gain(id: number, n: number): void {
-    this.stock[id] += n; this.delivered[id] += n; this.made[id] = 1;
+    this.stock[id] += n; this.made[id] = 1;
     this.stats.prod[id * Stats.WIN + this.stats.cur] += n;
   }
 
@@ -306,20 +313,22 @@ export class Game {
   handMine(x: number, y: number): number {
     const w = this.world;
     const type = w.deposit(x, y);
-    if (!type || this.world.ent(x, y) || !w.takeDeposit(x, y)) return -1;
-    const id = DEPOSITS[type]!.item;
-    this.gain(id, 1);
+    if (!type || this.world.ent(x, y)) return -1;
+    const d = DEPOSITS[type];
+    if (!d || d.item < 0) return -1;
+    if (!w.takeDeposit(x, y)) return -1;
+    this.gain(d.item, 1);
     this.gathered++;
-    this.emit('hand', x + 0.5, y + 0.5, id);
-    return id;
+    this.emit('hand', x + 0.5, y + 0.5, d.item);
+    return d.item;
   }
 
   /** Ramasser un tas de débris. */
   pickLoot(x: number, y: number): boolean {
     if (!this.world.takeLoot(x, y)) return false;
-    this.gain(I.fer, LOOT_FER);
+    this.gain(I.bois, LOOT_WOOD);
     this.gathered++;
-    this.emit('pick', x + 0.5, y + 0.5, I.fer);
+    this.emit('pick', x + 0.5, y + 0.5, I.bois);
     return true;
   }
 
@@ -393,15 +402,12 @@ export class Game {
     this.topoDirty = false;
     rebuildBelts(this);
     const p = this.power;
-    p.base = 0; p.solars = []; p.winds = []; p.hydros = []; p.gens = []; p.accus = [];
+    p.base = 0; p.hydros = []; p.gens = [];
     for (const e of this.tickers) {
       const k = e.def.kind;
       if (k === 'hub') p.base += e.def.power;
-      else if (k === 'solar') p.solars.push(e);
-      else if (k === 'wind') p.winds.push(e);
       else if (k === 'hydro') p.hydros.push(e);
       else if (k === 'generator') p.gens.push(e);
-      else if (k === 'battery') p.accus.push(e);
     }
   }
 
@@ -430,6 +436,7 @@ export class Game {
       case 'splitter': this.tickSplitter(e); break;
       case 'machine': this.tickMachine(e); break;
       case 'miner': this.tickMiner(e); break;
+      case 'clay': this.tickClay(e); break;
       case 'sawmill': this.tickSawmill(e); break;
       case 'storage': this.pushOut(e); e.status = e.outCount > 0 ? Status.Working : Status.Idle; break;
       case 'solar': e.light = this.sun.light; e.status = e.light > 0.02 ? Status.Working : Status.Dark; break;
@@ -484,13 +491,12 @@ export class Game {
       for (const [id, n] of r.inputs) { e.buf![id] -= n; this.stats.cons[id * Stats.WIN + this.stats.cur] += n; }
       e.working = true; e.progress = 0;
     }
-    const sat = this.draw(e);
-    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += e.def.speed * sat;
+    const sat = e.def.heat ? 1 : this.draw(e);
+    e.status = e.def.heat || sat >= 0.02 ? Status.Working : Status.NoPower;
+    e.progress += sat;
     if (e.progress >= r.time) {
       e.working = false; e.progress = 0; e.done++;
       for (const [id, n] of r.outputs) { e.out![id] += n; e.outCount += n; this.produce(id, n); }
-      for (const [gas, n] of r.gasOut) if (gas === 'CO2') this.atmo.co2 += n;
       this.emit('craft', e.cx, e.cy, r.id);
     }
   }
@@ -500,7 +506,7 @@ export class Game {
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     const sat = this.draw(e);
     e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat * e.def.speed;
+    e.progress += sat;
     if (e.progress < 60) return;
     e.progress = 0;
     const cells = e.cells!, n = cells.length >> 1, w = this.world;
@@ -508,15 +514,29 @@ export class Game {
       const idx = (e.ptr + k) % n;
       const x = cells[idx * 2], y = cells[idx * 2 + 1];
       const type = w.deposit(x, y);
-      if (type && w.takeDeposit(x, y)) {
-        const id = DEPOSITS[type]!.item;
-        e.out![id]++; e.outCount++; e.ptr = (idx + 1) % n; e.done++;
-        this.produce(id, 1);
-        this.emit('mine', e.cx, e.cy, id);
-        return;
-      }
+      if (!type) continue;
+      const d = DEPOSITS[type];
+      if (!d || d.item < 0) continue;                 // gisement pas encore exploitable : case suivante
+      if (!w.takeDeposit(x, y)) continue;
+      e.out![d.item]++; e.outCount++; e.ptr = (idx + 1) % n; e.done++;
+      this.produce(d.item, 1);
+      this.emit('mine', e.cx, e.cy, d.item);
+      return;
     }
     e.status = Status.NoResource;
+  }
+
+  private tickClay(e: Ent): void {
+    this.pushOut(e);
+    if (e.outCount >= 4) { e.status = Status.Blocked; return; }
+    const sat = this.draw(e);
+    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
+    e.progress += sat;
+    if (e.progress < 120) return;
+    e.progress = 0;
+    e.out![I.argile]++; e.outCount++; e.done++;
+    this.produce(I.argile, 1);
+    this.emit('mine', e.cx, e.cy, I.argile);
   }
 
   private tickSawmill(e: Ent): void {
@@ -550,8 +570,6 @@ export class Game {
     const demand = p.demand;
     p.demand = 0;
     let supply = p.base, capacity = p.base;
-    for (const s of p.solars) { const w = s.def.power * s.light; s.flow = w; supply += w; capacity += w; }
-    for (const s of p.winds) { const w = s.def.power * this.wind; s.flow = w; s.status = Status.Working; supply += w; capacity += w; }
     for (const s of p.hydros) { s.flow = s.def.power; s.status = Status.Working; supply += s.def.power; capacity += s.def.power; }
     let need = demand - supply;
     for (const g of p.gens) {
@@ -559,10 +577,8 @@ export class Game {
       let fuel = -1;
       for (const id of g.def.fuels) if (g.buf![id] > 0) { fuel = id; break; }
       if (g.energy <= 0 && fuel >= 0 && need > 0) {
-        const f = FUEL[fuel];
-        g.buf![fuel]--; g.energy += f.energy;
+        g.buf![fuel]--; g.energy += FUEL[fuel];
         this.stats.cons[fuel * Stats.WIN + this.stats.cur]++;
-        this.atmo.co2 += f.co2;
       }
       const hasFuel = g.energy > 0 || fuel >= 0;
       if (hasFuel) capacity += g.def.power;
@@ -573,21 +589,7 @@ export class Game {
         g.energy -= w * dt; g.flow = w; need -= w; supply += w;
       }
     }
-    let stored = 0;
-    for (const a of p.accus) {
-      a.flow = 0;
-      if (need > 0 && a.energy > 0) {
-        const w = Math.min(a.def.power, need, a.energy / dt);
-        a.energy -= w * dt; a.flow = w; need -= w; supply += w;
-      } else if (need < 0 && a.energy < ACCU_CAP) {
-        const w = Math.min(a.def.power, -need, (ACCU_CAP - a.energy) / dt);
-        a.energy += w * dt; a.flow = -w; need += w;
-      }
-      a.status = a.flow !== 0 ? Status.Working : Status.Idle;
-      stored += a.energy;
-      if (a.energy > 0) capacity += a.def.power;
-    }
-    p.stored = stored; p.storeMax = p.accus.length * ACCU_CAP;
+    p.stored = 0; p.storeMax = 0;
     p.lastDemand = demand; p.capacity = capacity;
     p.sat = demand > 0 ? Math.min(1, supply / demand) : 1;
   }
@@ -601,7 +603,7 @@ export class Game {
 
   private growChunk(c: Chunk): void {
     const light = this.sun.light;
-    if (light <= 0 || this.atmo.co2 <= 0) return;
+    if (light <= 0) return;
     const step = Math.max(1, Math.round(1.6 * light));
     const can = c.canopy, cap = c.cap;
     let dC = 0;
@@ -612,7 +614,7 @@ export class Game {
       const nv = Math.min(top, c0 + step);
       can[i] = nv; dC += nv - c0;
     }
-    if (dC > 0) { c.version++; this.atmo.co2 -= (dC * 6) / CANOPY_UNIT; }
+    if (dC > 0) c.version++;
   }
 
   private nearSlab(c: Chunk, i: number): boolean {
@@ -624,10 +626,16 @@ export class Game {
     return false;
   }
 
-  // ============================================================== quotas
+  // ========================================================== livraisons
   private checkQuota(): void {
     const q = quotaAt(this.quota);
-    for (const [id, n] of q.need) if (this.delivered[id] < n) return;
+    if (q.need.length === 0) return;
+    if (q.rebuild) {
+      for (const [id, n] of q.need) if (this.delivered[id] < n || this.stock[id] < n) return;
+      for (const [id, n] of q.need) this.stock[id] -= n;
+    } else {
+      for (const [id, n] of q.need) if (this.delivered[id] < n) return;
+    }
     this.records.push({ quota: this.quota, ticks: this.tick - this.quotaStart, buildings: this.tickers.length + this.belts.length });
     this.quota++;
     this.quotaStart = this.tick;
@@ -638,25 +646,34 @@ export class Game {
   }
 
   // ============================================================= bilans
-  /** Compte les atomes d'un élément présents dans tout le monde (pour les tests de conservation). */
-  ledger(el: string): number {
-    let total = 0;
-    const perItem = ITEMS.map((it) => it.atoms[el] ?? 0);
-    for (let i = 0; i < NITEMS; i++) total += this.stock[i] * perItem[i];
-    for (const p of this.paths) for (let i = p.head; i < p.types.length; i++) total += perItem[p.types[i]];
+  /** Compte les objets d'une sorte présents dans tout le monde (pour les tests de conservation). */
+  ledger(item: number): number {
+    let total = this.stock[item];
+    for (const p of this.paths) for (let i = p.head; i < p.types.length; i++) if (p.types[i] === item) total++;
     for (const e of this.tickers) {
-      if (e.buf) for (let i = 0; i < NITEMS; i++) total += (e.buf[i] + (e.out ? e.out[i] : 0)) * perItem[i];
-      if (e.working && e.recipe) for (const [id, n] of e.recipe.inputs) total += n * perItem[id];
-      if (e.held >= 0) total += perItem[e.held];
+      if (e.buf && e.out) total += e.buf[item] + e.out[item];
+      if (e.working && e.recipe) for (const [id, n] of e.recipe.inputs) if (id === item) total += n;
+      if (e.held === item) total++;
+    }
+    for (const e of [...this.tickers, ...this.belts]) {
+      if (e.dead) continue;
+      for (const [id, n] of costOf(e.def, e.def.era)) if (id === item) total += n;
     }
     for (const c of this.world.list) {
       for (let i = 0; i < CHUNK * CHUNK; i++) {
-        if (c.deposit[i]) total += c.amount[i] * perItem[DEPOSITS[c.deposit[i]]!.item];
-        if (c.loot[i]) total += LOOT_FER * perItem[I.fer];
-        if (el === 'C') total += (c.canopy[i] * 6) / CANOPY_UNIT;
+        if (c.deposit[i]) {
+          const d = DEPOSITS[c.deposit[i]];
+          if (d && d.item === item) total += c.amount[i];
+        }
+        if (c.loot[i] && item === I.bois) total += LOOT_WOOD;
+        if (item === I.bois) total += c.canopy[i] / CANOPY_UNIT;
       }
     }
-    if (el === 'C') total += this.atmo.co2;
+    for (let k = 0; k < Math.min(this.quota, QUOTAS.length); k++) {
+      const q = QUOTAS[k];
+      if (!q.rebuild) continue;
+      for (const [id, n] of q.need) if (id === item) total += n;
+    }
     return total;
   }
 }

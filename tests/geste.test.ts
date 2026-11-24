@@ -1,7 +1,7 @@
 // Gestes de construction : le tracé de convoyeur en L et la rotation d'un bâtiment posé.
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { I } from '../src/sim/data';
+import { B, I } from '../src/sim/data';
 import { beltRoute } from '../src/sim/route';
 import { outputPorts } from '../src/sim/belts';
 import { serialize, deserialize } from '../src/sim/save';
@@ -66,10 +66,10 @@ describe('tracé de convoyeur en L', () => {
     run(g, 1);
     const p = g.entAt(-10, 0)!.path!;
     expect(p.target.ent).toBe(g.hub);
-    p.insertAtStart(I.fer);
-    const before = g.stock[I.fer];
+    p.insertAtStart(I.pierre);
+    const before = g.stock[I.pierre];
     run(g, 600);
-    expect(g.stock[I.fer]).toBe(before + 1);
+    expect(g.stock[I.pierre]).toBe(before + 1);
   });
 
   it('se raccorde au flanc d’un tapis, jamais de face', () => {
@@ -98,7 +98,7 @@ describe('pivoter un bâtiment posé', () => {
   it('la sortie tourne, gratuitement, et se raccorde au tapis qui l’attend', () => {
     const g = sandbox();
     clear(g, 10, 10, 20, 20);
-    expect(g.place('presse', 12, 12, 0, { free: true }).ok).toBe(true);           // 2×2, sortie à l'est
+    expect(g.place('four', 12, 12, 0, { free: true }).ok).toBe(true);           // 2×2, sortie à l'est
     g.place('convoyeur', 11, 12, 2, { free: true });                               // un tapis à l'ouest
     const e = g.entAt(12, 12)!;
     run(g, 1);
@@ -126,9 +126,9 @@ describe('pivoter un bâtiment posé', () => {
   it('un bâtiment non carré change d’emprise, s’il a la place', () => {
     const g = sandbox();
     clear(g, 10, 10, 20, 20);
-    g.place('betonniere', 12, 12, 0, { free: true });   // 3×2
+    const def = { ...B.scierie, key: 'essai', w: 3, h: 2 };   // 3×2, comme l'ancienne Bétonnière
+    const e = g.spawn(def, 12, 12, 0);
     expect(g.rotate(12, 12).ok).toBe(true);
-    const e = g.entAt(12, 12)!;
     expect([e.w, e.h]).toEqual([2, 3]);
     expect(g.entAt(14, 12)).toBe(null);                  // l'ancienne emprise est libérée
     expect(g.entAt(12, 14)).toBe(e);
@@ -139,28 +139,26 @@ describe('pivoter un bâtiment posé', () => {
     expect(e.rot).toBe(1);
   });
 
-  it('la Tour, un pont ou un Héliostat ne pivotent pas, avec la raison', () => {
+  it('la Tour et le Brûleur ne pivotent pas, avec la raison', () => {
     const g = sandbox();
     clear(g, 10, 10, 20, 20);
     expect(g.rotate(0, 0)).toMatchObject({ ok: false, reason: 'La Tour ne pivote pas' });
-    g.place('heliostat', 12, 12, 0, { free: true });
-    expect(g.rotate(12, 12).ok).toBe(false);
-    g.place('pont', 14, 14, 0, { free: true });
-    expect(g.rotate(14, 14).reason).toContain('pont');
+    g.place('bruleur', 12, 12, 0, { free: true });
+    expect(g.rotate(12, 12)).toMatchObject({ ok: false, reason: 'Brûleur n’a pas de sortie à orienter' });
     expect(g.rotate(19, 19)).toMatchObject({ ok: false, reason: 'Rien à pivoter ici' });
   });
 
   it('rien ne se perd, et la sauvegarde garde l’orientation', () => {
     const g = sandbox();
     clear(g, 10, 10, 20, 20);
-    g.place('fonderie', 12, 12, 0, { free: true });
-    const f = g.entAt(12, 12)!;
-    f.buf![I.hematite] = 4; f.buf![I.carbone] = 6;
-    run(g, 100);
-    const fe = g.ledger('Fe');
+    g.place('entrepot', 12, 12, 0, { free: true });
+    const e = g.entAt(12, 12)!;
+    g.accept(e, I.bois, 0); g.accept(e, I.bois, 0);
+    run(g, 10);
+    const wood = g.ledger(I.bois);
     g.rotate(12, 12, 1);
     run(g, 400);
-    expect(g.ledger('Fe')).toBeCloseTo(fe, 6);
+    expect(g.ledger(I.bois)).toBeCloseTo(wood, 6);
     const b = deserialize(JSON.parse(JSON.stringify(serialize(g))));
     expect(b.entAt(12, 12)!.rot).toBe(1);
   });

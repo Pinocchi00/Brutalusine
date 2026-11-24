@@ -146,10 +146,10 @@ function main(): void {
     }),
     board('Bulle — objet manquant (image)', 3, 3, (ctx, now) => {
       const P = pen(ctx);
-      drawCauseBubble(P, ctx, 1.5, 1.5, Status.NoInput, I.fer, now, () => item);
+      drawCauseBubble(P, ctx, 1.5, 1.5, Status.NoInput, I.pierre, now, () => item);
     }),
     board('Bulle — objet manquant (couleur)', 3, 3, (ctx, now) => {
-      drawCauseBubble(pen(ctx), ctx, 1.5, 1.5, Status.NoInput, I.hematite, now);
+      drawCauseBubble(pen(ctx), ctx, 1.5, 1.5, Status.NoInput, I.carbone, now);
     }),
     board('Bulle — sortie bloquée', 3, 3, (ctx, now) => {
       drawCauseBubble(pen(ctx), ctx, 1.5, 1.5, Status.Blocked, -1, now);
