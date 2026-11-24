@@ -1,3 +1,5 @@
+@import './sheets.css';
+
 /* Brutalusine — le haut de l'écran du HUD pixel : objectif compact, cadran, énergie, stock et alertes.
    Tout est gardé derrière `:root[data-rendu='pixel']` : sans ce drapeau, l'ancien rendu ne change pas. */
 
