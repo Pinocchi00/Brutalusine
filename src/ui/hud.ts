@@ -12,6 +12,7 @@ import { buildingIcon } from '../render/sprites';
 import { hudIconUrl } from '../render/px/hudIcons';
 import './px/top.css';
 import './px/bottom.css';
+import './px/compact.css';
 import { sunDialSvg } from './px/sunDial';
 import { toolHint } from './px/barHint';
 

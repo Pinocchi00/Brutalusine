@@ -1,0 +1,56 @@
+/* Brutalusine — le HUD pixel dans les petites fenêtres PC. En dessous de 1260 px de large, la colonne
+   de droite porte l'heure et l'énergie empilées, puis le stock ou le panneau ; le centre reste libre.
+   En dessous de 800 px de haut, le panneau monte sous le bord. Tout est gardé derrière
+   `:root[data-rendu='pixel']` : sans ce drapeau, l'ancien rendu ne change pas. */
+
+/* Fenêtre étroite : la colonne de droite fait 310 px et le stock ou le panneau prennent le relais. */
+@media (max-width: 1259px) {
+  :root[data-rendu='pixel'] #topbar {
+    top: 16px;
+    right: 16px;
+    left: auto;
+    transform: none;
+    width: 310px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  :root[data-rendu='pixel'] .chip {
+    justify-content: center;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  :root[data-rendu='pixel'] .chip .meter {
+    width: 40px;
+  }
+  :root[data-rendu='pixel'] #stock {
+    top: 140px;
+    width: 310px;
+    max-height: calc(45vh - 124px);
+  }
+  :root[data-rendu='pixel'] #panel {
+    top: 140px;
+    right: 16px;
+    width: 310px;
+    max-height: calc(100vh - 140px - 278px);
+  }
+  :root[data-rendu='pixel'] #alerts,
+  :root[data-rendu='pixel'] #sidebtns {
+    bottom: 200px;
+  }
+}
+
+/* Fenêtre basse et large : le panneau monte sous le bord et gagne la hauteur perdue. */
+@media (max-height: 799px) and (min-width: 1260px) {
+  :root[data-rendu='pixel'] #panel {
+    top: 16px;
+    max-height: calc(100vh - 224px);
+  }
+}
+
+/* Dans les deux cas, un panneau de machine ouvert prend la place du stock. */
+@media (max-width: 1259px), (max-height: 799px) {
+  :root[data-rendu='pixel'] #hud:has(#panel:not([hidden])) #stock {
+    display: none;
+  }
+}
