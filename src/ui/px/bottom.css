@@ -92,7 +92,7 @@
   left: 3px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--px-c4);
+  color: var(--px-c3);
 }
 :root[data-rendu='pixel'] .tool.poor img {
   opacity: 0.35;
@@ -158,8 +158,14 @@
   :root[data-rendu='pixel'] #sidebtns {
     bottom: 16px;
   }
+}
+
+/* Les alertes restent au-dessus de la barre, avec leur propre défilement pour ne pas la recouvrir. */
+@media (min-width: 1260px) {
   :root[data-rendu='pixel'] #alerts {
     bottom: 190px;
+    max-height: max(56px, calc(100vh - 190px - 400px));
+    overflow-y: auto;
   }
 }
 
