@@ -102,7 +102,7 @@ export function resolveTarget(g: Game, x: number, y: number, dir: number): Targe
   if (!t || t.dead) return NO_TARGET;
   if (isBeltLike(t)) return accepts(t, dir) && t.path ? { path: t.path, ent: null, dir } : NO_TARGET;
   const k = t.def.kind;
-  if (k === 'solar' || k === 'battery' || k === 'wind' || k === 'hydro' || k === 'deco') return NO_TARGET;
+  if (k === 'hydro') return NO_TARGET;
   return { path: null, ent: t, dir };
 }
 

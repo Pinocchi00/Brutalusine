@@ -3,7 +3,7 @@
 
 import { B, DX, DY, ITEMS, NITEMS, TILE_U, DEPOSITS, TREE_MIN, type Shape } from '../sim/data';
 import type { Game } from '../sim/game';
-import { SAW_RANGE, ACCU_CAP, STORE_CAP } from '../sim/game';
+import { SAW_RANGE, STORE_CAP } from '../sim/game';
 import { Status, type Ent } from '../sim/ent';
 import { outputPorts, type BeltPath } from '../sim/belts';
 import { CHUNK, GROUND_WATER } from '../sim/world';
@@ -111,7 +111,7 @@ export class Renderer {
     // --- activité lissée : les machines démarrent et s'arrêtent en douceur
     for (const e of g.tickers) {
       const k = e.def.kind;
-      const on = e.status === Status.Working && (k !== 'generator' || e.flow > 1) ? (k === 'wind' ? g.wind : k === 'machine' || k === 'miner' || k === 'sawmill' ? g.power.sat : 1) : 0;
+      const on = e.status === Status.Working && (k !== 'generator' || e.flow > 1) ? (k === 'machine' || k === 'miner' || k === 'sawmill' ? g.power.sat : 1) : 0;
       e.act += (on - e.act) * Math.min(1, o.dt * 4);
       e.anim += o.dt * e.act;
       if (e.done !== e.seen) { e.seen = e.done; e.pulse = 1; }
@@ -283,7 +283,6 @@ export class Renderer {
     for (const e of ents) {
       const k = e.def.kind;
       if (k === 'hub') this.halo(c, e.cx, e.cy - e.height * K, 3.2, PAL.signalHi, 0.14 + 0.45 * n + 0.3 * e.pulse);
-      else if (k === 'deco') this.halo(c, e.cx, e.cy, 4.2, '#FFD9A0', 0.75 * n);
       else if (e.act > 0.05 && (k === 'machine' || k === 'generator')) this.halo(c, e.cx, e.cy - e.def.height * K * 0.5, Math.max(e.w, e.h) * 0.85, k === 'generator' ? PAL.hot : mix(PAL.hot, e.recipe && e.recipe.outputs.length ? ITEMS[e.recipe.outputs[0][0]].color : PAL.hot, 0.5), (0.1 + 0.4 * n) * e.act);
     }
     if (n > 0.1) for (const p of o.players) this.halo(c, p.x, p.y, 6.5, '#FFE9C0', 0.4 * n);
@@ -366,10 +365,17 @@ export class Renderer {
     c.strokeStyle = PAL.dark; c.lineWidth = 0.68; c.stroke();                  // tapis
     if (detail) {
       c.strokeStyle = '#3B3F48'; c.lineWidth = 0.6; c.setLineDash([0.07, 0.18]);
+      // un seul trait par vitesse : le décalage des tirets est le même pour tous les chemins de cette vitesse
+      const bySpeed = new Map<number, BeltPath[]>();
       for (const p of seen) {
+        const group = bySpeed.get(p.speed);
+        if (group) group.push(p);
+        else bySpeed.set(p.speed, [p]);
+      }
+      for (const [speed, group] of bySpeed) {
         c.beginPath();
-        this.traceBelt(c, p, [], [], [], []);
-        const sp = (p.speed * 60) / TILE_U;
+        for (const p of group) this.traceBelt(c, p, [], [], [], []);
+        const sp = (speed * 60) / TILE_U;
         c.lineDashOffset = -((o.time * sp) % 0.25);
         c.stroke();
       }
@@ -476,8 +482,6 @@ export class Renderer {
     st.color = PAL.signal; st.level = 0; st.mark = null; st.flag = e.isOut; st.pulse = e.pulse; st.aim = 0; st.plinth = plinthOf(e.def.key);
     if (e.recipe && e.recipe.outputs.length) st.color = ITEMS[e.recipe.outputs[0][0]].color;
     if (k === 'hub') st.level = e.level;
-    else if (k === 'solar') { st.level = e.light; st.aim = g.sun.day ? Math.atan2(g.sun.sy, g.sun.sx) * 0.35 : 0; }
-    else if (k === 'battery') st.level = e.energy / ACCU_CAP;
     else if (k === 'storage') st.level = e.outCount / STORE_CAP;
     else if (k === 'miner') { const cells = e.cells!; const i = (e.ptr % (cells.length >> 1)) * 2; const d = g.world.deposit(cells[i], cells[i + 1]); st.color = d ? DEPOSITS[d]!.color : '#6B5038'; }
     else if (k === 'sawmill') { const want = Math.atan2(e.ty - e.cy, e.tx - e.cx); e.aim += Math.atan2(Math.sin(want - e.aim), Math.cos(want - e.aim)) * Math.min(1, o.dt * 6); st.aim = e.aim; }

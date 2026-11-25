@@ -124,8 +124,8 @@ export function costOf(def: BuildingDef, era: number): [number, number][] {
 
 // ----------------------------------------------------------------- bâtiments
 export type Kind =
-  | 'hub' | 'slab' | 'belt' | 'bridge' | 'splitter' | 'storage' | 'deco' | 'machine' | 'miner' | 'sawmill'
-  | 'clay' | 'generator' | 'solar' | 'wind' | 'hydro' | 'battery';
+  | 'hub' | 'slab' | 'belt' | 'bridge' | 'splitter' | 'storage' | 'machine' | 'miner' | 'sawmill'
+  | 'clay' | 'generator' | 'hydro';
 
 export type Category = 'logistique' | 'extraction' | 'fonte' | 'fabrication' | 'energie';
 export const CATEGORIES: { key: Category; name: string }[] = [

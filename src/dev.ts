@@ -7,7 +7,6 @@ import type { Game } from './sim/game';
 
 export function buildDemo(g: Game): string[] {
   const log: string[] = [];
-  g.quota = 5;                 // tout le contenu des ères Bois et Pierre est débloqué
   // le stock se remplit par les tapis, pas d'avance : une pose refusée est notée dans le journal
   // et son tampon est alors un tampon factice, sans effet
   const sink = { buf: new Int32Array(64) };
@@ -22,6 +21,8 @@ export function buildDemo(g: Game): string[] {
     for (;;) { P('convoyeur', x, y, r); if (x === x1 && y === y1) break; x += Math.sign(x1 - x); y += Math.sign(y1 - y); }
   };
   // bois : scierie → charbonnière → Tour, sur la première allée entièrement sèche
+  // on les pose avant l'ère de la Pierre : elles naissent en version 1, puis le marteau les refait
+  g.quota = 0;
   for (const ry of [-4, 4, -8, 8, -12, 12, -16, 16]) {
     if (!woodLane(g, ry)) continue;
     P('scierie', 22, ry, 2);
@@ -32,6 +33,8 @@ export function buildDemo(g: Game): string[] {
     P('convoyeur', 2, 0, 2);              // entre dans la Tour par l'est
     break;
   }
+  // les machines de bois sont posées en version 1, puis la démo passe à l'ère de la Pierre
+  g.quota = 5;                 // tout le contenu des ères Bois et Pierre est débloqué
   // pierre : un Puits sur la roche, un Brûleur pour le courant, posés sur des cases libres
   const rock = g.world.blobs.find((q) => q.type === 1);
   if (rock) {
@@ -60,7 +63,6 @@ export function buildDemo(g: Game): string[] {
   for (const key of ['scierie', 'charbonniere']) {
     const e = g.tickers.find((t) => t.def.key === key);
     if (!e) continue;
-    e.era = 1;
     g.upgrade(e.x, e.y);
   }
   for (const [x, y] of demoSlabLine(g)) {

@@ -11,13 +11,12 @@ import { rebuildBelts, type BeltPath } from './belts';
 import { sunAt, type Sun } from './sun';
 import { valueNoise } from './rng';
 
-export const ACCU_CAP = 60000;         // J
 export const STORE_CAP = 240;
 export const SAW_RANGE = 5;
 
 /** Le réseau électrique : un seul pour toute l'usine. */
 export interface Power {
-  demand: number; lastDemand: number; capacity: number; sat: number; stored: number; storeMax: number;
+  demand: number; lastDemand: number; capacity: number; sat: number;
   base: number; hydros: Ent[]; gens: Ent[];
 }
 
@@ -62,7 +61,7 @@ export class Game {
   tickers: Ent[] = [];       // tout ce qui agit à chaque pas (hors convoyeurs)
   paths: BeltPath[] = [];
   topoDirty = true;
-  power: Power = { demand: 0, lastDemand: 0, capacity: 0, sat: 1, stored: 0, storeMax: 0, base: 0, hydros: [], gens: [] };
+  power: Power = { demand: 0, lastDemand: 0, capacity: 0, sat: 1, base: 0, hydros: [], gens: [] };
   wind = 0.6;
   stock = new Float64Array(NITEMS);
   quota = 0;                 // nombre de livraisons accomplies
@@ -536,7 +535,6 @@ export class Game {
       case 'clay': this.tickClay(e); break;
       case 'sawmill': this.tickSawmill(e); break;
       case 'storage': this.pushOut(e); e.status = e.outCount > 0 ? Status.Working : Status.Idle; break;
-      case 'solar': e.light = this.sun.light; e.status = e.light > 0.02 ? Status.Working : Status.Dark; break;
       default: break;
     }
   }
@@ -713,7 +711,6 @@ export class Game {
         g.energy -= w * dt; g.flow = w; need -= w; supply += w;
       }
     }
-    p.stored = 0; p.storeMax = 0;
     p.lastDemand = demand; p.capacity = capacity;
     p.sat = demand > 0 ? Math.min(1, supply / demand) : 1;
   }
