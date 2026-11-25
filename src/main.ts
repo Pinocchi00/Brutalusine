@@ -4,7 +4,7 @@
 
 import './ui/style.css';
 import './ui/px/theme.css';
-import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ITEMS, LOOT_WOOD, R, TILE_U, TREE_MIN, CANOPY_UNIT, type Dir, type Place, type Step } from './sim/data';
+import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ERAS, ITEMS, LOOT_WOOD, R, TILE_U, TREE_MIN, CANOPY_UNIT, costOf, type Dir, type Place, type Step } from './sim/data';
 import type { Ent } from './sim/ent';
 import { CHUNK, GROUND_WATER, GROUND_BANK } from './sim/world';
 import { serialize, deserialize, writeSave, readSave, SAVE_VERSION } from './sim/save';
@@ -17,6 +17,7 @@ import { BuilderAnimator, type MotionResult } from './render/px/builderMotion';
 import { PLAYER_COLORS } from './render/px/builderArt';
 import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
 import { PAL } from './render/terrain';
+import { hexToRgb } from './render/px/noise';
 import { Hud } from './ui/hud';
 import { AudioEngine } from './audio/audio';
 
@@ -98,7 +99,11 @@ class App {
     this.renderer = this.pixel ? new PxRenderer(this.canvas) : new Renderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
-      tool: () => this.players[0].tool,
+      tool: () => {
+        const t = this.players[0].tool;
+        // le HUD de ce lot n'a pas encore de bouton marteau (7d) : on le lui cache pour ne pas le casser
+        return t === 'marteau' && !document.querySelector('[data-tool="marteau"]') ? null : t;
+      },
       selectTool: (k) => { const p = this.players[0]; p.tool = k; p.task = null; this.hud.select(null); this.audio.ui(); },
       stepDone: (s) => this.stepDone(s),
       locate: (pl) => this.locate(pl),
@@ -173,6 +178,7 @@ class App {
       if (!this.started || this.paused) return;
       this.aim(p);
       if (m.left && p.tool === 'demolir') this.removeAt(p);
+      else if (m.left && p.tool === 'marteau') this.upgradeAt(p);
       else if (m.left && p.tool && p.gesture && (!p.dragLast || p.dragLast[0] !== p.cx || p.dragLast[1] !== p.cy)) this.tryPlace(p, false);
       else if (m.right && p.gesture) this.removeAt(p);
     });
@@ -202,7 +208,10 @@ class App {
   }
 
   private onKey(ev: KeyboardEvent): void {
-    const typing = (ev.target as HTMLElement).tagName === 'INPUT';
+    const target = ev.target as HTMLElement;
+    // Espace ou Entrée sur un bouton du HUD : la touche agit sur le bouton, pas sur le jeu
+    if ((ev.code === 'Space' || ev.code === 'Enter') && target.closest?.('button')) return;
+    const typing = target.tagName === 'INPUT';
     if (ev.code === 'Escape') { this.escape(); return; }
     if (typing || !this.started) return;
     const p = this.players[0], g = this.game;
@@ -215,6 +224,10 @@ class App {
       case 'KeyR': this.turn(p); break;
       case 'KeyE': this.pipette(p); break;
       case 'KeyX': p.tool = p.tool === 'demolir' ? null : 'demolir'; p.task = null; this.hud.select(null); this.audio.ui(); break;
+      case 'KeyM':
+        if (g.era < 2) { this.hud.toast('Le marteau sert à partir de l’ère de la Pierre'); break; }
+        p.tool = p.tool === 'marteau' ? null : 'marteau'; p.task = null; this.hud.select(null); this.audio.ui();
+        break;
       case 'Tab': this.hud.nextCategory(g, ev.shiftKey ? -1 : 1); this.audio.ui(); break;
       case 'KeyG': if (this.hud.codexOpen) this.hud.closeCodex(); else this.hud.openCodex(); break;
       case 'KeyH': this.hud.showGuide(!this.hud.guideOpen); break;
@@ -366,7 +379,7 @@ class App {
     const g = this.game;
     if (p.pad === null) { const w = this.pick(this.mouse.x, this.mouse.y); p.cx = Math.floor(w.x); p.cy = Math.floor(w.y); }
     else { p.cx = Math.floor(p.x + p.aimX); p.cy = Math.floor(p.y + p.aimY); }
-    if (p.tool && p.tool !== 'demolir') {
+    if (p.tool && p.tool !== 'demolir' && p.tool !== 'marteau') {
       const def = B[p.tool];
       const [fw, fh] = g.footprint(def, p.rot);
       p.ox = p.cx - ((fw - 1) >> 1); p.oy = p.cy - ((fh - 1) >> 1);
@@ -374,7 +387,7 @@ class App {
       p.ok = res.ok; p.reason = res.reason;
     }
     if (p.anchor) {
-      if (p.tool && B[p.tool].kind === 'belt') this.updateRoute(p);
+      if (p.tool && p.tool !== 'demolir' && p.tool !== 'marteau' && B[p.tool].kind === 'belt') this.updateRoute(p);
       else this.clearRoute(p);   // outil lâché en plein tracé
     }
   }
@@ -407,6 +420,7 @@ class App {
 
   private primaryDown(p: Player): void {
     if (p.tool === 'demolir') { p.gesture = []; p.lastRemove = ''; this.removeAt(p); return; }
+    if (p.tool === 'marteau') { p.gesture = []; p.lastRemove = ''; this.upgradeAt(p); return; }
     if (p.tool) { p.gesture = []; p.dragLast = null; this.tryPlace(p, true); return; }
     const e = this.game.entAt(p.cx, p.cy);
     if (e) {
@@ -439,8 +453,9 @@ class App {
   }
 
   private tryPlace(p: Player, first: boolean): void {
+    if (!p.tool || p.tool === 'marteau') return;
     const g = this.game;
-    const def = B[p.tool!];
+    const def = B[p.tool];
     if (def.kind === 'belt') {
       // le convoyeur se trace en L de la case de départ au curseur ; il n'est posé qu'au relâchement
       if (first || !p.anchor) { this.clearRoute(p); p.anchor = [p.cx, p.cy]; }
@@ -464,6 +479,17 @@ class App {
     if (info) { p.gesture.push({ type: 'remove', ...info }); p.beam = 1; }
   }
 
+  /** Clic au marteau sur la case visée, une fois par case d'un glissé. Ne va pas dans la pile d'annulation : Ctrl+Z ne défait pas une amélioration. */
+  private upgradeAt(p: Player): void {
+    const key = `${p.cx},${p.cy}`;
+    if (key === p.lastRemove || !p.gesture) return;
+    const first = p.lastRemove === '';
+    p.lastRemove = key;
+    const res = this.game.upgrade(p.cx, p.cy);
+    if (res.ok) { p.beam = 1; return; }
+    if (first) { this.audio.deny(); this.hud.toast(res.reason); }   // un glissé ne répète pas les refus
+  }
+
   private clearRoute(p: Player): void {
     p.anchor = null; p.route = null; p.xFirst = null; p.elbowSet = false; p.routeInto = false; p.routeKey = '';
   }
@@ -475,8 +501,11 @@ class App {
     const [ax, ay] = p.anchor, dx = p.cx - ax, dy = p.cy - ay;
     if (!dx && !dy) { p.xFirst = null; p.elbowSet = false; }              // revenu au départ : le coude se redécidera
     else if (p.xFirst === null) p.xFirst = Math.abs(dx) >= Math.abs(dy);  // le premier pas choisit le coude
+    // le prix d'une case est celui de la version qui sera posée, pas celui de l'ère d'apparition
+    const ver = g.versionFor(def);
+    const unit = costOf(def, ver);
     // rien n'a changé depuis le dernier calcul : on garde le tracé (aim() tourne plusieurs fois par image)
-    const key = `${ax},${ay},${p.cx},${p.cy},${p.xFirst},${p.elbowSet},${p.rot},${g.version},${def.cost.map(([id]) => Math.floor(g.stock[id])).join('/')}`;
+    const key = `${ax},${ay},${p.cx},${p.cy},${p.xFirst},${p.elbowSet},${p.rot},${g.version},${ver},${unit.map(([id]) => Math.floor(g.stock[id])).join('/')}`;
     if (key === p.routeKey && p.route) { p.ok = p.routeOk; p.reason = p.routeReason; return; }
     p.routeKey = key;
     let r = beltRoute(g, ax, ay, p.cx, p.cy, p.xFirst ?? true, p.rot as Dir);
@@ -487,7 +516,7 @@ class App {
       const alt = beltRoute(g, ax, ay, p.cx, p.cy, !p.xFirst, p.rot as Dir);
       if (alt.into) { r = alt; p.elbowShown = !p.xFirst; }
     }
-    const left = def.cost.map(([id, n]) => [id, Math.floor(g.stock[id]), n]);
+    const left = unit.map(([id, n]) => [id, Math.floor(g.stock[id]), n]);
     p.ok = r.cells.length > 0; p.reason = r.cells.length ? '' : 'Case occupée';
     p.route = r.cells.map((c) => {
       const res = g.canPlace(def, c.x, c.y, c.dir, true);
@@ -506,7 +535,7 @@ class App {
   }
 
   private endGesture(p: Player): void {
-    if (p.route && p.tool && B[p.tool].kind === 'belt') {
+    if (p.route && p.tool && p.tool !== 'marteau' && B[p.tool].kind === 'belt') {
       this.updateRoute(p);
       const route = p.route ?? [];
       let placed = 0;
@@ -540,7 +569,7 @@ class App {
   private turn(p: Player): void {
     // R change le coude qu'on voit (qui peut être celui choisi automatiquement), et ce choix devient définitif
     if (p.anchor && p.xFirst !== null) { p.xFirst = !p.elbowShown; p.elbowSet = true; this.aim(p); this.audio.ui(); return; }
-    if (p.tool && p.tool !== 'demolir') { p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); return; }
+    if (p.tool && p.tool !== 'demolir' && p.tool !== 'marteau') { p.rot = (p.rot + 1) & 3; this.aim(p); this.audio.ui(); return; }
     if (p.tool) return;
     const e = this.game.entAt(p.cx, p.cy);
     if (!e) return;
@@ -647,11 +676,14 @@ class App {
       if (down(3)) this.pipette(p);
       if (down(4) || down(5)) {
         const tools: (string | null)[] = [null, ...BUILDINGS.filter((d) => d.cat && g.unlocked(d)).map((d) => d.key)];
+        if (g.era >= 2) tools.push('marteau');
         p.tool = tools[(tools.indexOf(p.tool) + (down(5) ? 1 : -1) + tools.length) % tools.length];
-        this.audio.ui(); this.hud.toast(`${NAMES[p.id % 4]} : ${p.tool ? B[p.tool].name : 'mains libres'}`);
+        const name = p.tool === 'marteau' ? 'Marteau' : p.tool ? B[p.tool].name : 'mains libres';
+        this.audio.ui(); this.hud.toast(`${NAMES[p.id % 4]} : ${name}`);
         this.aim(p);
       }
       if (down(0)) this.primaryDown(p);
+      else if (b[0] && p.tool === 'marteau' && p.gesture && moved) this.upgradeAt(p);
       else if (b[0] && p.tool && p.tool !== 'demolir' && p.gesture && moved) this.tryPlace(p, false);
       if (up(0)) this.endGesture(p);
       if (down(1)) this.secondaryDown(p);
@@ -720,7 +752,7 @@ class App {
     else if (w.canopy(cellX, cellY) >= TREE_MIN) speed *= 0.72;
     let tx = mx * speed, ty = my * speed;
     const under = g.entAt(cellX, cellY);
-    if (under && under.def.kind === 'belt') { const bs = (BELT_SPEED * 60) / TILE_U; tx += DX[under.rot] * bs; ty += DY[under.rot] * bs; }
+    if (under && under.def.kind === 'belt') { const bs = ((under.path?.speed ?? BELT_SPEED) * 60) / TILE_U; tx += DX[under.rot] * bs; ty += DY[under.rot] * bs; }
     const a = Math.min(1, dt * 13);
     p.vx += (tx - p.vx) * a; p.vy += (ty - p.vy) * a;
     const nx = p.x + p.vx * dt, ny = p.y + p.vy * dt;
@@ -799,7 +831,7 @@ class App {
       }
       this.aim(p0);
       const e = m.over ? g.entAt(p0.cx, p0.cy) : null;
-      this.hover = e && (!p0.tool || p0.tool === 'demolir') ? e : null;
+      this.hover = e && (!p0.tool || p0.tool === 'demolir' || p0.tool === 'marteau') ? e : null;
     } else {
       // écran-titre : la vue dérive lentement autour de la clairière
       this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 6; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4;
@@ -830,8 +862,10 @@ class App {
       }
       if (best < Infinity) g.world.chunk(bestCx, bestCy);
     }
+    // le rendu classique ne connaît pas le marteau : on lui cache l'outil (pas d'aperçu), la surbrillance reste
+    const views = this.players.map((p) => (!this.pixel && p.tool === 'marteau' ? { ...p, color: p.color, tool: null } : p));
     this.renderer.render(g, this.cam, {
-      time: this.time, frame: this.frame, dt, players: this.started ? this.players : [],
+      time: this.time, frame: this.frame, dt, players: this.started ? views : [],
       selected: this.hud.selected, hover: this.hover, rings: this.rings, marker: this.started ? this.marker() : null,
     });
     this.rings = this.rings.filter((r) => this.time - r.t0 < r.dur);
@@ -847,12 +881,26 @@ class App {
     requestAnimationFrame(() => this.loop());
   }
 
+  /** Le prix d'une amélioration, en clair : « 8 Pierre ». */
+  private costText(cost: [number, number][]): string {
+    if (!cost.length) return 'Gratuit';
+    return cost.map(([id, n]) => `${n} ${ITEMS[id].name}`).join(' · ');
+  }
+
   /** Infobulle au curseur : ce qu'on vise et ce que fera le clic. */
   private updateTip(): void {
     const p = this.players[0], m = this.mouse, g = this.game, w = g.world;
     if (!m.over || this.paused) { this.hud.tip(null); return; }
     let html: string | null = null;
     if (p.tool === 'demolir') html = this.hover ? `<b>Démolir : ${this.hover.def.name}</b><span class="k">Tout est remboursé</span>` : null;
+    else if (p.tool === 'marteau') {
+      const res = g.checkUpgrade(p.cx, p.cy);
+      if (!res.ok) html = `<b>Marteau</b><span class="no">${res.reason}</span>`;
+      else {
+        const name = g.entAt(p.cx, p.cy)?.def.name ?? 'Dalle';
+        html = `<b>Refaire en ${ERAS[res.to - 1].name} : ${name}</b><span class="k">${this.costText(res.cost)} · l’ancienne matière revient</span>`;
+      }
+    }
     else if (p.tool) {
       const def = B[p.tool];
       html = p.ok
@@ -894,6 +942,12 @@ class App {
         case 'hand': r.burst('chip', ev.x, ev.y, ITEMS[ev.a].color, 6); break;
         case 'pick': r.burst('spark', ev.x, ev.y, PAL.signalHi, 10); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: PAL.signalHi, size: 1.2, dur: 0.4 }); if (this.started) this.audio.place(1); break;
         case 'place': if (this.started) this.audio.place(ev.a); r.burst('dust', ev.x, ev.y + 0.3, 'rgba(190,180,160,', 3 + Math.min(8, ev.a)); break;
+        case 'upgrade': {
+          if (this.started) this.audio.place(2);
+          const [cr, cg, cb] = hexToRgb(ITEMS[ERAS[ev.a - 1].material].color);
+          r.burst('dust', ev.x, ev.y + 0.3, `rgba(${cr},${cg},${cb},`, 10);
+          break;
+        }
         case 'remove': if (this.started) this.audio.remove(); r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4 + Math.min(8, ev.a)); r.burst('chip', ev.x, ev.y, PAL.steelHi, 5); break;
         case 'quota':
           if (this.started) { this.audio.quota(); this.hud.banner(g); }

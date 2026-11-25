@@ -310,12 +310,12 @@ export class Game {
     return res;
   }
 
-  /** Refait au marteau le bâtiment ou la dalle de la case dans la version de l'ère en cours. La cause en clair si non. */
-  upgrade(x: number, y: number): PlaceResult & { from: number; to: number } {
+  /** Ce que ferait le marteau sur cette case, sans rien changer : refus en clair, ou le prix et la version visée. */
+  checkUpgrade(x: number, y: number): PlaceResult & { from: number; to: number; cost: [number, number][] } {
     const to = Math.min(this.era, MAX_VERSION);
     const e = this.entAt(x, y);
     if (e) {
-      const res = { ok: false, reason: '', from: e.era, to };
+      const res = { ok: false, reason: '', from: e.era, to, cost: [] as [number, number][] };
       if (e.def.kind === 'hub') {
         res.reason = 'La Tour se refait par ses livraisons';
         return res;
@@ -324,24 +324,19 @@ export class Game {
         res.reason = `Déjà à l’ère ${ERAS[e.era - 1].name}`;
         return res;
       }
-      for (const [id, n] of costOf(e.def, to)) {
+      const cost = costOf(e.def, to);
+      for (const [id, n] of cost) {
         if (this.stock[id] < n) {
           res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`;
           return res;
         }
       }
-      for (const [id, n] of costOf(e.def, to)) this.stock[id] -= n;
-      for (const [id, n] of costOf(e.def, e.era)) this.stock[id] += n;
-      e.era = to;
-      e.upgraded = this.tick;
-      this.topoDirty = true;
-      this.version++;
-      this.events.push({ type: 'upgrade', x: e.cx, y: e.cy, a: to });
       res.ok = true;
+      res.cost = cost;
       return res;
     }
     const v = this.world.slab(x, y);
-    const res = { ok: false, reason: '', from: v, to };
+    const res = { ok: false, reason: '', from: v, to, cost: [] as [number, number][] };
     if (!v) {
       res.reason = 'Rien à améliorer ici';
       return res;
@@ -350,18 +345,39 @@ export class Game {
       res.reason = `Déjà à l’ère ${ERAS[v - 1].name}`;
       return res;
     }
-    for (const [id, n] of costOf(B.dalle, to)) {
+    const cost = costOf(B.dalle, to);
+    for (const [id, n] of cost) {
       if (this.stock[id] < n) {
         res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`;
         return res;
       }
     }
+    res.ok = true;
+    res.cost = cost;
+    return res;
+  }
+
+  /** Refait au marteau le bâtiment ou la dalle de la case dans la version de l'ère en cours. La cause en clair si non. */
+  upgrade(x: number, y: number): PlaceResult & { from: number; to: number } {
+    const res = this.checkUpgrade(x, y);
+    if (!res.ok) return res;
+    const to = res.to;
+    const e = this.entAt(x, y);
+    if (e) {
+      for (const [id, n] of costOf(e.def, to)) this.stock[id] -= n;
+      for (const [id, n] of costOf(e.def, res.from)) this.stock[id] += n;
+      e.era = to;
+      e.upgraded = this.tick;
+      this.topoDirty = true;
+      this.version++;
+      this.events.push({ type: 'upgrade', x: e.cx, y: e.cy, a: to });
+      return res;
+    }
     for (const [id, n] of costOf(B.dalle, to)) this.stock[id] -= n;
-    for (const [id, n] of costOf(B.dalle, v)) this.stock[id] += n;
+    for (const [id, n] of costOf(B.dalle, res.from)) this.stock[id] += n;
     this.world.setSlab(x, y, to);
     this.version++;
     this.events.push({ type: 'upgrade', x: x + 0.5, y: y + 0.5, a: to });
-    res.ok = true;
     return res;
   }
 

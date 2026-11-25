@@ -55,8 +55,35 @@ export function buildDemo(g: Game): string[] {
   four.buf![I.argile] = 60; four.buf![I.carbone] = 30;
   const bank = findBank(g);
   if (bank) P('argiliere', bank.x, bank.y);
+  // le marteau : deux machines restées en Bois et une ligne de dalles, refaites en Pierre
+  g.stock[I.pierre] += 200;
+  for (const key of ['scierie', 'charbonniere']) {
+    const e = g.tickers.find((t) => t.def.key === key);
+    if (!e) continue;
+    e.era = 1;
+    g.upgrade(e.x, e.y);
+  }
+  for (const [x, y] of demoSlabLine(g)) {
+    g.world.setSlab(x, y, 1);
+    g.upgrade(x, y);
+  }
   for (let i = 0; i < 1500; i++) g.step();
   return log;
+}
+
+/** Six cases sèches et libres de suite, pour la ligne de dalles refaite au marteau. */
+function demoSlabLine(g: Game): [number, number][] {
+  for (let y = 4; y <= 40; y++) {
+    for (let x = -20; x <= 20; x++) {
+      const line: [number, number][] = [];
+      for (let i = 0; i < 6; i++) {
+        if (!g.canPlace(B.dalle, x + i, y, 0, true).ok) break;
+        line.push([x + i, y]);
+      }
+      if (line.length === 6) return line;
+    }
+  }
+  return [];
 }
 
 /** L'allée de bois tient-elle entièrement sur des cases sèches et libres, à cette hauteur ? */
