@@ -1,7 +1,7 @@
 // L'amélioration au marteau : refaire un bâtiment, un convoyeur ou une dalle dans l'ère en cours.
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { B, I, ITEMS, R } from '../src/sim/data';
+import { B, beltSpeed, I, ITEMS, R } from '../src/sim/data';
 import { serialize, deserialize } from '../src/sim/save';
 
 const run = (g: Game, ticks: number): void => { for (let i = 0; i < ticks; i++) g.step(); };
@@ -123,6 +123,7 @@ describe('marteau sur un convoyeur', () => {
     }
     expect(inserted).toBe(10);
     const carried = (): number => g.paths.reduce((s, p) => s + p.count, 0);
+    const pathOf = (x: number) => g.paths.find((p) => p.tiles.some((t) => t.x === x && t.y === 0))!;
     expect(carried()).toBe(10);
 
     g.stock[I.cuir] = 100;
@@ -131,6 +132,21 @@ describe('marteau sur un convoyeur', () => {
     run(g, 1);                                     // les chemins se refont
     expect(g.paths.length).toBe(2);
     expect(carried()).toBe(10);                    // aucun objet perdu
+    const joined = pathOf(-5);
+    expect(pathOf(-6)).toBe(joined);               // la case améliorée a rejoint le chemin de pierre
+    expect(joined.tiles.length).toBe(5);
+    expect(joined.speed).toBe(beltSpeed(2));
+    expect(pathOf(-9).tiles.length).toBe(3);
+
+    expect(g.upgrade(-8, 0).ok).toBe(true);        // une case au milieu des rondins
+    expect(g.entAt(-8, 0)!.era).toBe(2);
+    run(g, 1);
+    expect(g.paths.length).toBe(4);                // -9 | -8 | -7 | -6..-2
+    expect(pathOf(-9).tiles.length).toBe(1);
+    expect(pathOf(-8).tiles.length).toBe(1);
+    expect(pathOf(-7).tiles.length).toBe(1);
+    expect(pathOf(-6).tiles.length).toBe(5);
+    expect(carried()).toBe(10);
 
     const before = g.delivered[I.pierre];
     run(g, 2400);
