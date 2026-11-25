@@ -46,6 +46,7 @@ export class Ent {
   ptr = 0;
   tx = 0; ty = 0;                    // dernier arbre coupé (scierie) : pour l'animation
   born = 0;                          // pas de simulation de la pose (animation d'apparition)
+  upgraded = -999;                   // pas de simulation de la dernière amélioration (animation)
   pushed = -999;                     // dernier pas où un objet est sorti (animation de la bouche)
   level = 0;                         // étages gagnés (Tour)
   anim = 0;                          // phase d'animation (rendu)
