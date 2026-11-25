@@ -432,7 +432,7 @@ class App {
 
   private placeOne(p: Player, key: string, x: number, y: number, rot: number): boolean {
     const g = this.game;
-    const existed = g.entAt(x, y) !== null || (key === 'dalle' && g.world.slab(x, y) === 1);
+    const existed = g.entAt(x, y) !== null || (key === 'dalle' && g.world.slab(x, y) !== 0);
     const res = g.place(key, x, y, rot, { recipe: p.recipeMem[key], filter: key === 'trieur' && p.filterMem >= 0 ? p.filterMem : undefined });
     if (res.ok && !existed) { p.gesture?.push({ type: 'place', key, x, y, rot }); p.beam = 1; }
     return res.ok;

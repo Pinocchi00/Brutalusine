@@ -2,7 +2,7 @@
 // Le brut de l'automatisation : extraire, transporter, transformer, livrer. Rien ne disparaît.
 
 import {
-  B, BELT_SPEED, CANOPY_UNIT, DEPOSITS, FUEL, I, ITEMS, LOOT_WOOD, NITEMS, R, QUOTAS, TREE_MIN,
+  B, CANOPY_UNIT, DEPOSITS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
   costOf, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
 import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
@@ -87,7 +87,7 @@ export class Game {
 
   private init(): void {
     this.world.ensureArea(-48, -48, 48, 48);
-    for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) this.pave(x, y);
+    for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) this.pave(x, y, 1);
     this.hub = this.spawn(B.tour, -1, -1, 3 as Dir);
   }
 
@@ -109,19 +109,20 @@ export class Game {
     return wood;
   }
 
-  /** Coule une dalle : l'arbre dessous et ceux qui la touchent sont arrachés. */
-  private pave(x: number, y: number): void {
+  /** Coule une dalle de cette ère : l'arbre dessous et ceux qui la touchent sont arrachés. */
+  private pave(x: number, y: number, era: number): void {
     const w = this.world;
     if (w.slab(x, y)) return;
     if (w.takeLoot(x, y)) this.stock[I.bois] += LOOT_WOOD;
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) this.clearTree(x + i, y + j, 0);   // une case de lisière dégagée
-    w.setSlab(x, y, 1);
+    w.setSlab(x, y, era);
   }
 
-  spawn(def: BuildingDef, x: number, y: number, rot: Dir): Ent {
+  spawn(def: BuildingDef, x: number, y: number, rot: Dir, era = def.era): Ent {
     const swap = (rot & 1) === 1 && def.w !== def.h;
     const w = swap ? def.h : def.w, h = swap ? def.w : def.h;
     const e = new Ent(this.nextId++, def, x, y, rot, w, h);
+    e.era = era;
     e.born = this.tick;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.world.setEnt(x + i, y + j, e.id);
     this.ents.set(e.id, e);
@@ -147,8 +148,27 @@ export class Game {
   }
 
   unlocked(def: BuildingDef): boolean { return this.quota >= def.unlock; }
-  affordable(def: BuildingDef): boolean { return def.cost.every(([id, n]) => this.stock[id] >= n); }
+  affordable(def: BuildingDef): boolean { return this.anyVersionPayable(def); }
   count(key: string): number { let n = 0; for (const e of this.tickers) if (e.def.key === key) n++; return n; }
+
+  /** Au moins une version entre l'ère d'apparition et l'ère en cours est-elle payable ? */
+  private anyVersionPayable(def: BuildingDef): boolean {
+    const top = Math.min(Math.max(def.era, this.era), MAX_VERSION);
+    for (let v = def.era; v <= top; v++) {
+      if (costOf(def, v).every(([id, n]) => this.stock[id] >= n)) return true;
+    }
+    return false;
+  }
+
+  /** La version d'un bâtiment neuf : la plus récente payable, ou la plus grande si la pose est gratuite. */
+  versionFor(def: BuildingDef, free = false): number {
+    const top = Math.min(Math.max(def.era, this.era), MAX_VERSION);
+    if (free) return top;
+    for (let v = top; v >= def.era; v--) {
+      if (costOf(def, v).every(([id, n]) => this.stock[id] >= n)) return v;
+    }
+    return def.era;
+  }
 
   /** Peut-on poser ce bâtiment ici ? Donne la cause en clair si non. */
   canPlace(def: BuildingDef, x: number, y: number, rot: number, free = false): PlaceResult {
@@ -176,8 +196,10 @@ export class Game {
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
     if (!free) {
       if (!this.unlocked(def)) { res.reason = 'Pas encore débloqué'; return res; }
-      for (const [id, n] of def.cost) {
-        if (this.stock[id] < n) { res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`; return res; }
+      if (!this.anyVersionPayable(def)) {
+        for (const [id, n] of def.cost) {
+          if (this.stock[id] < n) { res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`; return res; }
+        }
       }
     }
     res.ok = true;
@@ -196,11 +218,13 @@ export class Game {
         return res;
       }
     }
-    if (!opts.free) for (const [id, n] of def.cost) this.stock[id] -= n;
-    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.pave(x + i, y + j);
+    const v = this.versionFor(def, opts.free);
+    if (!opts.free) for (const [id, n] of costOf(def, v)) this.stock[id] -= n;
+    const slabEra = def.kind === 'slab' ? v : 1;      // seule une Dalle posée prend son ère ; le reste est offert en Bois
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.pave(x + i, y + j, slabEra);
     this.topoDirty = true; this.version++;
     if (def.kind === 'slab') { this.events.push({ type: 'place', x: x + 0.5, y: y + 0.5, a: 0 }); return res; }
-    const e = this.spawn(def, x, y, rot as Dir);
+    const e = this.spawn(def, x, y, rot as Dir, v);
     if (def.kind === 'bridge') e.isOut = opts.isOut ?? this.bridgeShouldBeExit(e);
     if (def.kind === 'splitter' && opts.filter !== undefined) e.filter = opts.filter;
     if (opts.recipe && def.recipes.includes(R[opts.recipe]) && this.quota >= R[opts.recipe].unlock) e.recipe = R[opts.recipe];
@@ -230,16 +254,18 @@ export class Game {
   remove(x: number, y: number): RemoveInfo | null {
     const e = this.entAt(x, y);
     if (!e) {
-      if (this.world.slab(x, y)) {
+      const era = this.world.slab(x, y);
+      if (era) {
         if (x >= -3 && x <= 3 && y >= -3 && y <= 3) return null;   // le socle de la Tour reste
         this.world.setSlab(x, y, 0); this.version++;
+        for (const [id, n] of costOf(B.dalle, era)) this.stock[id] += n;
         this.events.push({ type: 'remove', x: x + 0.5, y: y + 0.5, a: 0 });
         return { key: 'dalle', x, y, rot: 0 };
       }
       return null;
     }
     if (e.def.kind === 'hub') return null;
-    for (const [id, n] of e.def.cost) this.stock[id] += n;
+    for (const [id, n] of costOf(e.def, e.era)) this.stock[id] += n;
     if (e.buf) for (let i = 0; i < NITEMS; i++) this.stock[i] += e.buf[i] + e.out![i];
     if (e.working && e.recipe) for (const [id, n] of e.recipe.inputs) this.stock[id] += n;
     if (e.held >= 0) this.stock[e.held]++;
@@ -276,7 +302,7 @@ export class Game {
     }
     for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) w.setEnt(e.x + i, e.y + j, 0);
     e.rot = rot; e.w = fw; e.h = fh;
-    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { this.pave(e.x + i, e.y + j); w.setEnt(e.x + i, e.y + j, e.id); }
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { this.pave(e.x + i, e.y + j, 1); w.setEnt(e.x + i, e.y + j, e.id); }
     if (e.cells) { e.cells = []; for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) e.cells.push(e.x + i, e.y + j); }
     this.topoDirty = true; this.version++;
     this.events.push({ type: 'place', x: e.cx, y: e.cy, a: 1 });
@@ -419,7 +445,7 @@ export class Game {
     if (this.topoDirty) this.rebuildTopology();
     sunAt(this.tick, this.sun);
     const paths = this.paths;
-    for (let i = 0; i < paths.length; i++) paths[i].tick(BELT_SPEED, this);
+    for (let i = 0; i < paths.length; i++) paths[i].tick(paths[i].speed, this);
     const ts = this.tickers;
     for (let i = 0; i < ts.length; i++) this.tickEnt(ts[i]);
     this.tickPower();
@@ -474,7 +500,7 @@ export class Game {
     }
   }
 
-  private draw(e: Ent): number { this.power.demand += e.def.power; return this.power.sat; }
+  private draw(e: Ent): number { this.power.demand += e.def.power * ERA_POWER[e.era - 1]; return this.power.sat; }
 
   private produce(id: number, n: number): void {
     this.stats.prod[id * Stats.WIN + this.stats.cur] += n;
@@ -493,7 +519,7 @@ export class Game {
     }
     const sat = e.def.heat ? 1 : this.draw(e);
     e.status = e.def.heat || sat >= 0.02 ? Status.Working : Status.NoPower;
-    e.progress += sat;
+    e.progress += sat * ERA_SPEED[e.era - 1];
     if (e.progress >= r.time) {
       e.working = false; e.progress = 0; e.done++;
       for (const [id, n] of r.outputs) { e.out![id] += n; e.outCount += n; this.produce(id, n); }
@@ -501,12 +527,25 @@ export class Game {
     }
   }
 
+  /** Le Puits a-t-il encore une case exploitable sous lui ? */
+  private minerHasOre(e: Ent): boolean {
+    const cells = e.cells!, w = this.world;
+    for (let k = 0; k < cells.length; k += 2) {
+      const type = w.deposit(cells[k], cells[k + 1]);
+      if (!type) continue;
+      const d = DEPOSITS[type];
+      if (d && d.item >= 0 && w.amount(cells[k], cells[k + 1]) > 0) return true;
+    }
+    return false;
+  }
+
   private tickMiner(e: Ent): void {
     this.pushOut(e);
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
+    if (!this.minerHasOre(e)) { e.status = Status.NoResource; return; }
     const sat = this.draw(e);
     e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat;
+    e.progress += sat * ERA_SPEED[e.era - 1];
     if (e.progress < 60) return;
     e.progress = 0;
     const cells = e.cells!, n = cells.length >> 1, w = this.world;
@@ -531,7 +570,7 @@ export class Game {
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     const sat = this.draw(e);
     e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat;
+    e.progress += sat * ERA_SPEED[e.era - 1];
     if (e.progress < 120) return;
     e.progress = 0;
     e.out![I.argile]++; e.outCount++; e.done++;
@@ -539,15 +578,8 @@ export class Game {
     this.emit('mine', e.cx, e.cy, I.argile);
   }
 
-  private tickSawmill(e: Ent): void {
-    this.pushOut(e);
-    if (e.outCount >= 4) { e.status = Status.Blocked; return; }
-    const sat = this.draw(e);
-    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat;
-    if (e.progress < 90) return;
-    e.progress = 0;
-    // coupe le plus gros arbre à portée
+  /** Le plus gros arbre à portée de la Scierie, ou null s'il n'y a que des pousses. */
+  private biggestTree(e: Ent): { x: number; y: number; canopy: number } | null {
     const w = this.world, R0 = SAW_RANGE, cx = Math.floor(e.cx), cy = Math.floor(e.cy);
     let best = 0, bx = 0, by = 0;
     for (let j = -R0; j <= R0; j++) for (let i = -R0; i <= R0; i++) {
@@ -555,17 +587,38 @@ export class Game {
       const c = w.canopy(cx + i, cy + j);
       if (c > best) { best = c; bx = cx + i; by = cy + j; }
     }
-    if (best < TREE_MIN) { e.status = Status.NoResource; return; }
-    const left = best - CANOPY_UNIT;
-    w.setCanopy(bx, by, left);
+    return best >= TREE_MIN ? { x: bx, y: by, canopy: best } : null;
+  }
+
+  private tickSawmill(e: Ent): void {
+    this.pushOut(e);
+    if (e.outCount >= 4) { e.status = Status.Blocked; return; }
+    if (e.progress < 0) {                          // en attente d'un arbre : on ne sonde qu'une fois par seconde
+      if ((this.tick + e.id) % 60 !== 0 || !this.biggestTree(e)) { e.status = Status.NoResource; return; }
+      e.progress = 0;                              // trouvé : le cycle démarre dans le même pas
+    } else if (e.progress === 0 && !this.biggestTree(e)) {
+      e.progress = -1;                             // plus rien à couper : on attend une repousse
+      e.status = Status.NoResource;
+      return;
+    }
+    const sat = this.draw(e);
+    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
+    e.progress += sat * ERA_SPEED[e.era - 1];
+    if (e.progress < 90) return;
+    e.progress = 0;
+    const best = this.biggestTree(e);
+    if (!best) { e.progress = -1; e.status = Status.NoResource; return; }
+    const left = best.canopy - CANOPY_UNIT;
+    this.world.setCanopy(best.x, best.y, left);
     e.out![I.bois]++; e.outCount++; e.done++;
-    e.tx = bx + 0.5; e.ty = by + 0.5;
+    e.tx = best.x + 0.5; e.ty = best.y + 0.5;
     this.produce(I.bois, 1);
-    this.emit(left < TREE_MIN ? 'fell' : 'cut', bx + 0.5, by + 0.5, best);
+    this.emit(left < TREE_MIN ? 'fell' : 'cut', best.x + 0.5, best.y + 0.5, best.canopy);
   }
 
   // ============================================================ énergie
   private tickPower(): void {
+    // Les sources d'énergie (Tour, Brûleur, Roue à eau) gardent leur puissance : docs/ERES.md ne la fait pas varier.
     const dt = 1 / 60, p = this.power;
     const demand = p.demand;
     p.demand = 0;
@@ -657,10 +710,11 @@ export class Game {
     }
     for (const e of [...this.tickers, ...this.belts]) {
       if (e.dead) continue;
-      for (const [id, n] of costOf(e.def, e.def.era)) if (id === item) total += n;
+      for (const [id, n] of costOf(e.def, e.era)) if (id === item) total += n;
     }
     for (const c of this.world.list) {
       for (let i = 0; i < CHUNK * CHUNK; i++) {
+        if (c.slab[i]) for (const [id, n] of costOf(B.dalle, c.slab[i])) if (id === item) total += n;
         if (c.deposit[i]) {
           const d = DEPOSITS[c.deposit[i]];
           if (d && d.item === item) total += c.amount[i];

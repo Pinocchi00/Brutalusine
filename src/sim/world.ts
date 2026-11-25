@@ -435,7 +435,10 @@ export class World {
   }
   setSlab(x: number, y: number, v: number): void {
     const c = this.at(x, y)!; const i = ((y & 31) << 5) | (x & 31);
-    if (c.slab[i] !== v) { c.slabCount += v ? 1 : -1; c.slab[i] = v; c.version++; c.urgent = true; }
+    const before = c.slab[i];
+    if (before === v) return;
+    if ((before === 0) !== (v === 0)) c.slabCount += v ? 1 : -1;
+    c.slab[i] = v; c.version++; c.urgent = true;
   }
   setEnt(x: number, y: number, id: number): void { this.at(x, y)!.ent[((y & 31) << 5) | (x & 31)] = id; }
   takeDeposit(x: number, y: number): boolean {

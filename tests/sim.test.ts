@@ -4,11 +4,10 @@ import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, 
 import { Status, type Ent } from '../src/sim/ent';
 import { serialize, deserialize } from '../src/sim/save';
 
-/** Partie de test : tout débloqué, stock illimité. */
+/** Partie de test à l'ère du Bois, stock illimité ; les poses gratuites ignorent le déblocage. */
 function sandbox(seed = 7): Game {
   const g = new Game(seed);
   g.stock.fill(1e6);
-  g.quota = 99;
   return g;
 }
 const run = (g: Game, ticks: number) => { for (let i = 0; i < ticks; i++) g.step(); };
@@ -39,7 +38,7 @@ describe('convoyeurs', () => {
     expect(g.stock[I.pierre]).toBe(before + 1);
   });
 
-  it('débit maximal : 6 objets par seconde, sans perte aux jonctions', () => {
+  it('débit maximal : 3 objets par seconde, sans perte aux jonctions', () => {
     const g = sandbox();
     clear(g, -32, -8, -4, 2);
     line(g, -30, 0, 29);
@@ -50,7 +49,7 @@ describe('convoyeurs', () => {
     const before = g.stock[I.pierre];
     const T = UPS * 30;
     for (let t = 0; t < T; t++) { start.insertAtStart(I.pierre); g.step(); }
-    run(g, UPS * 20);
+    run(g, UPS * 40);                                // à 4 unités par pas, le trajet de 29 cases dure 1 740 pas
     const delivered = g.stock[I.pierre] - before;
     const ideal = (T * BELT_SPEED) / SPACING;
     expect(delivered).toBeGreaterThan(ideal * 0.98);
@@ -177,6 +176,10 @@ describe('machines', () => {
       const x = 40 + (i % 5) * 3, y = 40 + Math.floor(i / 5) * 3;
       expect(g.place('scierie', x, y, 0, { free: true }).ok).toBe(true);
     }
+    for (let i = 0; i < 10; i++) {
+      const x = 40 + (i % 5) * 3, y = 40 + Math.floor(i / 5) * 3;
+      g.world.setCanopy(x + 2, y, 200);              // un arbre à portée : la Scierie travaille
+    }
     run(g, 60);
     expect(g.power.lastDemand).toBe(400);
     expect(g.power.sat).toBeCloseTo(300 / 400, 5);      // la Tour ne fournit que 300 W
@@ -190,6 +193,7 @@ describe('machines', () => {
     const g = sandbox();
     clear(g, 38, 38, 60, 52);
     for (let i = 0; i < 10; i++) g.place('scierie', 40 + (i % 5) * 3, 40 + Math.floor(i / 5) * 3, 0, { free: true });
+    for (let i = 0; i < 10; i++) g.world.setCanopy(42 + (i % 5) * 3, 40 + Math.floor(i / 5) * 3, 200);
     g.place('bruleur', 40, 47, 0, { free: true });
     const b = g.entAt(40, 47)!;
     b.buf![I.bois] = 5;
@@ -393,7 +397,8 @@ describe('performance', () => {
     }
     run(g, 1);
     expect(g.paths.length).toBe(200);
-    for (let t = 0; t < 3300; t++) { for (const p of g.paths) p.insertAtStart(I.pierre); g.step(); }   // jusqu'à saturation
+    // Saturation : 100 cases par chemin à 4 unités par pas demandent 6 000 pas.
+    for (let t = 0; t < 6500; t++) { for (const p of g.paths) p.insertAtStart(I.pierre); g.step(); }
     expect(g.paths.reduce((s, p) => s + p.count, 0)).toBeGreaterThan(55000);
     const t0 = performance.now();
     run(g, 300);
