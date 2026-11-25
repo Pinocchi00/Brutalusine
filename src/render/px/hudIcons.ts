@@ -15,12 +15,13 @@ import { ROCK, boulder } from './outcrops';
 /** Les icônes dessinées pour le HUD. */
 export type HudIconKey =
   | 'belt' | 'puits' | 'kiln' | 'crate' | 'fist'
-  | 'slab' | 'splitter' | 'sorter' | 'sawmill' | 'furnace' | 'burner' | 'tower' | 'demolish' | 'neutral';
+  | 'slab' | 'splitter' | 'sorter' | 'sawmill' | 'furnace' | 'burner' | 'tower' | 'demolish' | 'hammer'
+  | 'neutral';
 
 /** Toutes les clés d'icône, dans l'ordre de la planche. */
 export const HUD_ICON_KEYS: readonly HudIconKey[] = [
   'belt', 'puits', 'kiln', 'crate', 'fist',
-  'slab', 'splitter', 'sorter', 'sawmill', 'furnace', 'burner', 'tower', 'demolish', 'neutral',
+  'slab', 'splitter', 'sorter', 'sawmill', 'furnace', 'burner', 'tower', 'demolish', 'hammer', 'neutral',
 ];
 
 /** L'icône de chaque bâtiment du jeu ; tout le reste tombe sur `neutral`. */
@@ -38,6 +39,7 @@ const BUILDING_ICONS: Readonly<Record<string, HudIconKey>> = {
   bruleur: 'burner',
   tour: 'tower',
   demolir: 'demolish',
+  marteau: 'hammer',
 };
 
 /** L'icône d'un bâtiment du jeu (ou de `poings`, `demolir`) ; `neutral` s'il n'a pas encore de dessin. */
@@ -339,6 +341,25 @@ function paintDemolish(P: Pen): void {
   P.p(15, 14, C.o2);
 }
 
+/** Un marteau de forgeron : tête d'acier, manche de bois, un éclat orange. */
+function paintHammer(P: Pen): void {
+  P.line(5, 24, 16, 12, C.e4, 4);
+  P.line(5, 23, 16, 11, C.e2, 2);
+  P.line(6, 22, 15, 11, C.e1);
+  P.p(6, 24, C.e4);
+  P.p(8, 21, C.e0);
+  P.r(14, 3, 12, 8, C.s2);
+  P.r(14, 3, 12, 2, C.s1);
+  P.r(14, 3, 2, 8, C.s1);
+  P.r(24, 3, 2, 8, C.s3);
+  P.r(14, 9, 12, 2, C.s3);
+  P.r(17, 5, 6, 3, C.s0);
+  P.p(15, 4, C.o1);
+  P.p(26, 2, C.o1);
+  P.p(28, 6, C.o2);
+  P.p(12, 8, C.o1);
+}
+
 /** Un engrenage d'acier à huit dents, un moyeu sombre. */
 function paintNeutral(P: Pen): void {
   const cx = 15;
@@ -372,6 +393,7 @@ const PAINTERS: Readonly<Record<HudIconKey, IconPainter>> = {
   burner: paintBurner,
   tower: paintTower,
   demolish: paintDemolish,
+  hammer: paintHammer,
   neutral: paintNeutral,
 };
 

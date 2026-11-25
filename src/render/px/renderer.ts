@@ -25,7 +25,7 @@ import { BUILDER_ANCHOR, idlePose } from './builderMotion';
 import type { BuilderFrame } from './builderTypes';
 import { buildingSilhouette, buildingSprite, prepareBuildings } from './buildings';
 import { drawPuitsMotion, isBurning, smokeVent } from './buildingAnims';
-import { readEra, type Era } from './eras';
+import { forcedEra, versionEra, type Era } from './eras';
 import {
   TREE_RADIUS,
   canopySolid,
@@ -135,6 +135,14 @@ export function coopScale(chosen: number, fit: number, bounds: { min: number; ma
   return Math.max(bounds.min, Math.min(bounds.max, Math.floor(Math.min(chosen, fit))));
 }
 
+/** Échelle verticale d'un bâtiment `since` pas après son amélioration : se tasse, puis rebondit ; 1 au-delà de 48 pas. */
+export function upgradeSquash(since: number): number {
+  if (since < 0 || since >= 48) return 1;
+  if (since <= 12) return 1 + (0.82 - 1) * (since / 12);
+  if (since <= 30) return 0.82 + (1.08 - 0.82) * ((since - 12) / 18);
+  return 1.08 + (1 - 1.08) * ((since - 30) / 18);
+}
+
 /** La taille de houppier à donner à un arbre selon sa canopée (0-255). */
 function treeSize(canopy: number): 1 | 2 | 3 {
   return canopy < 100 ? 1 : canopy < 190 ? 2 : 3;
@@ -166,7 +174,7 @@ function drawChute(P: Pen, e: Ent): void {
 export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly era: Era;
+  private readonly forced: Era | null;
   private readonly ground: GroundLayer;
   private readonly fx = new PixelFx();
   private readonly queue = new DrawQueue();
@@ -185,11 +193,11 @@ export class PxRenderer {
     if (!ctx) throw new Error('Contexte 2D indisponible');
     this.canvas = canvas;
     this.ctx = ctx;
-    this.era = readEra(window.location.search);
-    this.ground = new GroundLayer({ slabEra: this.era });
+    this.forced = forcedEra(window.location.search);
+    this.ground = this.forced === null ? new GroundLayer() : new GroundLayer({ slabEra: this.forced });
     prepareTrees();
     prepareOutcrops();
-    prepareBuildings(this.era);
+    prepareBuildings();
     this.ground.prepare();
   }
 
@@ -282,7 +290,7 @@ export class PxRenderer {
   /** Ajoute les tapis et les objets qui glissent dessus. */
   private addBelts(f: Frame): void {
     const { g, view, ctx } = f;
-    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem, this.era));
+    this.queue.add('flat', () => drawBelts(ctx, g, view.tileX0, view.tileY0, view.tileX1, view.tileY1, placeholderItem, this.forced));
   }
 
   /** Ajoute les arbres, les pousses et les gisements visibles. */
@@ -446,7 +454,7 @@ export class PxRenderer {
     }
     for (const e of g.tickers) {
       if (e.x - 4 > x || e.x + e.w + 4 < x || e.y - 4 > y || e.y + e.h + 4 < y) continue;
-      const sprite = buildingSilhouette(e.def, e.w, e.h, this.era);
+      const sprite = buildingSilhouette(e.def, e.w, e.h, this.eraOf(g, e));
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
@@ -615,32 +623,60 @@ export class PxRenderer {
     return () => f.ctx.drawImage(rubble.img, x, rubble.y);
   }
 
+  /** L'ère dessinée d'un bâtiment : forcée, sinon sa version, et la Tour suit l'ère du jeu. */
+  private eraOf(g: Game, e: Ent): Era {
+    if (this.forced !== null) return this.forced;
+    return versionEra(e.def.kind === 'hub' ? g.era : e.era);
+  }
+
   /** Ajoute les bâtiments visibles, leur ombre portée, leurs lumières et leur goulotte. */
   private addBuildings(f: Frame): void {
     const { g, ctx, P, now, view } = f;
     for (const e of g.tickers) {
       if (!this.visible(view, e)) continue;
       const burning = isBurning(e);
-      const sprite = buildingSprite(e.def, e.w, e.h, this.era, burning);
+      const era = this.eraOf(g, e);
+      const sprite = buildingSprite(e.def, e.w, e.h, era, burning);
       if (!sprite) continue;
       const X = e.x * TILE_PX - 1;
       const Y = e.y * TILE_PX - sprite.up - 1;
       const foot = (e.y + e.h) * TILE_PX;
-      const silhouette = buildingSilhouette(e.def, e.w, e.h, this.era) ?? sprite;
-      if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, silhouette, X, Y));
+      const bottom = foot + 1;
+      const since = g.tick - e.upgraded;
+      const squash = since < 48 ? upgradeSquash(since) : 1;
+      const silhouette = buildingSilhouette(e.def, e.w, e.h, era) ?? sprite;
+      if (f.fade > 0) {
+        if (squash === 1) this.queue.add('cast', () => castShadow(ctx, silhouette, X, Y));
+        else this.queue.add('cast', () => {
+          ctx.save();
+          ctx.translate(0, bottom);
+          ctx.scale(1, squash);
+          ctx.translate(0, -bottom);
+          castShadow(ctx, silhouette, X, Y);
+          ctx.restore();
+        });
+      }
       if (sprite.lights.length) this.lit.push({ sprite, X, Y });
-      const vent = smokeVent(e.def.key, this.era, sprite.up);
+      const vent = smokeVent(e.def.key, era, sprite.up);
       if (vent && burning && g.tick !== this.lastSmokeTick && Math.random() < f.opts.dt * 4) {
         const color = vent.color === 'dark' ? C.s3 : C.c2;
         this.fx.smoke(e.x * TILE_PX + vent.x, e.y * TILE_PX - sprite.up + vent.y, color, g.wind);
       }
       this.queue.addTall(foot, X, () => {
+        const stretched = squash !== 1;
+        if (stretched) {
+          ctx.save();
+          ctx.translate(0, bottom);
+          ctx.scale(1, squash);
+          ctx.translate(0, -bottom);
+        }
         ctx.drawImage(sprite.img, X, Y);
         if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {
-          drawPuitsMotion(P, this.era, X + 1, Y + 1, sprite.up, e.progress);
+          drawPuitsMotion(P, era, X + 1, Y + 1, sprite.up, e.progress);
         }
         drawLights(P, sprite.lights, X + 1, Y + 1, now);
         if (outputPorts(e).length) drawChute(P, e);
+        if (stretched) ctx.restore();
       });
       f.shown.push({ e, sprite });
     }
@@ -716,6 +752,10 @@ export class PxRenderer {
         this.addDemolish(f, p);
         continue;
       }
+      if (p.tool === 'marteau') {
+        this.addHammer(f, p);
+        continue;
+      }
       if (!p.tool) continue;
       const def = B[p.tool];
       if (!def) continue;
@@ -729,7 +769,7 @@ export class PxRenderer {
         continue;
       }
       const [fw, fh] = g.footprint(def, p.rot);
-      const sprite = buildingSilhouette(def, fw, fh, this.era);
+      const sprite = buildingSilhouette(def, fw, fh, this.forced ?? versionEra(g.versionFor(def)));
       if (sprite) {
         const X = p.ox * TILE_PX - 1;
         const Y = p.oy * TILE_PX - sprite.up - 1;
@@ -775,6 +815,20 @@ export class PxRenderer {
       P.r(X, Y, 1, H, C.red);
       P.r(X + W - 1, Y, 1, H, C.red);
     });
+  }
+
+  /** Les crochets orange du marteau sur le bâtiment ou la dalle visée. */
+  private addHammer(f: Frame, p: PlayerView): void {
+    const e = f.g.entAt(p.cx, p.cy);
+    if (e) {
+      this.queue.add('fx', () => drawBrackets(f.P, e.x, e.y, e.w, e.h, C.o1, f.now));
+      return;
+    }
+    const chunk = f.g.world.at(p.cx, p.cy, false);
+    if (!chunk) return;
+    const i = ((p.cy & 31) << 5) | (p.cx & 31);
+    if (!chunk.slab[i]) return;
+    this.queue.add('fx', () => drawBrackets(f.P, p.cx, p.cy, 1, 1, C.o1, f.now));
   }
 
   /** L'aperçu d'une dalle, qui n'a pas de volume provisoire. */

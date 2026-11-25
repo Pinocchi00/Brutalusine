@@ -324,7 +324,7 @@ export class GroundLayer {
         const inside = cx >= 1 && cx <= CHUNK && cy >= 1 && cy <= CHUNK;
         const c = inside ? chunk : world.at(x, y, false);
         const i = ((y & 31) << 5) | (x & 31);
-        out[cy * CODES + cx] = c ? c.slab[i] | (c.loot[i] << 1) : 0;
+        out[cy * CODES + cx] = c ? c.slab[i] | (c.loot[i] << 2) : 0;
       }
     }
   }

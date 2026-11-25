@@ -93,7 +93,7 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
       loot[ly * CHUNK + lx] = scene.loot(originX + lx, originY + ly) ? 1 : 0;
     }
   }
-  return { seed: 4242, originX, originY, shore, ford, paths: scene.paths, slab, loot };
+  return { seed: 4242, originX, originY, shore, ford, paths: scene.paths, slab, loot, slabEra: 'maquette' };
 }
 
 /** Les indices des pixels dont le RGBA diffère entre deux tampons. */

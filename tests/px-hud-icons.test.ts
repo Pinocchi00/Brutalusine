@@ -46,12 +46,13 @@ describe('icônes du HUD', () => {
   it('traite les outils et les clés inconnues', () => {
     expect(hudIconKey('poings')).toBe('fist');
     expect(hudIconKey('demolir')).toBe('demolish');
+    expect(hudIconKey('marteau')).toBe('hammer');
     expect(hudIconKey('inconnu')).toBe('neutral');
     expect(hudIconKey('')).toBe('neutral');
   });
 
-  it('liste quatorze clés sans doublon', () => {
-    expect(HUD_ICON_KEYS).toHaveLength(14);
-    expect(new Set(HUD_ICON_KEYS).size).toBe(14);
+  it('liste quinze clés sans doublon', () => {
+    expect(HUD_ICON_KEYS).toHaveLength(15);
+    expect(new Set(HUD_ICON_KEYS).size).toBe(15);
   });
 });

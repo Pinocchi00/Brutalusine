@@ -1,7 +1,7 @@
 // Rendu 2D : terrain en cache, ombres, convoyeurs et leurs raccords, objets, bâtiments animés,
 // arbres, bâtisseurs, particules, lumière du jour et de la nuit.
 
-import { B, DX, DY, ITEMS, NITEMS, TILE_U, DEPOSITS, BELT_SPEED, TREE_MIN, type Shape } from '../sim/data';
+import { B, DX, DY, ITEMS, NITEMS, TILE_U, DEPOSITS, TREE_MIN, type Shape } from '../sim/data';
 import type { Game } from '../sim/game';
 import { SAW_RANGE, ACCU_CAP, STORE_CAP } from '../sim/game';
 import { Status, type Ent } from '../sim/ent';
@@ -319,6 +319,31 @@ export class Renderer {
   }
 
   // ------------------------------------------------------- convoyeurs
+  /** Trace un chemin de tapis sur le contexte, en retenant butoirs, amorces, goulottes et ponts. */
+  private traceBelt(c: Ctx, p: BeltPath, ends: number[], starts: number[], hoods: number[], spans: Ent[]): void {
+    const T = p.tiles, t0 = T[0];
+    if (!(t0.def.kind === 'bridge' && t0.isOut)) {
+      c.moveTo(t0.x + 0.5 - DX[t0.inDir] * 0.5, t0.y + 0.5 - DY[t0.inDir] * 0.5);
+      if (t0.nfeed === 0) starts.push(t0.x + 0.5 - DX[t0.rot] * 0.5, t0.y + 0.5 - DY[t0.rot] * 0.5, t0.rot);
+    }
+    for (let k = 0; k < T.length; k++) {
+      const t = T[k], cx = t.x + 0.5, cy = t.y + 0.5;
+      if (t.def.kind === 'bridge') {
+        if (!t.isOut) { c.lineTo(cx, cy); if (t.pair) spans.push(t); }
+        else { c.moveTo(cx, cy); c.lineTo(cx + DX[t.rot] * 0.5, cy + DY[t.rot] * 0.5); }
+        continue;
+      }
+      const ex = cx + DX[t.rot] * 0.5, ey = cy + DY[t.rot] * 0.5;
+      if (t.inDir !== t.rot && t.inDir !== ((t.rot + 2) & 3)) c.arcTo(cx, cy, ex, ey, 0.5); else c.lineTo(ex, ey);
+    }
+    const tl = T[T.length - 1];
+    if (tl.def.kind === 'bridge' && !tl.isOut) return;
+    const bx = tl.x + 0.5 + DX[tl.rot] * 0.5, by = tl.y + 0.5 + DY[tl.rot] * 0.5;
+    if (p.target.path) c.lineTo(bx + DX[tl.rot] * 0.5, by + DY[tl.rot] * 0.5);        // raccord en T : le flux rejoint l'autre tapis
+    else if (p.target.ent) { const k = p.target.ent.def.kind; if (k !== 'splitter') hoods.push(bx, by, tl.rot); else c.lineTo(bx + DX[tl.rot] * 0.5, by + DY[tl.rot] * 0.5); }
+    else ends.push(bx, by, tl.rot);
+  }
+
   private belts(c: Ctx, g: Game, x0: number, y0: number, x1: number, y1: number, o: RenderOpts, detail: boolean): void {
     const paths = g.paths, tick = g.tick;
     const spans: Ent[] = [], ends: number[] = [], starts: number[] = [], hoods: number[] = [];
@@ -328,27 +353,7 @@ export class Renderer {
       const p = paths[i];
       if (p.maxx + 7 < x0 || p.minx - 7 > x1 || p.maxy + 7 < y0 || p.miny - 7 > y1) continue;
       seen.push(p);
-      const T = p.tiles, t0 = T[0];
-      if (!(t0.def.kind === 'bridge' && t0.isOut)) {
-        c.moveTo(t0.x + 0.5 - DX[t0.inDir] * 0.5, t0.y + 0.5 - DY[t0.inDir] * 0.5);
-        if (t0.nfeed === 0) starts.push(t0.x + 0.5 - DX[t0.rot] * 0.5, t0.y + 0.5 - DY[t0.rot] * 0.5, t0.rot);
-      }
-      for (let k = 0; k < T.length; k++) {
-        const t = T[k], cx = t.x + 0.5, cy = t.y + 0.5;
-        if (t.def.kind === 'bridge') {
-          if (!t.isOut) { c.lineTo(cx, cy); if (t.pair) spans.push(t); }
-          else { c.moveTo(cx, cy); c.lineTo(cx + DX[t.rot] * 0.5, cy + DY[t.rot] * 0.5); }
-          continue;
-        }
-        const ex = cx + DX[t.rot] * 0.5, ey = cy + DY[t.rot] * 0.5;
-        if (t.inDir !== t.rot && t.inDir !== ((t.rot + 2) & 3)) c.arcTo(cx, cy, ex, ey, 0.5); else c.lineTo(ex, ey);
-      }
-      const tl = T[T.length - 1];
-      if (tl.def.kind === 'bridge' && !tl.isOut) continue;
-      const bx = tl.x + 0.5 + DX[tl.rot] * 0.5, by = tl.y + 0.5 + DY[tl.rot] * 0.5;
-      if (p.target.path) c.lineTo(bx + DX[tl.rot] * 0.5, by + DY[tl.rot] * 0.5);        // raccord en T : le flux rejoint l'autre tapis
-      else if (p.target.ent) { const k = p.target.ent.def.kind; if (k !== 'splitter') hoods.push(bx, by, tl.rot); else c.lineTo(bx + DX[tl.rot] * 0.5, by + DY[tl.rot] * 0.5); }
-      else ends.push(bx, by, tl.rot);
+      this.traceBelt(c, p, ends, starts, hoods, spans);
     }
     // sorties des aiguillages : un court tronçon jusqu'au tapis voisin
     for (const e of g.tickers) {
@@ -360,9 +365,15 @@ export class Renderer {
     c.strokeStyle = PAL.steelHi; c.lineWidth = 0.84; c.stroke();               // rives
     c.strokeStyle = PAL.dark; c.lineWidth = 0.68; c.stroke();                  // tapis
     if (detail) {
-      const sp = (BELT_SPEED * 60) / TILE_U;
-      c.strokeStyle = '#3B3F48'; c.lineWidth = 0.6; c.setLineDash([0.07, 0.18]); c.lineDashOffset = -((o.time * sp) % 0.25);
-      c.stroke(); c.setLineDash([]);
+      c.strokeStyle = '#3B3F48'; c.lineWidth = 0.6; c.setLineDash([0.07, 0.18]);
+      for (const p of seen) {
+        c.beginPath();
+        this.traceBelt(c, p, [], [], [], []);
+        const sp = (p.speed * 60) / TILE_U;
+        c.lineDashOffset = -((o.time * sp) % 0.25);
+        c.stroke();
+      }
+      c.setLineDash([]);
     }
     // butoirs en bout de ligne morte, amorces en début de ligne
     for (let i = 0; i < ends.length; i += 3) { c.save(); c.translate(ends[i], ends[i + 1]); c.rotate(ends[i + 2] * Math.PI / 2); c.fillStyle = PAL.signal; c.fillRect(-0.1, -0.42, 0.1, 0.84); c.fillStyle = PAL.ink; c.fillRect(-0.1, -0.14, 0.1, 0.07); c.fillRect(-0.1, 0.07, 0.1, 0.07); c.restore(); }

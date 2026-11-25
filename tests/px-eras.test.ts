@@ -3,7 +3,7 @@
  * Un faux crayon enregistre les rectangles et les lumières, sans aucune API du navigateur.
  */
 import { describe, expect, it } from 'vitest';
-import { eraFor, readEra } from '../src/render/px/eras';
+import { eraFor, forcedEra, versionEra } from '../src/render/px/eras';
 import { eraArts } from '../src/render/px/buildings';
 import { towerE1, towerE2 } from '../src/render/px/artTower';
 import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../src/render/px/artWorks';
@@ -62,21 +62,31 @@ function lightKinds(draw: (P: Pen, U: number, L: Light[]) => void): string[] {
   return lights.map((light) => light.k);
 }
 
-describe('readEra', () => {
-  it('donne le Bois quand l’adresse ne dit rien', () => {
-    expect(readEra('')).toBe(1);
+describe('forcedEra', () => {
+  it('ne force rien quand l’adresse ne dit rien', () => {
+    expect(forcedEra('')).toBeNull();
   });
 
   it('lit les deux ères et ignore les autres paramètres', () => {
-    expect(readEra('?ere=1')).toBe(1);
-    expect(readEra('?ere=2')).toBe(2);
-    expect(readEra('?rendu=pixel&ere=2')).toBe(2);
+    expect(forcedEra('?ere=1')).toBe(1);
+    expect(forcedEra('?ere=2')).toBe(2);
+    expect(forcedEra('?rendu=pixel&ere=2')).toBe(2);
   });
 
-  it('retombe sur le Bois pour une valeur invalide', () => {
-    expect(readEra('?ere=3')).toBe(1);
-    expect(readEra('?ere=abc')).toBe(1);
-    expect(readEra('?ere=2.5')).toBe(1);
+  it('ne force rien pour une valeur invalide', () => {
+    expect(forcedEra('?ere=3')).toBeNull();
+    expect(forcedEra('?ere=abc')).toBeNull();
+    expect(forcedEra('?ere=2.5')).toBeNull();
+  });
+});
+
+describe('versionEra', () => {
+  it('dessine la Pierre au-delà de la première version', () => {
+    expect(versionEra(0)).toBe(1);
+    expect(versionEra(1)).toBe(1);
+    expect(versionEra(2)).toBe(2);
+    expect(versionEra(3)).toBe(2);
+    expect(versionEra(8)).toBe(2);
   });
 });
 
