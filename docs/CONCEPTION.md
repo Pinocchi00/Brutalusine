@@ -22,45 +22,42 @@ convoyeur — et l'usine finit par tourner toute seule.
 ## La boucle de jeu
 
 - **Seconde par seconde** : marcher, cliquer, voir le résultat tout de suite.
-- **Quota par quota** (10 à 30 minutes) : une nouvelle matière, de nouveaux bâtiments, **une seule idée
-  nouvelle**.
-- **À long terme** : les paliers croissent de 45 %. La place, l'énergie et les gisements qui s'épuisent
-  deviennent les vraies limites.
+- **Livraison par livraison** (10 à 30 minutes) : la Tour demande une matière, la livrer débloque de nouveaux
+  bâtiments, **une seule idée nouvelle** à la fois.
+- **Ère par ère** : la troisième livraison d'une ère refait la Tour dans la matière suivante ; le marteau refait
+  ensuite chaque bâtiment, un par un, plus rapide et plus gourmand en courant. Le détail : `docs/ERES.md`.
+- **À long terme** : la place, l'énergie et les gisements qui s'épuisent deviennent les vraies limites.
 
-### Les neuf quotas
+### Les livraisons de la démo
 
-| # | Quota | Idée enseignée |
+| Ère | Livraison | Idée enseignée |
 | --- | --- | --- |
-| 1 | Réveil — 30 minerais de fer | un flux : gisement, convoyeur, Tour |
-| 2 | Charbon | transformer : une machine prend une matière, en sort une autre |
-| 3 | Fer | deux entrées dans une machine ; le Répartiteur ; l'énergie |
-| 4 | Charpente — béton et plaques | une chaîne en deux étapes |
-| 5 | Acier | choisir une recette ; le solaire, le jour seulement |
-| 6 | Cuivre — câbles | une ligne longue distance |
-| 7 | Circuits | une machine très gourmande : diversifier l'énergie |
-| 8 | Moteurs | trois lignes qui convergent dans les bonnes proportions |
-| 9 | Première vertèbre | tout converge |
+| Bois | 20 bois | un flux : arbre, Scierie, tapis, Tour |
+| Bois | 40 charbons | transformer : une machine prend une matière, en sort une autre |
+| Bois | 60 pierres — la Tour passe en pierre | extraire un gisement |
+| Pierre | 30 cuirs | chasser, puis trier (la chasse arrive à l'étape suivante) |
+| Pierre | 60 argiles | prendre sur la berge |
+| Pierre | 100 briques — la Tour passe en brique | deux entrées dans le Four |
 
-## Les 24 bâtiments
+## Les bâtiments de la démo
 
-- **Logistique** : Convoyeur, Dalle, Répartiteur, Pont, Trieur, Entrepôt, Lampadaire
-- **Extraction** : Puits, Scierie, Foreuse
-- **Fonte** : Charbonnière, Fonderie (fer, cuivre), Four (chaux, verre), Four à arc
-- **Fabrication** : Presse (plaques, câbles), Bétonnière, Convertisseur, Atelier (circuits, moteurs), Cloître
-- **Énergie** : Brûleur, Héliostat, Éolienne, Turbine, Accumulateur
+- **Logistique** : Convoyeur, Dalle, Stockage, Répartiteur, Trieur
+- **Extraction** : Scierie, Puits, Argilière
+- **Fonte** : Charbonnière, Four (ils chauffent au charbon, sans courant)
+- **Énergie** : Brûleur, Roue à eau
 
-Peu de machines, plusieurs recettes par machine : on apprend une forme, on la réutilise.
+Chaque bâtiment a une version par ère. Les 31 bâtiments prévus et leur allure ère par ère : `docs/ERES.md`.
 
 ## Le monde
 
 - **La jungle** : chaque case porte un arbre ou rien. Un arbre déraciné donne du bois et repousse à sa place,
   le jour — sauf sous une dalle ou contre une dalle. Poser des dalles, c'est gagner du terrain pour de bon.
-- **Les gisements** : des rochers de la couleur du minerai (rouge : fer ; clair : calcaire ; bleu : quartz ;
-  vert : cuivre). Un Puits se pose dessus.
-- **Les débris** : des morceaux du module, autour du départ et, plus rarement, loin dans la jungle. Du fer
-  gratuit pour qui explore.
-- **L'eau** : lac et rivières. On y marche lentement ; une Turbine se pose sur la rive.
-- **Le jour et la nuit** : dix minutes. La nuit, l'usine s'éclaire toute seule ; les Héliostats s'arrêtent.
+- **Les gisements** : la roche, près du départ, donne la pierre ; un Puits se pose dessus. Les autres rochers
+  colorés (quartz, cuivre…) attendent leur ère. L'argile se prend sur la berge, à l'Argilière.
+- **Les débris** : des morceaux de la capsule, autour du départ et, plus rarement, loin dans la jungle. Du bois
+  pour qui explore.
+- **L'eau** : lac et rivières. On y marche lentement ; une Roue à eau se pose sur la rive.
+- **Le jour et la nuit** : dix minutes. La nuit, l'usine s'éclaire toute seule ; elle ne ralentit pas.
 
 ## Direction artistique
 
@@ -85,5 +82,5 @@ Peu de machines, plusieurs recettes par machine : on apprend une forme, on la r�
 
 ## Ce qui n'est pas dans le jeu, volontairement
 
-Pas de Savoir ni d'améliorations, pas de gaz ni de fumée toxique, pas de santé de la jungle, pas de récompense
+Pas de Savoir ni d'arbre de compétences, pas de formules chimiques, pas de gaz ni de fumée toxique, pas de santé de la jungle, pas de récompense
 quotidienne, pas de hasard dans les récompenses.

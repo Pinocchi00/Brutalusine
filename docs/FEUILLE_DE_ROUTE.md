@@ -1,16 +1,23 @@
 # Feuille de route vers la 1.0
 
-## Où en est-on : 0.3
+## Où en est-on
 
-Retour à la 2D, avec un bâtisseur qu'on dirige. 24 bâtiments, 15 recettes, 9 quotas guidés puis paliers
-infinis. Récolte à la main (déraciner, piocher, ramasser), convoyeurs à virages courbes et raccords visibles,
-un dessin animé par bâtiment, cycle jour/nuit, énergie, sauvegarde, coop locale à la manette.
+Le jeu passe des quotas aux **ères** (`docs/ERES.md`). La démo jouable en cours : les ères Bois et Pierre,
+13 bâtiments, la Tour comme inventaire, ses livraisons, le marteau qui refait un bâtiment dans la matière de l'ère,
+et le rendu pixel art (`?rendu=pixel`), où chaque bâtiment se dessine dans sa version.
 
-Retirés à la demande : le Savoir et ses améliorations, les gaz et la fumée toxique, la santé de la jungle,
-les Éventails, la chaîne chimique (acide, hydrogène, engrais).
+Retirés : le Savoir, les formules chimiques et le CO₂, les gaz et la fumée toxique, la santé de la jungle, les neuf
+quotas et le Colosse, le Lampadaire, les plaques de fer.
 
 **Non vérifié à ce jour** : la musique n'a pas été écoutée par un humain ; les manettes n'ont pas été essayées
 sur du matériel réel ; la fluidité sur une grande usine n'a pas été mesurée (seule la simulation l'a été).
+
+## Suite immédiate : finir la démo
+
+- La chasse : les animaux, le Piège, la Tannerie, le cuir (et la bande de cuir des tapis de Pierre)
+- Les épaves et les noyaux comptés ; la burette de graisse
+- Les dessins qui manquent : Piège, Argilière, Tannerie, Roue à eau, la Tour en brique
+- La démo se termine quand la Tour passe en brique
 
 ## 0.4 — Confort de construction
 
@@ -41,10 +48,10 @@ sur du matériel réel ; la fluidité sur une grande usine n'a pas été mesuré
 - Outils complémentaires, repères et messages rapides entre joueurs
 - Partie en réseau
 
-## 0.8 — Le Colosse
+## 0.8 — Les ères suivantes
 
-- Les Vertèbres s'assemblent en mégastructure visible : la fin de partie se construit dans le monde
-- Paliers avec contraintes (palier sans charbon, palier sans Brûleur)
+- Brique, Béton, Fer, Acier, Cuivre, Verre (`docs/ERES.md`), puis des paliers sans fin
+- La surcharge des noyaux et les éclats des lieux remarquables
 - Statistiques complètes : graphiques de production, comparaison avec ses propres records
 
 ## 0.9 — Finition
