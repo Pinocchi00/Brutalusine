@@ -5,7 +5,7 @@ import {
   B, BUILDINGS, CATEGORIES, ERAS, ERA_POWER, ERA_SPEED, ITEMS, MAX_VERSION, NITEMS, RECIPES, costOf, quotaAt,
   type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
-import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
+import { STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
 import { buildingIcon } from '../render/sprites';
 import { hudIconUrl } from '../render/px/hudIcons';
@@ -86,6 +86,7 @@ export class Hud {
   private onClick(ev: MouseEvent): void {
     const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-tool],[data-hands],[data-cat],[data-recipe],[data-filter],[data-codex],[data-act],[data-menu],[data-alert],[data-alert-toggle],[data-steps-toggle],[data-close],[data-go]');
     if (!t) return;
+    if (ev.detail > 0) t.blur();   // un clic de souris ne laisse pas le focus au bouton : Espace met en pause
     const d = t.dataset;
     const g = this.host.game();
     if (d.stepsToggle !== undefined) {
@@ -220,7 +221,7 @@ export class Hud {
       : `<div class="chip" title="${title}"><b>${time}</b>${s.day ? 'jour' : 'nuit'}</div>`;
     $('topbar').innerHTML = `
       ${dial}
-      <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}${p.storeMax ? ` · réserve ${Math.round((100 * p.stored) / p.storeMax)} %` : ''}</div>`;
+      <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}</div>`;
   }
 
   private renderStock(g: Game): void {
@@ -240,7 +241,7 @@ export class Hud {
       const s = e.status;
       if (s !== Status.NoInput && s !== Status.NoPower && s !== Status.NoResource && s !== Status.Blocked) continue;
       const k = e.def.kind;
-      if (k === 'solar' || k === 'hub' || k === 'splitter' || k === 'storage' || k === 'generator') continue;
+      if (k === 'hub' || k === 'splitter' || k === 'storage' || k === 'generator') continue;
       const key = `${s}:${s === Status.NoInput ? e.missing : -1}:${e.def.key}`;
       const cause = s === Status.NoInput ? `il manque ${ITEMS[e.missing]?.name ?? '…'}` : s === Status.NoPower ? 'pas assez de courant' : s === Status.Blocked ? 'sortie bloquée' : 'plus rien à extraire';
       const gr = groups.get(key);
@@ -262,7 +263,7 @@ export class Hud {
   private toolTipbox(b: BuildingDef, g: Game): string {
     const cost = costOf(b, g.versionFor(b)).map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
     const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
-    const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
+    const pw = b.power ? `<span>${['generator', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : `Consomme ${b.power} W`}</span>` : '';
     return `<span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span>`;
   }
 
@@ -324,7 +325,7 @@ export class Hud {
   statusLine(g: Game, e: Ent): { text: string; cls: string } {
     let text = STATUS_TEXT[e.status];
     if (e.status === Status.NoInput && e.missing >= 0) text = `Il manque : ${ITEMS[e.missing].name}`;
-    if (e.status === Status.Working && g.power.sat < 0.999 && e.def.power && !['generator', 'solar', 'wind', 'hydro', 'battery'].includes(e.def.kind)) text = `Au ralenti : ${Math.round(g.power.sat * 100)} % du courant demandé`;
+    if (e.status === Status.Working && g.power.sat < 0.999 && e.def.power && !['generator', 'hydro'].includes(e.def.kind)) text = `Au ralenti : ${Math.round(g.power.sat * 100)} % du courant demandé`;
     if (e.def.kind === 'storage') text = `${e.outCount} / ${STORE_CAP} objets`;
     if (e.def.kind === 'hub') text = 'Reçoit tout ce qui arrive';
     if (e.def.kind === 'splitter') text = e.def.filter ? (e.filter >= 0 ? `Laisse passer : ${ITEMS[e.filter].name}` : 'Choisis l’objet à laisser passer') : 'Répartit le flux';
@@ -361,14 +362,8 @@ export class Hud {
       body += `<p class="meta">Jusqu’à ${Math.round(40 * speed)} bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
     } else if (k === 'generator') {
       body += `<div class="io"><div><span class="eyebrow">Combustible</span>${e.def.fuels.map((id) => itemTag(id, e.buf![id])).join('')}${give}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que l’usine demande.</p>`;
-    } else if (k === 'solar') {
-      body += `<p class="meta">Éclairement : <b>${Math.round(e.light * 100)} %</b> → ${Math.round(e.light * e.def.power)} W</p>`;
-    } else if (k === 'wind') {
-      body += `<p class="meta">Vent : <b>${Math.round(g.wind * 100)} %</b> → ${Math.round(e.flow)} W</p>`;
     } else if (k === 'hydro') {
       body += `<p class="meta">Fournit <b>${e.def.power} W</b> en continu.</p>`;
-    } else if (k === 'battery') {
-      body += `<div class="bar big"><i style="width:${(100 * e.energy / ACCU_CAP).toFixed(0)}%"></i></div><p class="meta">${(e.energy / 1000).toFixed(1)} / ${ACCU_CAP / 1000} kJ · ${e.flow >= 0 ? 'fournit' : 'se charge de'} ${Math.abs(Math.round(e.flow))} W</p>`;
     } else if (k === 'storage') {
       body += `<div class="io"><div><span class="eyebrow">Contenu</span>${ITEMS.filter((it) => e.out![it.id] > 0).map((it) => itemTag(it.id, e.out![it.id])).join('') || '—'}${grab}</div></div>`;
     } else if (k === 'splitter' && e.def.filter) {

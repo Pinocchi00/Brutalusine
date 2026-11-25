@@ -19,6 +19,7 @@ import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render
 import { PAL } from './render/terrain';
 import { hexToRgb } from './render/px/noise';
 import { Hud } from './ui/hud';
+import { costText } from './ui/eraText';
 import { AudioEngine } from './audio/audio';
 
 interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
@@ -38,6 +39,7 @@ interface WorldRenderer {
 const COLORS = PLAYER_COLORS;
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
 const MIN_ZOOM = 16, MAX_ZOOM = 76, REACH = 2.1;
+const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
 
 /** Un bâtisseur : clavier et souris (id 0) ou une manette. */
 class Player implements PlayerView {
@@ -99,11 +101,7 @@ class App {
     this.renderer = this.pixel ? new PxRenderer(this.canvas) : new Renderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
-      tool: () => {
-        const t = this.players[0].tool;
-        // le HUD de ce lot n'a pas encore de bouton marteau (7d) : on le lui cache pour ne pas le casser
-        return t === 'marteau' && !document.querySelector('[data-tool="marteau"]') ? null : t;
-      },
+      tool: () => this.players[0].tool,
       selectTool: (k) => { const p = this.players[0]; p.tool = k; p.task = null; this.hud.select(null); this.audio.ui(); },
       stepDone: (s) => this.stepDone(s),
       locate: (pl) => this.locate(pl),
@@ -424,7 +422,7 @@ class App {
     if (p.tool) { p.gesture = []; p.dragLast = null; this.tryPlace(p, true); return; }
     const e = this.game.entAt(p.cx, p.cy);
     if (e) {
-      const sel = e.def.kind !== 'belt' && e.def.kind !== 'bridge' && e.def.kind !== 'deco' ? e : null;
+      const sel = e.def.kind !== 'belt' && e.def.kind !== 'bridge' ? e : null;
       this.hud.select(sel); if (sel) this.audio.ui();
       return;
     }
@@ -881,12 +879,6 @@ class App {
     requestAnimationFrame(() => this.loop());
   }
 
-  /** Le prix d'une amélioration, en clair : « 8 Pierre ». */
-  private costText(cost: [number, number][]): string {
-    if (!cost.length) return 'Gratuit';
-    return cost.map(([id, n]) => `${n} ${ITEMS[id].name}`).join(' · ');
-  }
-
   /** Infobulle au curseur : ce qu'on vise et ce que fera le clic. */
   private updateTip(): void {
     const p = this.players[0], m = this.mouse, g = this.game, w = g.world;
@@ -895,10 +887,10 @@ class App {
     if (p.tool === 'demolir') html = this.hover ? `<b>Démolir : ${this.hover.def.name}</b><span class="k">Tout est remboursé</span>` : null;
     else if (p.tool === 'marteau') {
       const res = g.checkUpgrade(p.cx, p.cy);
-      if (!res.ok) html = `<b>Marteau</b><span class="no">${res.reason}</span>`;
+      if (!res.ok) html = `<b>Marteau</b><span class="no">${esc(res.reason)}</span>`;
       else {
         const name = g.entAt(p.cx, p.cy)?.def.name ?? 'Dalle';
-        html = `<b>Refaire en ${ERAS[res.to - 1].name} : ${name}</b><span class="k">${this.costText(res.cost)} · l’ancienne matière revient</span>`;
+        html = `<b>Refaire en ${esc(ERAS[res.to - 1].name)} : ${esc(name)}</b><span class="k">${esc(costText(res.cost))} · l’ancienne matière revient</span>`;
       }
     }
     else if (p.tool) {
@@ -906,9 +898,9 @@ class App {
       html = p.ok
         ? p.route
           ? `<b>${def.name} · ${p.route.length} case${p.route.length > 1 ? 's' : ''}</b><span class="${p.routeInto ? 'ok' : 'k'}">${p.routeInto ? 'Raccordé : le flux entrera au bout' : 'Relâche pour poser'}</span><br><span class="k">R : changer le coude · clic droit : annuler</span>`
-          : `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' · glisser : tracer' : ''}${def.kind !== 'slab' && def.kind !== 'deco' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
+          : `<b>${def.name}</b><span class="k">Clic : poser${def.kind === 'belt' || def.kind === 'slab' ? ' · glisser : tracer' : ''}${def.kind !== 'slab' ? ' · R : pivoter' : ''} · clic droit : lâcher</span>`
         : `<b>${def.name}</b><span class="no">${p.reason}</span>`;
-    } else if (this.hover && (this.hover.def.kind === 'belt' || this.hover.def.kind === 'bridge' || this.hover.def.kind === 'deco')) {
+    } else if (this.hover && (this.hover.def.kind === 'belt' || this.hover.def.kind === 'bridge')) {
       html = `<b>${this.hover.def.name}</b><span class="k">${this.hover.def.kind === 'belt' ? 'R : pivoter · ' : ''}Clic droit : démolir · E : copier</span>`;
     } else if (this.hover) {
       const st = this.hud.statusLine(g, this.hover);

@@ -54,7 +54,6 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     if (e.ptr) s.ptr = e.ptr;
     if (e.level) s.level = e.level;
     if (e.done) s.done = e.done;
-    if (e.def.kind === 'solar') s.light = e.light;
     const it = items.get(e.id);
     if (it) s.items = it;
     ents.push(s);

@@ -656,7 +656,8 @@ export class PxRenderer {
           ctx.restore();
         });
       }
-      if (sprite.lights.length) this.lit.push({ sprite, X, Y });
+      // pendant l'amélioration, la lueur est déjà dessinée tassée avec le sprite : pas de lueur à l'ancienne hauteur
+      if (since >= 48 && sprite.lights.length) this.lit.push({ sprite, X, Y });
       const vent = smokeVent(e.def.key, era, sprite.up);
       if (vent && burning && g.tick !== this.lastSmokeTick && Math.random() < f.opts.dt * 4) {
         const color = vent.color === 'dark' ? C.s3 : C.c2;
