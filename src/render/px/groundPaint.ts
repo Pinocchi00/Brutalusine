@@ -31,8 +31,8 @@ export interface GroundSource {
   readonly slab: ArrayLike<number>;
   /** 32×32 cases, indice `ly * 32 + lx`. */
   readonly loot: ArrayLike<number>;
-  /** L'ère des dalles : absente, la dalle de la maquette est peinte à l'identique. */
-  readonly slabEra?: Era;
+  /** L'ère des dalles : forcée, lue sur chaque case si absente, ou `'maquette'` pour la dalle d'origine. */
+  readonly slabEra?: Era | 'maquette';
 }
 
 /** Le nombre de coins d'un côté du champ de rivage. */
@@ -380,11 +380,11 @@ function fillCandidates(out: SegmentPx[], segments: readonly SegmentPx[], tx: nu
   }
 }
 
-/** Un accès sûr à la marge de dalles, en coordonnées locales de case. */
-function slabLookup(src: GroundSource): (lx: number, ly: number) => boolean {
-  return (lx: number, ly: number): boolean => {
-    if (lx < -1 || ly < -1 || lx > CHUNK || ly > CHUNK) return false;
-    return src.slab[(ly + 1) * SLAB_SIDE + lx + 1] !== 0;
+/** Un accès sûr à la marge de dalles, en coordonnées locales de case : 0, 1 ou 2. */
+function slabLookup(src: GroundSource): (lx: number, ly: number) => number {
+  return (lx: number, ly: number): number => {
+    if (lx < -1 || ly < -1 || lx > CHUNK || ly > CHUNK) return 0;
+    return src.slab[(ly + 1) * SLAB_SIDE + lx + 1];
   };
 }
 
@@ -553,18 +553,24 @@ function paintSlabDetails(
   ty0: number,
   tx1: number,
   ty1: number,
-  slabAt: (lx: number, ly: number) => boolean,
+  slabAt: (lx: number, ly: number) => number,
 ): void {
-  const era = src.slabEra;
+  const slabEra = src.slabEra;
   for (let ty = ty0 - 1; ty < ty1; ty++) {
     const ly = ty - src.originY;
     for (let tx = tx0 - 1; tx < tx1; tx++) {
       const lx = tx - src.originX;
-      if (!slabAt(lx, ly)) continue;
-      if (era === undefined) paintSlabTile(out, bounds, tx, ty, lx, ly, slabAt);
-      else paintEraSlabTile(out, bounds, tx, ty, lx, ly, slabAt, era);
+      const value = slabAt(lx, ly);
+      if (!value) continue;
+      if (slabEra === 'maquette') paintSlabTile(out, bounds, tx, ty, lx, ly, slabAt);
+      else paintEraSlabTile(out, bounds, tx, ty, lx, ly, slabAt, slabEra ?? slabEraOf(value));
     }
   }
+}
+
+/** L'ère d'une dalle d'après la valeur de sa case : la pierre pour 2, le bois sinon. */
+function slabEraOf(value: number): Era {
+  return value >= 2 ? 2 : 1;
 }
 
 /** Peint une dalle et ce qui déborde d'elle sur ses voisines du sud et de l'est. */
@@ -575,7 +581,7 @@ function paintSlabTile(
   ty: number,
   lx: number,
   ly: number,
-  slabAt: (lx: number, ly: number) => boolean,
+  slabAt: (lx: number, ly: number) => number,
 ): void {
   const X = tx * TILE_PX;
   const Y = ty * TILE_PX;
@@ -626,7 +632,7 @@ function paintEraSlabTile(
   ty: number,
   lx: number,
   ly: number,
-  slabAt: (lx: number, ly: number) => boolean,
+  slabAt: (lx: number, ly: number) => number,
   era: Era,
 ): void {
   if (era === 1) paintWoodSlabTile(out, bounds, tx, ty);
@@ -759,7 +765,7 @@ function paintEraSlabEdges(
   ty: number,
   lx: number,
   ly: number,
-  slabAt: (lx: number, ly: number) => boolean,
+  slabAt: (lx: number, ly: number) => number,
   era: Era,
 ): void {
   const X = tx * TILE_PX;

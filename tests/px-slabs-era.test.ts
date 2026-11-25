@@ -33,15 +33,19 @@ function diffPixels(a: Uint8ClampedArray, b: Uint8ClampedArray): number[] {
   return out;
 }
 
+/** La valeur d'une case de dalle : un booléen pour 1, un nombre pour une ère précise. */
+type SlabValue = (tx: number, ty: number) => boolean | number;
+
 /** La couleur d'une case de dalle, ou le champ absent quand `era` est `null`. */
-function slabSource(slab: (tx: number, ty: number) => boolean, era: Era | undefined | null): GroundSource {
+function slabSource(slab: SlabValue, era: Era | 'maquette' | undefined | null): GroundSource {
   const shore = new Float64Array(CORNER * CORNER);
   shore.fill(6);
   const ford = new Float64Array(CORNER * CORNER);
   const slabField = new Uint8Array(SLAB_SIDE * SLAB_SIDE);
   for (let ly = -1; ly <= CHUNK; ly++) {
     for (let lx = -1; lx <= CHUNK; lx++) {
-      slabField[(ly + 1) * SLAB_SIDE + lx + 1] = slab(lx, ly) ? 1 : 0;
+      const value = slab(lx, ly);
+      slabField[(ly + 1) * SLAB_SIDE + lx + 1] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
     }
   }
   const loot = new Uint8Array(CHUNK * CHUNK);
@@ -63,7 +67,7 @@ function bigSlab(tx: number, ty: number): boolean {
 }
 
 describe('les dalles d’ère', () => {
-  it('ne change pas un pixel quand l’ère est absente ou indéfinie', () => {
+  it('ne force rien quand l’ère est absente ou indéfinie', () => {
     const absent = slabSource(bigSlab, null);
     const undef = slabSource(bigSlab, undefined);
     const a = paintRange(absent, 0, 0, 8, 8);
@@ -71,12 +75,12 @@ describe('les dalles d’ère', () => {
     expect(diffPixels(a, b)).toEqual([]);
   });
 
-  it('donne le bois, la pierre et le fond sans ère tous différents', () => {
-    const fondo = paintRange(slabSource(bigSlab, null), 0, 0, 8, 8);
+  it('donne le bois, la pierre et la dalle de la maquette tous différents', () => {
+    const maquette = paintRange(slabSource(bigSlab, 'maquette'), 0, 0, 8, 8);
     const bois = paintRange(slabSource(bigSlab, 1), 0, 0, 8, 8);
     const pierre = paintRange(slabSource(bigSlab, 2), 0, 0, 8, 8);
-    expect(diffPixels(bois, fondo).length).toBeGreaterThan(0);
-    expect(diffPixels(pierre, fondo).length).toBeGreaterThan(0);
+    expect(diffPixels(bois, maquette).length).toBeGreaterThan(0);
+    expect(diffPixels(pierre, maquette).length).toBeGreaterThan(0);
     expect(diffPixels(bois, pierre).length).toBeGreaterThan(0);
   });
 
@@ -109,6 +113,28 @@ describe('les dalles d’ère', () => {
         }
       }
     }
+  });
+
+  it('choisit le dessin de chaque case quand aucune ère n’est forcée', () => {
+    const one = (value: number): SlabValue => (tx, ty) => (tx === 2 && ty === 2 ? value : false);
+    for (const value of [1, 2] as const) {
+      const byTile = paintRange(slabSource(one(value), null), 2, 2, 3, 3);
+      const forced = paintRange(slabSource(one(value), value), 2, 2, 3, 3);
+      expect(diffPixels(byTile, forced)).toEqual([]);
+    }
+    expect(diffPixels(
+      paintRange(slabSource(one(1), null), 2, 2, 3, 3),
+      paintRange(slabSource(one(2), null), 2, 2, 3, 3),
+    ).length).toBeGreaterThan(0);
+  });
+
+  it('force une seule ère partout quand elle est imposée', () => {
+    const stone = (tx: number, ty: number): number => (tx === 2 && ty === 2 ? 2 : 0);
+    const wood = (tx: number, ty: number): number => (tx === 2 && ty === 2 ? 1 : 0);
+    expect(diffPixels(
+      paintRange(slabSource(stone, 1), 2, 2, 3, 3),
+      paintRange(slabSource(wood, 1), 2, 2, 3, 3),
+    )).toEqual([]);
   });
 
   it('porte la lèvre au sud sans voisine, et pas avec une voisine', () => {

@@ -5,7 +5,7 @@
 import { BELT_SPEED, DX, DY, TILE_U } from '../../sim/data';
 import type { Game } from '../../sim/game';
 import type { BeltPath } from '../../sim/belts';
-import type { Era } from './eras';
+import { versionEra, type Era } from './eras';
 import { C } from './palette';
 import { pen, type Pen } from './pen';
 import { makeSurface } from './surface';
@@ -318,9 +318,8 @@ export function drawBelts(
   x1: number,
   y1: number,
   itemImg: (id: number) => HTMLCanvasElement,
-  era?: Era,
+  forced: Era | null,
 ): void {
-  const phase = (g.tick * BELT_SPEED / TILE_U) * T;
   const paths = g.paths;
   for (let i = 0; i < paths.length; i++) {
     const p = paths[i];
@@ -330,7 +329,10 @@ export function drawBelts(
       const t = tiles[k];
       if (t.def.kind === 'bridge') continue;
       if (t.x < x0 || t.x > x1 || t.y < y0 || t.y > y1) continue;
-      const img = era === undefined ? beltTileImage(t.inDir, t.rot, phase) : eraBeltTileImage(t.inDir, t.rot, phase, era);
+      const speed = t.path ? t.path.speed : BELT_SPEED;
+      const phase = (g.tick * speed / TILE_U) * T;
+      const era = forced ?? versionEra(t.era);
+      const img = eraBeltTileImage(t.inDir, t.rot, phase, era);
       ctx.drawImage(img, t.x * T, t.y * T);
     }
   }

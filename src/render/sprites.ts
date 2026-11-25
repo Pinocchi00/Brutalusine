@@ -436,7 +436,15 @@ S.foreuse = (c, s) => {
   disc(c, 0, -0.1 - 0.3 * K - 1.5 * K, 0.14, s.act > 0.3 ? PAL.signalHi : PAL.dark);
 };
 
-export function drawSprite(c: Ctx, key: string, s: SpriteState): void { S[key]?.(c, s); }
+export function drawSprite(c: Ctx, key: string, s: SpriteState): void {
+  const draw = S[key];
+  if (draw) {
+    draw(c, s);
+    return;
+  }
+  const height = B[key]?.height ?? 0.6;
+  block(c, -s.w / 2 + 0.04, -s.h / 2 + 0.04, s.w - 0.08, s.h - 0.08, 0, height, PAL.roofHi, PAL.wallLo);
+}
 
 /** Icône d'un bâtiment pour l'interface (image mise en cache). */
 const iconCache = new Map<string, string>();

@@ -62,6 +62,7 @@ function blockSource(scene: Scene, originX: number, originY: number): GroundSour
     paths: scene.paths,
     slab,
     loot: new Uint8Array(CHUNK * CHUNK),
+    slabEra: 'maquette',
   };
 }
 

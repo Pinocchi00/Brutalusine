@@ -110,11 +110,13 @@ export function buildingSilhouette(def: BuildingDef, w: number, h: number, era: 
   return sprite;
 }
 
-/** Dessine à l'avance tous les bâtiments de cette ère, allumés et éteints. */
-export function prepareBuildings(era: Era): void {
+/** Dessine à l'avance tous les bâtiments des deux ères, allumés et éteints. */
+export function prepareBuildings(): void {
   for (const def of BUILDINGS) {
     if (!eraArts(def.key)) continue;
-    buildingSprite(def, def.w, def.h, era);
-    buildingSprite(def, def.w, def.h, era, false);
+    for (const era of [1, 2] as const) {
+      buildingSprite(def, def.w, def.h, era);
+      buildingSprite(def, def.w, def.h, era, false);
+    }
   }
 }
