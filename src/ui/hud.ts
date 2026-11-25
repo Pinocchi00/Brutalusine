@@ -2,7 +2,7 @@
 // reconnaître plutôt que se souvenir (icône + mot), montrer la cause, dévoiler par couches, erreur récupérable.
 
 import {
-  B, BUILDINGS, CATEGORIES, ITEMS, NITEMS, RECIPES, quotaAt,
+  B, BUILDINGS, CATEGORIES, ERAS, ERA_POWER, ERA_SPEED, ITEMS, MAX_VERSION, NITEMS, RECIPES, costOf, quotaAt,
   type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
 import { ACCU_CAP, STORE_CAP, type Game } from '../sim/game';
@@ -15,6 +15,7 @@ import './px/compact.css';
 import { sunDialSvg } from './px/sunDial';
 import { toolHint } from './px/barHint';
 import { stepsToggleLabel } from './px/stepsLabel';
+import { bannerTitle, costText, deliveryLabel } from './eraText';
 
 export interface HudHost {
   game(): Game;
@@ -185,7 +186,7 @@ export class Hud {
       const have = Math.min(n, g.delivered[id]);
       return `<div class="need">${itemTag(id)}<span class="count">${fmt(have)} / ${fmt(n)}</span><div class="bar"><i style="width:${(100 * have / n).toFixed(1)}%"></i></div></div>`;
     }).join('');
-    const html = `<div class="eyebrow">Quota ${String(g.quota + 1).padStart(2, '0')} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${this.quotaSteps(q)}`;
+    const html = `<div class="eyebrow">${esc(deliveryLabel(g.quota))} · ${esc(q.title)}</div><h2>${esc(q.verb)}</h2>${rows}<p class="why">${esc(q.why)}</p>${this.quotaSteps(q)}`;
     if (html !== this.quotaKey) { this.quotaKey = html; $('quota').innerHTML = html; }
   }
 
@@ -230,7 +231,7 @@ export class Hud {
       if (n < 1 && Math.abs(rate) < 0.5) continue;
       html += `<button class="row" data-codex="i:${i}">${itemIcon(ITEMS[i])}<span class="name">${esc(ITEMS[i].name)}</span><span class="rate ${rate < -0.5 ? 'neg' : ''}">${Math.abs(rate) >= 0.5 ? (rate > 0 ? '+' : '−') + Math.abs(Math.round(rate)) + '/min' : ''}</span><b>${fmt(n)}</b></button>`;
     }
-    $('stock').innerHTML = `<div class="eyebrow">${this.pixel ? 'Stock' : 'Ton stock'}</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
+    $('stock').innerHTML = `<div class="eyebrow">Stock de la Tour</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
   }
 
   private renderAlerts(g: Game): void {
@@ -259,7 +260,7 @@ export class Hud {
 
   /** La bulle d'aide d'une case de bâtiment : nom, description, recette, courant et coût. */
   private toolTipbox(b: BuildingDef, g: Game): string {
-    const cost = b.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
+    const cost = costOf(b, g.versionFor(b)).map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
     const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
     const pw = b.power ? `<span>${['generator', 'solar', 'wind', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : b.kind === 'battery' ? '' : `Consomme ${b.power} W`}</span>` : '';
     return `<span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span>`;
@@ -276,18 +277,19 @@ export class Hud {
     // la barre suit l'outil seulement quand il vient de changer (pipette, raccourci) : on reste libre de feuilleter
     if (tool !== this.lastTool) {
       this.lastTool = tool;
-      if (tool && tool !== 'demolir' && B[tool].cat) this.cat = B[tool].cat!;
+      if (tool && tool !== 'demolir' && tool !== 'marteau' && B[tool].cat) this.cat = B[tool].cat!;
     }
     const cats = CATEGORIES.filter((c) => BUILDINGS.some((b) => b.cat === c.key && g.unlocked(b)));
     const list = BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b));
-    const toolDef = tool && tool !== 'demolir' ? B[tool] ?? null : null;
-    const pays = this.pixel && toolDef ? toolDef.cost.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
-    const key = [this.cat, tool, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0)).join(), [...this.fresh].join(), pays].join('|');
+    const toolDef = tool && tool !== 'demolir' && tool !== 'marteau' ? B[tool] ?? null : null;
+    const price = toolDef ? costOf(toolDef, g.versionFor(toolDef)) : [];
+    const pays = this.pixel && toolDef ? price.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
+    const key = [this.cat, tool, g.era, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0) + g.versionFor(b)).join(), [...this.fresh].join(), pays, price.map(([id, n]) => `${id}:${n}`).join()].join('|');
     if (key === this.barKey) return;
     this.barKey = key;
     $('cats').innerHTML = cats.map((c) => `<button class="${c.key === this.cat ? 'on' : ''} ${BUILDINGS.some((b) => b.cat === c.key && this.fresh.has(b.key)) ? 'fresh' : ''}" data-cat="${c.key}">${c.name}</button>`).join('');
     if (this.pixel) {
-      const cost = toolDef && toolDef.cost.length ? ` · ${toolDef.cost.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
+      const cost = price.length ? ` · ${price.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
       const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
       const tools = list.map((b, i) => {
         return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
@@ -296,14 +298,16 @@ export class Hud {
       }).join('');
       const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
       const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
-      $('tools').innerHTML = hint + tools + hands + demolish;
+      const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><img src="${hudIconUrl('marteau')}" alt="" width="64" height="56"><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
+      $('tools').innerHTML = hint + tools + hands + demolish + hammer;
       return;
     }
+    const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M14 44 30 28" stroke="#ff8a3c" stroke-width="6" stroke-linecap="square"/><path d="M30 16 42 28 34 36 22 24Z" fill="#ff8a3c"/></svg><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
     $('tools').innerHTML = list.map((b, i) => {
       return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
         <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${buildingIcon(b.key)}" alt=""><span class="nm">${esc(b.name)}</span>
         ${this.toolTipbox(b, g)}</button>`;
-    }).join('') + `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M17 17 41 41M41 17 17 41" stroke="#ff6a5a" stroke-width="6" stroke-linecap="square"/></svg><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
+    }).join('') + `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M17 17 41 41M41 17 17 41" stroke="#ff6a5a" stroke-width="6" stroke-linecap="square"/></svg><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>` + hammer;
   }
 
   /** Bâtiments de la catégorie affichée, dans l'ordre des touches 1 à 9. */
@@ -332,6 +336,9 @@ export class Hud {
     const e = this.selected!;
     const k = e.def.kind;
     const st = this.statusLine(g, e);
+    const speed = ERA_SPEED[e.era - 1] ?? 1;
+    const drain = ERA_POWER[e.era - 1] ?? 1;
+    const versionEra = e.def.kind === 'hub' ? Math.min(g.era, ERAS.length) : Math.min(Math.max(1, e.era), ERAS.length);
     let body = '';
     const give = '<button class="act" data-act="feed">Donner depuis mon stock</button>', grab = '<button class="act" data-act="take">Prendre la sortie</button>';
     if (k === 'machine') {
@@ -342,16 +349,16 @@ export class Hud {
         body += `<div class="eq">${recipeIcons(r)}</div><p class="note">${esc(recipeWords(r))}. ${esc(r.note)}</p>`;
         body += `<div class="bar big"><i style="width:${(e.working ? (100 * e.progress) / r.time : 0).toFixed(0)}%"></i></div>`;
         body += `<div class="io"><div><span class="eyebrow">Entrées</span>${r.inputs.map(([id, n]) => itemTag(id, `${e.buf![id]}/${n * 2}`)).join('') || '—'}${give}</div><div><span class="eyebrow">Sorties</span>${r.outputs.map(([id]) => itemTag(id, e.out![id])).join('')}${grab}</div></div>`;
-        const perMin = 3600 / r.time;
-        body += `<p class="meta">À plein régime : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} par minute · consomme ${e.def.power} W</p>`;
+        const perMin = (3600 / r.time) * speed;
+        body += `<p class="meta">À plein régime : ${r.outputs.map(([id, n]) => `${(n * perMin).toFixed(0)} ${ITEMS[id].name}`).join(', ')} par minute · consomme ${Math.round(e.def.power * drain)} W</p>`;
       }
     } else if (k === 'miner') {
       let left = 0;
       const cells = e.cells!;
       for (let i = 0; i < cells.length; i += 2) left += g.world.amount(cells[i], cells[i + 1]);
-      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · 60 par minute · consomme ${e.def.power} W</p>`;
+      body += `<p class="meta">Reste sous le Puits : <b>${fmt(left)}</b> · ${Math.round(60 * speed)} par minute · consomme ${Math.round(e.def.power * drain)} W</p>`;
     } else if (k === 'sawmill') {
-      body += `<p class="meta">Jusqu’à 40 bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
+      body += `<p class="meta">Jusqu’à ${Math.round(40 * speed)} bois par minute. Les arbres repoussent là où ils étaient, sauf sous une dalle.</p>${grab}`;
     } else if (k === 'generator') {
       body += `<div class="io"><div><span class="eyebrow">Combustible</span>${e.def.fuels.map((id) => itemTag(id, e.buf![id])).join('')}${give}</div></div><p class="meta">Fournit <b>${Math.round(e.flow)} W</b> sur ${e.def.power}. Ne brûle que ce que l’usine demande.</p>`;
     } else if (k === 'solar') {
@@ -368,10 +375,10 @@ export class Hud {
       body += `<div class="filters">${ITEMS.filter((it) => g.stock[it.id] > 0 || g.made[it.id] || e.filter === it.id).map((it) => `<button class="${e.filter === it.id ? 'on' : ''}" data-filter="${it.id}">${itemIcon(it)}${esc(it.name)}</button>`).join('')}</div>`;
     } else if (k === 'hub') {
       body += `<p class="meta">Énergie fournie : ${e.def.power} W. Objets reçus : ${fmt(e.done)}.</p>`;
-      if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Quota</th><th>Durée</th><th>Bâtiments</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td></tr>`).join('')}</table>`;
+      if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Livraison</th><th>Durée</th><th>Bâtiments</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td></tr>`).join('')}</table>`;
     }
     const html = `<header><div><div class="eyebrow">${esc(CATEGORIES.find((c) => c.key === e.def.cat)?.name ?? 'Monument')}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
-      <div class="status ${st.cls}">${esc(st.text)}</div><p class="desc">${esc(e.def.desc)}</p>${body}`;
+      <div class="status ${st.cls}">${esc(st.text)}</div><p class="desc">${esc(e.def.desc)}</p><p class="meta">Version : ${esc(ERAS[versionEra - 1].name)}</p>${body}`;
     if (!force && html === this.panelKey) return;
     this.panelKey = html;
     $('panel').innerHTML = html;
@@ -383,7 +390,7 @@ export class Hud {
     const done = quotaAt(rec.quota), next = quotaAt(g.quota);
     const unlocked = BUILDINGS.filter((b) => b.cat && b.unlock === g.quota).map((b) => b.name);
     const el = $('banner');
-    el.innerHTML = `<div class="eyebrow">Quota accompli</div><h1>${esc(done.title)}</h1>
+    el.innerHTML = `<div class="eyebrow">${esc(bannerTitle(rec.quota))}</div><h1>${esc(done.title)}</h1>
       <div class="metrics"><span><b>${clock(rec.ticks)}</b>durée</span><span><b>${rec.buildings}</b>bâtiments</span></div>
       <p class="lore">${esc(next.lore)}</p>${unlocked.length ? `<p class="unlock">Nouveau : ${unlocked.map(esc).join(' · ')}</p>` : ''}`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
@@ -423,12 +430,16 @@ export class Hud {
     const where = (r: Recipe) => BUILDINGS.find((b) => b.recipes.includes(r) || (b.kind === 'generator' && r.key.startsWith('combustion') && r.inputs.some(([x]) => b.fuels.includes(x))));
     const recipeCard = (r: Recipe) => `<button class="rcard" data-codex="r:${r.key}"><b>${esc(r.name)}</b> <small>${esc(where(r)?.name ?? '')}</small><div class="eq">${recipeIcons(r)}</div></button>`;
     const known = (r: Recipe) => g.quota >= r.unlock;
+    const anyVersionCosts = (b: BuildingDef, item: number): boolean => {
+      for (let v = b.era; v <= MAX_VERSION; v++) if (costOf(b, v).some(([x]) => x === item)) return true;
+      return false;
+    };
     let html = '';
     if (type === 'i') {
       const it = ITEMS[+id];
       const made = RECIPES.filter((r) => known(r) && r.outputs.some(([x]) => x === it.id));
       const used = RECIPES.filter((r) => known(r) && r.inputs.some(([x]) => x === it.id));
-      const builds = BUILDINGS.filter((b) => g.unlocked(b) && b.cost.some(([x]) => x === it.id));
+      const builds = BUILDINGS.filter((b) => g.unlocked(b) && anyVersionCosts(b, it.id));
       html = `<h2>${itemIcon(it, 28)} ${esc(it.name)}</h2><p>${esc(it.desc)}</p>
         <div class="eyebrow">D’où ça vient</div>${made.map(recipeCard).join('') || '<p class="meta">Se récolte dans le monde : à la main, ou avec un Puits ou une Scierie.</p>'}
         <div class="eyebrow">À quoi ça sert</div>${used.map(recipeCard).join('')}${builds.length ? `<p class="meta">Pour construire : ${builds.map((b) => `<button class="link" data-codex="b:${b.key}">${esc(b.name)}</button>`).join(', ')}</p>` : ''}${!used.length && !builds.length ? '<p class="meta">Rien de connu pour l’instant.</p>' : ''}`;
@@ -438,8 +449,12 @@ export class Hud {
       const icon = this.pixel
         ? `<img src="${hudIconUrl(b.key)}" alt="" width="64" height="56">`
         : `<img src="${buildingIcon(b.key)}" alt="" width="52" height="52">`;
+      const price = costOf(b, g.versionFor(b));
+      const versions: string[] = [];
+      for (let v = b.era; v <= MAX_VERSION; v++) versions.push(`${ERAS[v - 1].name} : ${costText(costOf(b, v))}`);
       html = `<h2>${icon} ${esc(b.name)}</h2><p>${esc(b.desc)}</p>
-        <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${b.cost.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ${b.power} W` : ''}</p>
+        <p class="meta">Emprise ${b.w}×${b.h} · Coût : ${price.map(([x, n]) => itemTag(x, n)).join(' ') || '—'}${b.power ? ` · ${b.power} W` : ''}</p>
+        <p class="meta">${versions.map(esc).join(' · ')}</p>
         ${recs.length ? `<div class="eyebrow">Recettes</div>${recs.map(recipeCard).join('')}` : ''}`;
     } else {
       const r = RECIPES.find((x) => x.key === id)!;

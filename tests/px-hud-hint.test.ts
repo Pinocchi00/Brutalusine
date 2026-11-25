@@ -1,5 +1,5 @@
 /**
- * Vérifie la phrase d'aide de la barre de construction pixel : les cinq cas d'outil,
+ * Vérifie la phrase d'aide de la barre de construction pixel : les six cas d'outil,
  * l'échappement du nom et le repli sur les Poings quand la définition manque.
  */
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,10 @@ describe('phrase d’aide de la barre pixel', () => {
 
   it('décrit la démolition', () => {
     expect(toolHint('demolir', null)).toBe('<b>Démolir</b> · clique ou glisse · tout est remboursé');
+  });
+
+  it('décrit le marteau', () => {
+    expect(toolHint('marteau', null)).toBe('<b>Marteau</b> · clique ou glisse · refait dans la matière de l’ère');
   });
 
   it('décrit le tracé d’un convoyeur', () => {
