@@ -178,9 +178,6 @@ describe('conservation pendant la nuit', () => {
     g.stock[I.argile] = 10;
     g.stock[I.carbone] = 10;
 
-    // L'entrepôt se pose sur des dalles déjà payées : poser puis démolir ne doit rien changer.
-    for (let y = 10; y <= 11; y++) for (let x = 10; x <= 11; x++) expect(g.place('dalle', x, y, 0).ok).toBe(true);
-
     const baseline = snap(g);
     const loot = findLoot(g);
     expect(loot).not.toBeNull();

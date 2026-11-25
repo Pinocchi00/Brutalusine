@@ -275,6 +275,7 @@ describe('lois de conservation', () => {
     let tx = 0, ty = 0;
     search: for (let y = -60; y <= 60; y++) for (let x = -60; x <= 60; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
     g.stock[I.bois] = 100; g.stock[I.pierre] = 100;
+    const before = [g.ledger(I.bois), g.ledger(I.pierre)];
 
     let scierie: Ent | null = null;
     search: for (let dy = -3; dy <= 3 && !scierie; dy++) for (let dx = -3; dx <= 3 && !scierie; dx++) {
@@ -294,8 +295,6 @@ describe('lois de conservation', () => {
     expect(g.place('puits', rock.x - 1, rock.y - 1, 0).ok).toBe(true);
     const puits = g.entAt(rock.x - 1, rock.y - 1)!;
 
-    // La pose crée des dalles offertes sous les bâtiments : le bilan part d'après la construction.
-    const before = [g.ledger(I.bois), g.ledger(I.pierre)];
     g.tick = Math.round(DAY_TICKS * 0.75);        // la nuit : aucun arbre ne repousse
     run(g, 600);
     expect(scierie!.done).toBeGreaterThan(0);

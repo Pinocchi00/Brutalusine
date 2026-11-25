@@ -170,7 +170,7 @@ export function rebuildBelts(g: Game): void {
   }
 
   // 3. chemins : une case prolonge son prédécesseur si celui-ci est son unique alimentation
-  const continues = (e: Ent) => e.nfeed === 1 && e.feeder !== null;
+  const continues = (e: Ent) => e.nfeed === 1 && e.feeder !== null && e.feeder.era === e.era;
   const paths: BeltPath[] = [];
   const build = (start: Ent) => {
     const p = new BeltPath();
@@ -191,7 +191,7 @@ export function rebuildBelts(g: Game): void {
       if (cur.y < p.miny) p.miny = cur.y; if (cur.y > p.maxy) p.maxy = cur.y;
       prevDir = cur.rot;
       const nx: Ent | null = cur.next;
-      if (!nx || !continues(nx) || nx.era !== cur.era) break;
+      if (!nx || !continues(nx)) break;
       cur = nx;
     }
     paths.push(p);

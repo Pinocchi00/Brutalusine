@@ -148,8 +148,16 @@ export class Game {
   }
 
   unlocked(def: BuildingDef): boolean { return this.quota >= def.unlock; }
-  affordable(def: BuildingDef): boolean { return def.cost.every(([id, n]) => this.stock[id] >= n); }
+  affordable(def: BuildingDef): boolean { return this.anyVersionPayable(def); }
   count(key: string): number { let n = 0; for (const e of this.tickers) if (e.def.key === key) n++; return n; }
+
+  /** Au moins une version entre l'ère d'apparition et l'ère en cours est-elle payable ? */
+  private anyVersionPayable(def: BuildingDef): boolean {
+    for (let v = def.era; v <= Math.max(def.era, this.era); v++) {
+      if (costOf(def, v).every(([id, n]) => this.stock[id] >= n)) return true;
+    }
+    return false;
+  }
 
   /** La version d'un bâtiment neuf : la plus récente payable, ou la plus grande si la pose est gratuite. */
   versionFor(def: BuildingDef, free = false): number {
@@ -187,8 +195,10 @@ export class Game {
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
     if (!free) {
       if (!this.unlocked(def)) { res.reason = 'Pas encore débloqué'; return res; }
-      for (const [id, n] of def.cost) {
-        if (this.stock[id] < n) { res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`; return res; }
+      if (!this.anyVersionPayable(def)) {
+        for (const [id, n] of def.cost) {
+          if (this.stock[id] < n) { res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`; return res; }
+        }
       }
     }
     res.ok = true;
@@ -209,7 +219,8 @@ export class Game {
     }
     const v = this.versionFor(def, opts.free);
     if (!opts.free) for (const [id, n] of costOf(def, v)) this.stock[id] -= n;
-    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.pave(x + i, y + j, v);
+    const slabEra = def.kind === 'slab' ? v : 1;      // seule une Dalle posée prend son ère ; le reste est offert en Bois
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.pave(x + i, y + j, slabEra);
     this.topoDirty = true; this.version++;
     if (def.kind === 'slab') { this.events.push({ type: 'place', x: x + 0.5, y: y + 0.5, a: 0 }); return res; }
     const e = this.spawn(def, x, y, rot as Dir, v);
@@ -290,7 +301,7 @@ export class Game {
     }
     for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) w.setEnt(e.x + i, e.y + j, 0);
     e.rot = rot; e.w = fw; e.h = fh;
-    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { this.pave(e.x + i, e.y + j, e.era); w.setEnt(e.x + i, e.y + j, e.id); }
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { this.pave(e.x + i, e.y + j, 1); w.setEnt(e.x + i, e.y + j, e.id); }
     if (e.cells) { e.cells = []; for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) e.cells.push(e.x + i, e.y + j); }
     this.topoDirty = true; this.version++;
     this.events.push({ type: 'place', x: e.cx, y: e.cy, a: 1 });
@@ -578,22 +589,12 @@ export class Game {
     return best >= TREE_MIN ? { x: bx, y: by, canopy: best } : null;
   }
 
-  /** Le prochain pas où la Scierie a le droit de chercher un arbre : une fois par seconde. */
-  private nextTreeSearch(e: Ent): number {
-    const phase = (this.tick + e.id) % 60;
-    return this.tick + (phase === 0 ? 60 : 60 - phase);
-  }
-
   private tickSawmill(e: Ent): void {
     this.pushOut(e);
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     if (e.progress === 0) {
-      if (this.tick < e.searchAt) { e.status = Status.NoResource; return; }
-      if (!this.biggestTree(e)) {
-        e.searchAt = this.nextTreeSearch(e);
-        e.status = Status.NoResource;
-        return;
-      }
+      if ((this.tick + e.id) % 60 !== 0) { e.status = Status.NoResource; return; }
+      if (!this.biggestTree(e)) { e.status = Status.NoResource; return; }
     }
     const sat = this.draw(e);
     e.status = sat < 0.02 ? Status.NoPower : Status.Working;
@@ -601,11 +602,7 @@ export class Game {
     if (e.progress < 90) return;
     e.progress = 0;
     const best = this.biggestTree(e);
-    if (!best) {
-      e.searchAt = this.nextTreeSearch(e);
-      e.status = Status.NoResource;
-      return;
-    }
+    if (!best) { e.status = Status.NoResource; return; }
     const left = best.canopy - CANOPY_UNIT;
     this.world.setCanopy(best.x, best.y, left);
     e.out![I.bois]++; e.outCount++; e.done++;

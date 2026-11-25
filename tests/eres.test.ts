@@ -50,6 +50,20 @@ describe('version des bâtiments', () => {
     expect(no.reason).toBe('Il manque Bois (0/8)');
   });
 
+  it('une pose n’est refusée que si aucune version n’est payable', () => {
+    const g = new Game(18);
+    g.quota = 3;
+    g.stock[I.pierre] = 8;                         // de quoi payer la version 2
+    g.stock[I.bois] = 0;                           // mais pas la version 1
+    clear(g, 8, 8, 16, 16);
+    expect(g.versionFor(B.scierie)).toBe(2);
+    expect(g.affordable(B.scierie)).toBe(true);
+    const res = g.place('scierie', 10, 10, 0);
+    expect(res.ok).toBe(true);
+    expect(g.entAt(10, 10)!.era).toBe(2);
+    expect(g.stock[I.pierre]).toBe(0);
+  });
+
   it('la vitesse de l’ère raccourcit le cycle d’une Charbonnière', () => {
     const fast = new Game(8);
     fast.quota = 3;
@@ -85,7 +99,7 @@ describe('version des bâtiments', () => {
     clear(g, 8, 8, 24, 20);
     const saw = g.spawn(B.scierie, 10, 10, 0, 2);
     g.world.setCanopy(12, 10, 200);                // un arbre à portée
-    run(g, 1);
+    run(g, 60);                                    // la recherche d'arbre n'a lieu qu'une fois par seconde
     expect(g.power.lastDemand).toBe(60);           // 40 W × 1,5
 
     g.remove(10, 10);
@@ -167,6 +181,31 @@ describe('dalles par ère', () => {
     expect(c.slabCount).toBe(before + 1);
     g.world.setSlab(20, 20, 0);
     expect(c.slabCount).toBe(before);
+  });
+
+  it('les dalles coulées sous un bâtiment restent d’ère 1 et ne créent pas de matière', () => {
+    const g = new Game(19);
+    g.quota = 3;
+    const b = g.world.blobs.find((q) => q.type === 1)!;
+    g.world.ensureArea(b.x - 8, b.y - 8, b.x + 8, b.y + 8);
+    for (let y = b.y - 7; y <= b.y + 7; y++) for (let x = b.x - 7; x <= b.x + 7; x++) {
+      const c = g.world.at(x, y)!, i = ((y & 31) << 5) | (x & 31);
+      if (c.deposit[i]) continue;                  // on garde le gisement, on enlève arbres et débris
+      c.canopy[i] = 0; c.cap[i] = 0; c.loot[i] = 0;
+    }
+    g.stock[I.pierre] = 100;
+    g.stock[I.bois] = 100;
+
+    const x0 = b.x - 1, y0 = b.y - 1;
+    expect(g.place('puits', x0, y0, 0).ok).toBe(true);
+    const well = g.entAt(x0, y0)!;
+    expect(well.era).toBe(2);
+    expect(g.stock[I.pierre]).toBe(82);            // 3 × 3 cases × 2 pierres
+    expect(g.world.slab(x0, y0)).toBe(1);          // la dalle sous le Puits est offerte en Bois
+    expect(g.remove(x0, y0)?.key).toBe('puits');
+    for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + 3; x++) expect(g.remove(x, y)?.key).toBe('dalle');
+    expect(g.stock[I.pierre]).toBe(100);
+    expect(g.stock[I.bois]).toBe(100);
   });
 });
 
@@ -251,6 +290,23 @@ describe('sauvegarde et conservation', () => {
     expect(c.world.slab(14, 14)).toBe(2);
     run(a, 120);
     run(c, 120);
+    expect(serialize(c)).toEqual(serialize(a));
+  });
+
+  it('une Scierie sans arbre se recharge au même pas, sans état caché', () => {
+    const play = (): Game => {
+      const g = new Game(20);
+      clear(g, 30, 30, 50, 50);
+      expect(g.place('scierie', 34, 34, 0, { free: true }).ok).toBe(true);
+      run(g, 35);                                  // sauvegarde au milieu d'une seconde
+      return g;
+    };
+    const a = play();
+    const c = deserialize(structuredClone(serialize(a)));
+    a.world.setCanopy(36, 35, TREE_MIN);           // le même arbre, au même pas
+    c.world.setCanopy(36, 35, TREE_MIN);
+    run(a, 600);
+    run(c, 600);
     expect(serialize(c)).toEqual(serialize(a));
   });
 
