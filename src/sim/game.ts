@@ -2,7 +2,7 @@
 // Le brut de l'automatisation : extraire, transporter, transformer, livrer. Rien ne disparaît.
 
 import {
-  B, CANOPY_UNIT, DEPOSITS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
+  B, CANOPY_UNIT, DEPOSITS, ERAS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
   costOf, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
 import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
@@ -22,7 +22,7 @@ export interface Power {
 }
 
 export interface GameEvent {
-  type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand';
+  type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade';
   x: number; y: number; a: number;
 }
 export interface PlaceResult { ok: boolean; reason: string; }
@@ -306,6 +306,61 @@ export class Game {
     if (e.cells) { e.cells = []; for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) e.cells.push(e.x + i, e.y + j); }
     this.topoDirty = true; this.version++;
     this.events.push({ type: 'place', x: e.cx, y: e.cy, a: 1 });
+    res.ok = true;
+    return res;
+  }
+
+  /** Refait au marteau le bâtiment ou la dalle de la case dans la version de l'ère en cours. La cause en clair si non. */
+  upgrade(x: number, y: number): PlaceResult & { from: number; to: number } {
+    const to = Math.min(this.era, MAX_VERSION);
+    const e = this.entAt(x, y);
+    if (e) {
+      const res = { ok: false, reason: '', from: e.era, to };
+      if (e.def.kind === 'hub') {
+        res.reason = 'La Tour se refait par ses livraisons';
+        return res;
+      }
+      if (e.era >= to) {
+        res.reason = `Déjà à l’ère ${ERAS[e.era - 1].name}`;
+        return res;
+      }
+      for (const [id, n] of costOf(e.def, to)) {
+        if (this.stock[id] < n) {
+          res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`;
+          return res;
+        }
+      }
+      for (const [id, n] of costOf(e.def, to)) this.stock[id] -= n;
+      for (const [id, n] of costOf(e.def, e.era)) this.stock[id] += n;
+      e.era = to;
+      e.upgraded = this.tick;
+      this.topoDirty = true;
+      this.version++;
+      this.events.push({ type: 'upgrade', x: e.cx, y: e.cy, a: to });
+      res.ok = true;
+      return res;
+    }
+    const v = this.world.slab(x, y);
+    const res = { ok: false, reason: '', from: v, to };
+    if (!v) {
+      res.reason = 'Rien à améliorer ici';
+      return res;
+    }
+    if (v >= to) {
+      res.reason = `Déjà à l’ère ${ERAS[v - 1].name}`;
+      return res;
+    }
+    for (const [id, n] of costOf(B.dalle, to)) {
+      if (this.stock[id] < n) {
+        res.reason = `Il manque ${ITEMS[id].name} (${Math.floor(this.stock[id])}/${n})`;
+        return res;
+      }
+    }
+    for (const [id, n] of costOf(B.dalle, to)) this.stock[id] -= n;
+    for (const [id, n] of costOf(B.dalle, v)) this.stock[id] += n;
+    this.world.setSlab(x, y, to);
+    this.version++;
+    this.events.push({ type: 'upgrade', x: x + 0.5, y: y + 0.5, a: to });
     res.ok = true;
     return res;
   }
