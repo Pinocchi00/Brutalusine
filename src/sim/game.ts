@@ -592,9 +592,15 @@ export class Game {
   private tickSawmill(e: Ent): void {
     this.pushOut(e);
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
-    if (e.progress === 0) {
-      if ((this.tick + e.id) % 60 !== 0) { e.status = Status.NoResource; return; }
-      if (!this.biggestTree(e)) { e.status = Status.NoResource; return; }
+    if (e.progress < 0) {                          // en attente d'un arbre : on ne sonde qu'une fois par seconde
+      if ((this.tick + e.id) % 60 !== 0 || !this.biggestTree(e)) { e.status = Status.NoResource; return; }
+      e.progress = 0;                              // le cycle démarrera au pas suivant
+      return;
+    }
+    if (e.progress === 0 && !this.biggestTree(e)) {
+      e.progress = -1;                             // plus rien à couper : on attend une repousse
+      e.status = Status.NoResource;
+      return;
     }
     const sat = this.draw(e);
     e.status = sat < 0.02 ? Status.NoPower : Status.Working;
@@ -602,7 +608,7 @@ export class Game {
     if (e.progress < 90) return;
     e.progress = 0;
     const best = this.biggestTree(e);
-    if (!best) { e.status = Status.NoResource; return; }
+    if (!best) { e.progress = -1; e.status = Status.NoResource; return; }
     const left = best.canopy - CANOPY_UNIT;
     this.world.setCanopy(best.x, best.y, left);
     e.out![I.bois]++; e.outCount++; e.done++;

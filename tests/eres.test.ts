@@ -246,6 +246,24 @@ describe('trois défauts corrigés', () => {
     expect(cut).toBe(true);
   });
 
+  it('une Scierie entourée de grands arbres coupe dix fois sans attente', () => {
+    const g = new Game(21);
+    clear(g, 28, 28, 44, 44);
+    expect(g.place('scierie', 34, 34, 0, { free: true }).ok).toBe(true);
+    const mill = g.entAt(34, 34)!;
+    for (let y = 31; y <= 38; y++) for (let x = 31; x <= 38; x++) g.world.setCanopy(x, y, 255);
+
+    let steps = 0;
+    while (mill.done < 10 && steps < 1000) {
+      g.step();
+      steps++;
+      expect(mill.status).toBe(Status.Working);
+      g.take(mill);
+    }
+    expect(mill.done).toBe(10);
+    expect(steps).toBeLessThan(10 * 90 + 10);
+  });
+
   it('l’Argilière déverse son argile sur un tapis jusqu’à la Tour', () => {
     const g = new Game(15);
     clear(g, -8, -2, -2, 4);
