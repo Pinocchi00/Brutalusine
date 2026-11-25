@@ -267,6 +267,67 @@ describe('marteau sur une dalle', () => {
   });
 });
 
+describe('aperçu du marteau (checkUpgrade)', () => {
+  it('pour chaque refus, donne la même raison que upgrade sans rien changer', () => {
+    const g = new Game(112);
+    g.quota = 3;
+    g.stock.fill(0);
+    clear(g, 8, 8, 20, 20);
+    const modern = g.spawn(B.scierie, 10, 10, 0, 2);   // déjà en Pierre
+    const poor = g.spawn(B.scierie, 14, 14, 0, 1);     // pas de pierre pour la refaire
+    g.world.setSlab(18, 18, 2);                        // une dalle déjà en Pierre
+    g.world.setSlab(19, 18, 1);                        // une dalle en Bois sans pierre pour la refaire
+    const cases: [number, number][] = [[12, 12], [-1, -1], [10, 10], [14, 14], [18, 18], [19, 18]];
+
+    for (const [x, y] of cases) {
+      const stockBefore = Array.from(g.stock);
+      const eraBefore = g.era;
+      const versionBefore = g.version;
+      const cellBefore = g.entAt(x, y)?.era ?? g.world.slab(x, y);
+
+      const check = g.checkUpgrade(x, y);
+      expect(check.ok).toBe(false);
+      const real = g.upgrade(x, y);
+      expect(real.ok).toBe(false);
+      expect(check.reason).toBe(real.reason);
+
+      expect(Array.from(g.stock)).toEqual(stockBefore);
+      expect(g.era).toBe(eraBefore);
+      expect(g.version).toBe(versionBefore);
+      expect(g.entAt(x, y)?.era ?? g.world.slab(x, y)).toBe(cellBefore);
+    }
+    expect(modern.era).toBe(2);
+    expect(poor.era).toBe(1);
+  });
+
+  it('pour un cas accepté, annonce le prix et la version sans les appliquer', () => {
+    const g = new Game(113);
+    g.quota = 3;
+    g.stock.fill(0);
+    g.stock[I.bois] = 100;
+    clear(g, 8, 8, 16, 16);
+    expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
+    g.stock[I.pierre] = 100;
+
+    const stockBefore = Array.from(g.stock);
+    const versionBefore = g.version;
+    const check = g.checkUpgrade(10, 10);
+    expect(check.ok).toBe(true);
+    expect(check.from).toBe(1);
+    expect(check.to).toBe(2);
+    expect(check.cost).toEqual([[I.pierre, 8]]);
+    expect(Array.from(g.stock)).toEqual(stockBefore);
+    expect(g.version).toBe(versionBefore);
+    expect(g.entAt(10, 10)!.era).toBe(1);
+
+    const real = g.upgrade(10, 10);
+    expect(real.ok).toBe(check.ok);
+    expect(real.reason).toBe(check.reason);
+    expect(real.from).toBe(check.from);
+    expect(real.to).toBe(check.to);
+  });
+});
+
 describe('la version visée', () => {
   it('reste la Pierre une fois la démo finie', () => {
     const g = new Game(109);
