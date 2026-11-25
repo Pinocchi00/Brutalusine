@@ -1,7 +1,8 @@
 # AGENTS.md — Brutalusine
 
 Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirige et une coop locale.
-« Le brut de l'automatisation » : extraire, transporter, transformer, livrer. Lire d'abord `docs/CONCEPTION.md`.
+« Le brut de l'automatisation » : extraire, transporter, transformer, livrer. Lire d'abord `docs/CONCEPTION.md`,
+puis `docs/ERES.md` (la progression : les ères, la Tour, le marteau ; il fait foi).
 
 ## Commandes
 
@@ -10,22 +11,25 @@ Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirig
 - `npm test` : tests de simulation (Vitest, sans navigateur)
 - `npm run typecheck` : vérification TypeScript
 - `npm run build` : build de production dans `dist/`
-- Console du navigateur en développement : `brutalusine.demo()` pose une usine de démonstration
+- Console du navigateur en développement : `brutalusine.demo()` pose une usine de démonstration à l'ère de la Pierre
+- Rendu pixel : `?rendu=pixel` ; `?ere=1` ou `?ere=2` force une ère pour tout le dessin (contrôle, banc)
 
 ## Architecture
 
 - `src/sim/` : simulation pure, déterministe, à pas fixe (60 pas/s). **Aucun accès au DOM, aucun `Math.random`.**
-  - `data.ts` : objets, recettes, bâtiments, quotas et leurs étapes guidées (tout le contenu est ici)
-  - `game.ts` : `step()`, pose et démolition, récolte à la main, machines, énergie, repousse, quotas, `ledger()`
-  - `belts.ts` : convoyeurs par chemins (coût constant par chemin et par pas)
+  - `data.ts` : objets, recettes, bâtiments, ères (`ERAS`, `ERA_SPEED`, `ERA_POWER`, `costOf`), livraisons de la
+    Tour (`QUOTAS`) et leurs étapes guidées (tout le contenu est ici)
+  - `game.ts` : `step()`, pose (dans la version la plus récente payable) et démolition, amélioration au marteau
+    (`upgrade`, `checkUpgrade`), récolte à la main, machines, énergie, repousse, livraisons, `ledger()`
+  - `belts.ts` : convoyeurs par chemins (coût constant par chemin et par pas ; un chemin n'a qu'une ère)
   - `route.ts` : le tracé d'un convoyeur en L (un seul virage), utilisé par le geste et testé seul
-  - `world.ts` : monde infini par blocs de 32×32 ; chaque case porte un arbre ou rien
-  - `sun.ts`, `chem.ts`, `rng.ts`, `save.ts`, `ent.ts`
+  - `world.ts` : monde infini par blocs de 32×32 ; chaque case porte un arbre ou rien ; une dalle vaut son ère
+  - `sun.ts`, `rng.ts`, `save.ts`, `ent.ts`
 - `src/render/` : rendu Canvas 2D
-  - `terrain.ts` : sol, rivage, gisements, débris, dalles — peints une fois par bloc, en cache
-  - `sprites.ts` : un dessin animé par bâtiment, les planches d'arbres, le bâtisseur
-  - `renderer.ts` : ombres, convoyeurs et raccords, objets, tri nord-sud, particules, jour et nuit
-- `src/ui/` : interface DOM (`hud.ts`, `style.css`) ; le guide est dans `index.html`
+  - `px/` : le rendu pixel art (`?rendu=pixel`), fidèle à `docs/maquettes/heure-doree.html` ; chaque bâtiment,
+    tapis et dalle se dessine dans sa version
+  - `terrain.ts`, `sprites.ts`, `renderer.ts` : l'ancien rendu, par défaut, sans dessin nouveau
+- `src/ui/` : interface DOM (`hud.ts`, `style.css`, `px/` pour le rendu pixel) ; le guide est dans `index.html`
 - `src/audio/audio.ts` : musique générative et bruitages (Web Audio)
 - `src/main.ts` : bâtisseurs (clavier-souris, manettes), gestes, caméra, boucle
 - `src/dev.ts` : outils de développement, jamais chargés en production
@@ -34,45 +38,52 @@ Jeu d'automatisation d'usine en 2D vue de dessus, avec un bâtisseur qu'on dirig
 
 - **2D, pas de 3D.** Il a essayé une version 3D et a préféré la 2D.
 - **Un bâtisseur qu'on dirige** (la petite créature à antennes), qui déracine, pioche et ramasse à la main.
-- **Pas de « Savoir », pas d'améliorations, pas de gaz ni de pollution à gérer, pas de santé de la jungle.**
+- **Des ères, pas un arbre de compétences** (`docs/ERES.md`) : la Tour est l'inventaire ; sa troisième livraison
+  la refait dans la matière de l'ère suivante ; le marteau refait chaque bâtiment un par un.
+- **Pas de « Savoir », pas de formules chimiques, pas de gaz ni de pollution à gérer, pas de santé de la jungle.**
   Le plaisir doit venir des flux, pas de systèmes ajoutés.
 - **Des raccords lisibles** : virages courbes, bouche d'entrée, goulotte de sortie, déversement en T.
 - **Des animations de bâtiments et de convoyeurs soignées**, mais brutes : béton, acier, un accent orange.
 - **Un geste de construction précis** : la caméra ne glisse pas quand on vise avec un outil ; le convoyeur se
   trace en L avec aperçu et se pose au relâchement ; R fait pivoter un bâtiment déjà posé.
+- **PC uniquement** : pas de version mobile.
 
 ## Invariants
 
-1. **Conservation** : chaque recette est équilibrée atome par atome (`tests/chem.test.ts`). Rien ne disparaît :
-   démolir rembourse, les objets en transit retournent au stock. C'est une règle interne ; l'interface n'en
-   parle pas.
-2. **Déterminisme** : même graine et mêmes commandes donnent la même partie. Le hasard passe par `rng.ts`
-   (le rendu, lui, peut utiliser `Math.random` pour ses particules).
-3. **Montrer la cause** : tout refus et toute machine arrêtée disent pourquoi, en clair.
-4. **Un quota, une idée nouvelle.** Ce qu'il demande doit être faisable avec ce qui est déjà débloqué, et le
-   coût de chaque bâtiment payable au moment où il se débloque (un test le vérifie).
+1. **Rien ne disparaît** : démolir ou améliorer rend la matière, les objets en transit retournent au stock, une
+   dalle coulée sous un bâtiment est offerte (ère 1) et ne rend rien. `ledger(objet)` compte chaque objet dans tout
+   le monde ; les tests de conservation (`livraisons`, `eres`, `marteau`) le vérifient. Seules les recettes, la
+   repousse et l'Argilière transforment ou créent de la matière. C'est une règle interne ; l'interface n'en parle pas.
+2. **Déterminisme** : même graine et mêmes commandes donnent la même partie, sauvegarde comprise. Le hasard passe
+   par `rng.ts` (le rendu, lui, peut utiliser `Math.random` pour ses particules). Aucun état de simulation hors de
+   la sauvegarde.
+3. **Montrer la cause** : tout refus et toute machine arrêtée disent pourquoi, en clair. Une machine sans rien à
+   faire ne prend pas de courant.
+4. **Une livraison, une idée nouvelle.** Ce qu'elle demande doit être faisable avec ce qui est déjà débloqué, et le
+   coût de chaque bâtiment payable au moment où il se débloque (`tests/livraisons.test.ts`).
 5. Identifiants de code en anglais, textes du jeu et commentaires en français.
 
 ## Ajouter du contenu
 
 - **Un objet, une recette, un bâtiment** : `src/sim/data.ts`. Une machine à recettes n'a besoin d'aucun code :
-  le type `machine` suffit.
-- **Son dessin** : une fonction dans `S` de `src/render/sprites.ts`. Vue trois quarts : ce qui est haut est
-  décalé vers le nord (`K` par unité de hauteur) et montre sa face sud. Utiliser `block`, `cyl`, `stack`.
-  Le dessin n'est **pas** tourné avec le bâtiment ; seule la goulotte de sortie suit `rot`.
-- **Sa fumée** : une entrée dans `STACKS` de `renderer.ts`.
-- **Son déblocage** : champ `unlock` (nombre de quotas accomplis) et, si besoin, une étape dans `QUOTAS`.
+  le type `machine` suffit. Son prix se déduit de son ère (`costOf`) : 2 unités de la matière de l'ère par case.
+- **Son dessin** : rendu pixel dans `src/render/px/` (un dessin par ère, dans `buildings.ts`) ; ancien rendu, une
+  fonction dans `S` de `src/render/sprites.ts` (sinon un bloc neutre). Vue trois quarts : ce qui est haut est
+  décalé vers le nord et montre sa face sud. Le dessin n'est **pas** tourné ; seule la goulotte de sortie suit `rot`.
+- **Son déblocage** : champ `unlock` (nombre de livraisons accomplies) et, si besoin, une étape dans `QUOTAS`.
 
 ## Vérifier un changement
 
 1. `npm run typecheck` puis `npm test`.
 2. Lancer le jeu et regarder : le rendu ne se teste pas autrement. `brutalusine.demo()` donne une usine
-   complète ; `brutalusine.game.tick += 18000` avance d'une demi-journée.
-3. Pour une modification de prise en main, refaire le premier quota : ramasser un débris, déraciner un arbre,
-   poser un Puits, tracer un convoyeur jusqu'à la Tour.
+   complète ; `brutalusine.game.tick += 18000` avance d'une demi-journée. Pour le rendu pixel, `banc.html` doit
+   rester à 0 écart.
+3. Pour une modification de prise en main, refaire la première livraison : déraciner des arbres, poser une
+   Scierie au milieu des arbres, tracer un convoyeur de sa flèche jusqu'à la Tour, attendre 20 bois.
 
 ## État connu
 
 - La musique n'a pas été écoutée par un humain ; les manettes n'ont pas été essayées sur du matériel réel.
 - La fluidité n'a pas été mesurée sur une très grande usine (seule la simulation l'a été).
+- La démo s'arrête à la Pierre : la chasse (cuir), les épaves, les noyaux et la graisse viennent ensuite.
 - Suite prévue : `docs/FEUILLE_DE_ROUTE.md`.
