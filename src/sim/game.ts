@@ -2,7 +2,7 @@
 // Le brut de l'automatisation : extraire, transporter, transformer, livrer. Rien ne disparaît.
 
 import {
-  B, CANOPY_UNIT, DEPOSITS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, NITEMS, R, QUOTAS, TREE_MIN,
+  B, CANOPY_UNIT, DEPOSITS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
   costOf, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
 import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
@@ -153,7 +153,8 @@ export class Game {
 
   /** Au moins une version entre l'ère d'apparition et l'ère en cours est-elle payable ? */
   private anyVersionPayable(def: BuildingDef): boolean {
-    for (let v = def.era; v <= Math.max(def.era, this.era); v++) {
+    const top = Math.min(Math.max(def.era, this.era), MAX_VERSION);
+    for (let v = def.era; v <= top; v++) {
       if (costOf(def, v).every(([id, n]) => this.stock[id] >= n)) return true;
     }
     return false;
@@ -161,7 +162,7 @@ export class Game {
 
   /** La version d'un bâtiment neuf : la plus récente payable, ou la plus grande si la pose est gratuite. */
   versionFor(def: BuildingDef, free = false): number {
-    const top = Math.max(def.era, this.era);
+    const top = Math.min(Math.max(def.era, this.era), MAX_VERSION);
     if (free) return top;
     for (let v = top; v >= def.era; v--) {
       if (costOf(def, v).every(([id, n]) => this.stock[id] >= n)) return v;
@@ -594,10 +595,8 @@ export class Game {
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     if (e.progress < 0) {                          // en attente d'un arbre : on ne sonde qu'une fois par seconde
       if ((this.tick + e.id) % 60 !== 0 || !this.biggestTree(e)) { e.status = Status.NoResource; return; }
-      e.progress = 0;                              // le cycle démarrera au pas suivant
-      return;
-    }
-    if (e.progress === 0 && !this.biggestTree(e)) {
+      e.progress = 0;                              // trouvé : le cycle démarre dans le même pas
+    } else if (e.progress === 0 && !this.biggestTree(e)) {
       e.progress = -1;                             // plus rien à couper : on attend une repousse
       e.status = Status.NoResource;
       return;

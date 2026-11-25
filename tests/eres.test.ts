@@ -64,6 +64,20 @@ describe('version des bâtiments', () => {
     expect(g.stock[I.pierre]).toBe(0);
   });
 
+  it('une Tour en brique ne fabrique pas de version Brique', () => {
+    const g = new Game(22);
+    g.quota = 6;                                   // ère de la Brique
+    g.stock[I.brique] = 100;
+    g.stock[I.pierre] = 100;
+    clear(g, 8, 8, 16, 16);
+    expect(g.era).toBe(3);
+    expect(g.versionFor(B.scierie)).toBe(2);
+    expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
+    expect(g.entAt(10, 10)!.era).toBe(2);
+    expect(g.stock[I.pierre]).toBe(92);            // 8 pierres pour la version 2
+    expect(g.stock[I.brique]).toBe(100);           // aucune brique dépensée
+  });
+
   it('la vitesse de l’ère raccourcit le cycle d’une Charbonnière', () => {
     const fast = new Game(8);
     fast.quota = 3;
@@ -143,6 +157,32 @@ describe('tapis par ère', () => {
     expect(g.paths.map((p) => p.era).sort((a, b) => a - b)).toEqual([1, 2]);
 
     const start = g.paths.find((p) => p.tiles[0].x === -7)!;
+    const before = g.delivered[I.pierre];
+    let inserted = 0;
+    for (let t = 0; t < 1200 && inserted < 10; t++) {
+      if (t % 20 === 0 && start.insertAtStart(I.pierre)) inserted++;
+      g.step();
+    }
+    expect(inserted).toBe(10);
+    run(g, 1200);
+    expect(g.delivered[I.pierre] - before).toBe(10);
+    expect(g.paths.reduce((s, p) => s + p.count, 0)).toBe(0);
+  });
+
+  it('un pont dont l’entrée est en version 1 et la sortie en version 2 laisse tout passer', () => {
+    const g = new Game(23);
+    clear(g, -12, -4, -2, 4);
+    const bridge = { ...B.convoyeur, key: 'essai', kind: 'bridge' as const };
+    const entry = g.spawn(bridge, -8, 0, 0, 1);
+    const exit = g.spawn(bridge, -5, 0, 0, 2);
+    exit.isOut = true;
+    for (let x = -4; x <= -2; x++) g.spawn(B.convoyeur, x, 0, 0, 2);
+    run(g, 1);
+    expect(entry.path).not.toBe(null);
+    expect(entry.era).toBe(1);
+    expect(exit.era).toBe(2);
+
+    const start = entry.path!;
     const before = g.delivered[I.pierre];
     let inserted = 0;
     for (let t = 0; t < 1200 && inserted < 10; t++) {

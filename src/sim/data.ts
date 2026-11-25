@@ -110,6 +110,9 @@ export function beltSpeed(era: number): number {
   return Math.round(BELT_SPEED * ERA_SPEED[era - 1]);
 }
 
+/** Dernière ère dont les bâtiments sont conçus : la démo s'arrête à la Pierre. */
+export const MAX_VERSION = 2;
+
 /** Ce que coûte la version `era` d'un bâtiment. */
 export function costOf(def: BuildingDef, era: number): [number, number][] {
   if (def.kind === 'hub') return [];
