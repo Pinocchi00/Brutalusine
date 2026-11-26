@@ -112,7 +112,7 @@ export function outputPorts(e: Ent): [number, number, number][] {
   if (k === 'splitter') {
     return [3, 0, 1].map((turn) => { const d = (e.rot + turn) & 3; return [e.x + DX[d], e.y + DY[d], d] as [number, number, number]; });
   }
-  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage') {
+  if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'trap' || k === 'storage') {
     const d = e.rot;
     const mx = e.x + ((e.w - 1) >> 1), my = e.y + ((e.h - 1) >> 1);
     if (d === 0) return [[e.x + e.w, my, d]];

@@ -12,6 +12,7 @@ function producedBy(id: number, index: number): boolean {
     if (b.kind === 'sawmill' && id === I.bois) return true;
     if (b.kind === 'clay' && id === I.argile) return true;
     if (b.kind === 'miner' && id === I.pierre) return true;
+    if (b.kind === 'trap' && (id === I.peau || id === I.graisse || id === I.os)) return true;
     return b.recipes.some((r) => r.unlock <= index && r.outputs.some(([x]) => x === id));
   });
 }
@@ -53,11 +54,17 @@ function findTree(g: Game): { x: number; y: number } | null {
 }
 
 describe('les livraisons', () => {
-  it('chaque livraison, sauf la chasse à l’étape 8, est atteignable avec ce qui est débloqué', () => {
+  it('chaque livraison est atteignable avec ce qui est débloqué', () => {
     QUOTAS.forEach((q, index) => {
-      if (index === 3) return;                        // le cuir demandera la chasse, à l'étape 8 du projet
       for (const [id] of q.need) expect(producedBy(id, index), `${q.title} · ${ITEMS[id].name}`).toBe(true);
     });
+  });
+
+  it('l’Argilière se débloque après les cuirs, le Four après l’argile', () => {
+    expect(B.argiliere.unlock).toBe(4);
+    expect(B.tannerie.unlock).toBe(3);
+    expect(B.piege.unlock).toBe(3);
+    expect(B.four.unlock).toBe(5);
   });
 
   it('chaque bâtiment posable coûte des objets déjà obtenables à son déblocage', () => {

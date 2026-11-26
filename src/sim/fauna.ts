@@ -16,6 +16,12 @@ export const SPAWN_MIN_DIST = 28;
 export const RESPAWN_TICKS = 1200;
 /** Une zone est un bloc de 32×32 ; ce rayon donne un carré de 8×8 zones autour du départ. */
 export const ZONE_RANGE = 4;
+/** Portée d'attraction d'un Piège, en cases depuis son centre. */
+export const TRAP_RANGE = 6;
+/** Pas nécessaires à un Piège de version 1 pour prendre une bête. */
+export const TRAP_TICKS = 900;
+/** Objets que la sortie d'un Piège peut contenir avant de se bloquer. */
+export const TRAP_OUT_MAX = 6;
 
 const ZONES_PER_SIDE = ZONE_RANGE * 2;
 const DRIFT_MIN = 40 * 60;
@@ -57,6 +63,12 @@ export interface Zone {
   respawn: number;
   count: number;
 }
+
+/** La position d'un Piège vue par la faune : son coin nord-ouest et sa taille. */
+export interface TrapBait { x: number; y: number; w: number; h: number; }
+
+/** Le bilan d'une attraction : bêtes à portée avec un chemin et bêtes à portée sans chemin. */
+export interface AttractResult { reachable: number; noPath: number; }
 
 interface Tile { x: number; y: number; }
 
@@ -148,12 +160,12 @@ export class Fauna {
   }
 
   /** Un pas de faune : dérive des ancres, reconstitutions, puis comportement des bêtes. */
-  step(world: World): void {
+  step(world: World, traps: readonly TrapBait[] = []): void {
     for (const z of this.zones) {
       if (!z.herd) continue;
       z.drift--;
       if (z.drift <= 0) {
-        this.moveAnchor(world, z);
+        this.moveAnchor(world, z, traps);
         z.drift = this.rng.int(DRIFT_MIN, DRIFT_MAX);
       }
       z.respawn--;
@@ -177,6 +189,115 @@ export class Fauna {
       }
     }
     return best;
+  }
+
+  /** La bête dont le centre est à `r` cases au plus du bord d'un rectangle, ou null. */
+  beastNearRect(x: number, y: number, w: number, h: number, r: number): Beast | null {
+    let best: Beast | null = null;
+    let bestD = r + 1e-9;
+    for (const b of this.beasts) {
+      const d = rectDistance(b.x, b.y, x, y, w, h);
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  }
+
+  /**
+   * Attire les bêtes qui broutent à portée par le plus court chemin praticable jusqu'au bord d'un Piège.
+   * Renvoie le nombre de bêtes à portée avec un chemin et celui sans chemin.
+   */
+  attract(world: World, x: number, y: number, w: number, h: number): AttractResult {
+    return this.scan(world, x, y, w, h, true);
+  }
+
+  /** Le bilan d'une portée sans rien changer : bêtes à portée avec un chemin et bêtes sans chemin. */
+  reachability(world: World, x: number, y: number, w: number, h: number): AttractResult {
+    return this.scan(world, x, y, w, h, false);
+  }
+
+  /**
+   * Compte les bêtes à portée du centre d'un Piège et cherche leur chemin. Celles qui broutent sont
+   * attirées quand `apply` est vrai ; celles qui marchent gardent leur cible, seul le chemin est cherché.
+   */
+  private scan(world: World, x: number, y: number, w: number, h: number, apply: boolean): AttractResult {
+    const cx = x + w / 2, cy = y + h / 2;
+    let reachable = 0;
+    let noPath = 0;
+    for (const b of this.beasts) {
+      if (Math.hypot(b.x - cx, b.y - cy) > TRAP_RANGE) continue;
+      const path = this.trapPath(world, Math.floor(b.x), Math.floor(b.y), x, y, w, h);
+      if (!path) { noPath++; continue; }
+      reachable++;
+      if (!apply || b.state !== 'graze') continue;
+      const t = this.segmentTarget(b, path);
+      b.tx = t.x + 0.5;
+      b.ty = t.y + 0.5;
+      b.state = 'walk';
+    }
+    return { reachable, noPath };
+  }
+
+  /** La cible d'un pas : le centre de la case si la bête n'y est pas, sinon la fin du premier segment droit. */
+  private segmentTarget(b: Beast, path: readonly Tile[]): Tile {
+    const start = path[0];
+    if (Math.abs(b.x - (start.x + 0.5)) > 0.05 || Math.abs(b.y - (start.y + 0.5)) > 0.05) return start;
+    if (path.length < 2) return start;
+    const dx = path[1].x - start.x;
+    const dy = path[1].y - start.y;
+    let end = path[1];
+    for (let i = 2; i < path.length; i++) {
+      if (path[i].x - path[i - 1].x !== dx || path[i].y - path[i - 1].y !== dy) break;
+      end = path[i];
+    }
+    return end;
+  }
+
+  /**
+   * Le plus court chemin d'une case à une case du bord d'un Piège, par parcours en largeur borné.
+   * Quatre voisins dans un ordre fixe : le résultat est le même à chaque fois.
+   */
+  private trapPath(world: World, sx: number, sy: number, x: number, y: number, w: number, h: number): Tile[] | null {
+    const margin = TRAP_RANGE + 4;
+    const cx = x + w / 2, cy = y + h / 2;
+    const minX = Math.floor(cx) - margin, maxX = Math.floor(cx) + margin;
+    const minY = Math.floor(cy) - margin, maxY = Math.floor(cy) + margin;
+    if (sx < minX || sx > maxX || sy < minY || sy > maxY) return null;
+    const stride = maxY - minY + 1;
+    const key = (px: number, py: number): number => (px - minX) * stride + (py - minY);
+    const onBorder = (px: number, py: number): boolean =>
+      px >= x - 1 && px <= x + w && py >= y - 1 && py <= y + h
+      && !(px >= x && px < x + w && py >= y && py < y + h);
+
+    const cells = new Map<number, Tile>();
+    const came = new Map<number, number>();
+    const startKey = key(sx, sy);
+    cells.set(startKey, { x: sx, y: sy });
+    came.set(startKey, -1);
+    const queue: number[] = [startKey];
+    const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]] as const;
+    let goal = -1;
+    for (let head = 0; head < queue.length; head++) {
+      const k = queue[head];
+      const c = cells.get(k)!;
+      if (onBorder(c.x, c.y)) { goal = k; break; }
+      for (const [dx, dy] of dirs) {
+        const nx = c.x + dx, ny = c.y + dy;
+        if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
+        const nk = key(nx, ny);
+        if (came.has(nk)) continue;
+        if (!passable(world, nx, ny)) continue;
+        came.set(nk, k);
+        cells.set(nk, { x: nx, y: ny });
+        queue.push(nk);
+      }
+    }
+    if (goal < 0) return null;
+
+    const path: Tile[] = [];
+    for (let k = goal; k !== startKey; k = came.get(k)!) path.push(cells.get(k)!);
+    path.push(cells.get(startKey)!);
+    path.reverse();
+    return path;
   }
 
   /** Retire une bête abattue de sa zone. */
@@ -327,8 +448,18 @@ export class Fauna {
     return best;
   }
 
-  /** Déplace l'ancre de quelques cases, sans sortir de sa zone. */
-  private moveAnchor(world: World, z: Zone): void {
+  /**
+   * Déplace l'ancre de quelques cases, sans sortir de sa zone. Si un Piège est à 12 cases au plus,
+   * le troupeau suit l'appât : la nouvelle ancre se pose à 4 cases au plus du Piège.
+   */
+  private moveAnchor(world: World, z: Zone, traps: readonly TrapBait[]): void {
+    let bait: TrapBait | null = null;
+    let best = 12;
+    for (const t of traps) {
+      const d = Math.hypot(t.x + t.w / 2 - (z.ax + 0.5), t.y + t.h / 2 - (z.ay + 0.5));
+      if (d <= best) { best = d; bait = t; }
+    }
+    if (bait && this.anchorNearTrap(world, z, bait)) return;
     const x0 = z.cx * CHUNK;
     const y0 = z.cy * CHUNK;
     const x1 = x0 + CHUNK - 1;
@@ -361,6 +492,39 @@ export class Fauna {
       }
     }
   }
+
+  /** Pose l'ancre à 4 cases au plus du centre d'un Piège, sur une case praticable. */
+  private anchorNearTrap(world: World, z: Zone, t: TrapBait): boolean {
+    const cx = Math.floor(t.x + t.w / 2), cy = Math.floor(t.y + t.h / 2);
+    for (let i = 0; i < 40; i++) {
+      const dx = this.rng.int(-4, 4);
+      const dy = this.rng.int(-4, 4);
+      if (dx * dx + dy * dy > 16) continue;
+      if (passable(world, cx + dx, cy + dy)) {
+        z.ax = cx + dx;
+        z.ay = cy + dy;
+        return true;
+      }
+    }
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        if (dx * dx + dy * dy > 16) continue;
+        if (passable(world, cx + dx, cy + dy)) {
+          z.ax = cx + dx;
+          z.ay = cy + dy;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/** La distance d'un point au bord d'un rectangle en cases. */
+function rectDistance(px: number, py: number, x: number, y: number, w: number, h: number): number {
+  const dx = Math.max(x - px, 0, px - (x + w));
+  const dy = Math.max(y - py, 0, py - (y + h));
+  return Math.hypot(dx, dy);
 }
 
 /** Les 8×8 zones du carré de départ, avec leur troupeau et leur minuterie décalée. */

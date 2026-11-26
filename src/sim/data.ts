@@ -73,6 +73,8 @@ export const RECIPES: Recipe[] = [
     { time: 240, unlock: 1, note: 'On cuit le bois sans flamme : il reste le charbon.' }),
   recipe('brique', 'Brique', { argile: 2, carbone: 1 }, { brique: 2 },
     { time: 300, unlock: 5, note: 'L’argile cuit au charbon.' }),
+  recipe('cuir', 'Tannage', { peau: 1 }, { cuir: 1 },
+    { time: 180, unlock: 3, note: 'La peau trempe, sèche et s’assouplit : du cuir.' }),
 ];
 RECIPES.forEach((r, i) => { r.id = i; });
 export const R: Record<string, Recipe> = Object.fromEntries(RECIPES.map((r) => [r.key, r]));
@@ -128,7 +130,7 @@ export function costOf(def: BuildingDef, era: number): [number, number][] {
 // ----------------------------------------------------------------- bâtiments
 export type Kind =
   | 'hub' | 'slab' | 'belt' | 'bridge' | 'splitter' | 'storage' | 'machine' | 'miner' | 'sawmill'
-  | 'clay' | 'generator' | 'hydro';
+  | 'clay' | 'trap' | 'generator' | 'hydro';
 
 export type Category = 'logistique' | 'extraction' | 'fonte' | 'fabrication' | 'energie';
 export const CATEGORIES: { key: Category; name: string }[] = [
@@ -183,11 +185,15 @@ export const BUILDINGS: BuildingDef[] = [
   // --- extraction
   building('scierie', 'Scierie', 'sawmill', 'extraction', 2, 2, { era: 1, height: 0.8, power: 40, unlock: 0, desc: 'Coupe les arbres à 5 cases à la ronde et sort du bois. Les arbres repoussent.' }),
   building('puits', 'Puits', 'miner', 'extraction', 3, 3, { era: 1, height: 0.7, power: 60, unlock: 2, desc: 'Extrait la roche sous lui : 1 pierre par seconde. À poser sur des rochers.' }),
-  building('argiliere', 'Argilière', 'clay', 'extraction', 2, 2, { era: 2, height: 0.6, power: 40, unlock: 3, desc: 'Drague la berge et sort de l’argile, sans jamais l’épuiser. À poser sur la berge.' }),
+  building('piege', 'Piège', 'trap', 'extraction', 2, 2, { era: 2, height: 0.5, power: 0, unlock: 3, desc: 'Des baies en appât attirent les bêtes à 6 cases ; il les prend une à une. Sa sortie mélange peau, graisse et os : trie-la.' }),
+  building('argiliere', 'Argilière', 'clay', 'extraction', 2, 2, { era: 2, height: 0.6, power: 40, unlock: 4, desc: 'Drague la berge et sort de l’argile, sans jamais l’épuiser. À poser sur la berge.' }),
 
   // --- fonte
   building('charbonniere', 'Charbonnière', 'machine', 'fonte', 2, 2, { era: 1, height: 1, unlock: 1, heat: true, recipes: ['charbon'], desc: 'Cuit le bois sans flamme : 2 bois donnent 1 charbon. Pas besoin de courant.' }),
   building('four', 'Four', 'machine', 'fonte', 2, 2, { era: 2, height: 1.2, unlock: 5, heat: true, recipes: ['brique'], desc: 'Cuit l’argile au charbon : 2 argiles et 1 charbon donnent 2 briques. Pas besoin de courant.' }),
+
+  // --- fabrication
+  building('tannerie', 'Tannerie', 'machine', 'fabrication', 2, 2, { era: 2, height: 0.9, power: 40, unlock: 3, recipes: ['cuir'], desc: 'Tanne la peau : 1 peau donne 1 cuir.' }),
 
   // --- énergie
   building('bruleur', 'Brûleur', 'generator', 'energie', 2, 2, { era: 1, height: 1.2, power: 600, unlock: 2, fuels: ['bois', 'carbone'], desc: 'Brûle du bois ou du charbon : jusqu’à 600 W. Ne consomme que ce que l’usine demande.' }),
@@ -249,8 +255,12 @@ export const QUOTAS: Quota[] = [
      build('bruleur', 'Le courant manque ? Pose un Brûleur et nourris-le de bois')], 1, true),
   quota('Cuir', 'Livrer du cuir', { cuir: 30 },
     'La jungle est peuplée. Tout ce qui vit peut servir.',
-    'Chasser, puis trier. La chasse arrive bientôt.',
-    [], 2),
+    'Chasser, puis trier.',
+    [make('peau', 'Abats un cabiai : trois coups de poing'),
+     build('piege', 'Pose un Piège près d’un troupeau'),
+     build('trieur', 'Trie sa sortie : les peaux tout droit'),
+     build('tannerie', 'Pose une Tannerie'),
+     link('tannerie', 'Relie sa flèche à la Tour')], 2),
   quota('Argile', 'Prendre l’argile des berges', { argile: 60 },
     'Le long de l’eau, une terre grasse.',
     'Prendre sur la berge : une machine qui ne s’épuise pas.',

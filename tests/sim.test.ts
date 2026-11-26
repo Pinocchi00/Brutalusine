@@ -321,7 +321,7 @@ describe('contenu et progression', () => {
   it('chaque bâtiment constructible est débloqué par une livraison écrite, et chaque recette a sa machine', () => {
     for (const b of BUILDINGS) if (b.cat) expect(b.unlock, b.key).toBeLessThan(QUOTAS.length);
     for (const r of RECIPES) expect(BUILDINGS.some((b) => b.recipes.includes(r)), r.key).toBe(true);
-    expect(BUILDINGS.filter((b) => b.cat).length).toBe(12);
+    expect(BUILDINGS.filter((b) => b.cat).length).toBe(14);
   });
 
   it('le coût de chaque bâtiment est celui de son ère, et les machines à chauffer n’ont pas de courant', () => {

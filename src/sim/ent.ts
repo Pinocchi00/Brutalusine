@@ -4,7 +4,7 @@
 import type { BuildingDef, Dir, Recipe } from './data';
 import { NO_TARGET, type BeltPath, type Target } from './belts';
 
-export enum Status { Idle, Working, NoInput, Blocked, NoPower, NoResource, NoRecipe, Dark, NoGas }
+export enum Status { Idle, Working, NoInput, Blocked, NoPower, NoResource, NoRecipe, Dark, NoGas, NoBeast, NoPath }
 
 export class Ent {
   dead = false;
@@ -76,4 +76,6 @@ export const STATUS_TEXT: Record<number, string> = {
   [Status.NoResource]: 'Plus rien à récolter ici',
   [Status.NoRecipe]: 'Aucune recette choisie',
   [Status.Dark]: 'Attend le jour',
+  [Status.NoBeast]: 'Aucune bête à 6 cases : pose-le près d’un troupeau',
+  [Status.NoPath]: 'Les bêtes ne peuvent pas l’atteindre : dégage un passage',
 };

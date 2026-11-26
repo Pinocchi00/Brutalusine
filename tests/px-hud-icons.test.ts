@@ -37,9 +37,9 @@ describe('icônes du HUD', () => {
     expect(drawnKeys.map((def) => def.key).sort()).toEqual(Object.keys(DRAWN).sort());
   });
 
-  it('renvoie neutral pour les deux autres bâtiments', () => {
+  it('renvoie neutral pour les bâtiments sans dessin propre', () => {
     const neutralKeys = BUILDINGS.filter((def) => hudIconKey(def.key) === 'neutral');
-    expect(neutralKeys).toHaveLength(2);
+    expect(neutralKeys).toHaveLength(4);
     for (const def of neutralKeys) expect(hudIconKey(def.key)).toBe('neutral');
   });
 
