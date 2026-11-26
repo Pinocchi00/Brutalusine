@@ -189,7 +189,7 @@ Les **cabiais** vivent en troupeaux de 2 à 4, dans des zones de 32×32 cases si
 Ils broutent et errent lentement — un troupeau dérive dans sa zone — et ne fuient pas le bâtisseur. Trois coups
 de poing les abattent ; une bête donne 1 peau, 1 graisse et 1 os. Une bête revient toutes les 20 secondes dans une
 zone sous son plafond. Le **Piège** les attire à 6 cases, par un vrai chemin autour des obstacles, et en prend une
-toutes les 15 secondes au plus ; sa sortie mélange les trois matières, d'où le Trieur.
+environ toutes les 11 secondes ; sa sortie mélange les trois matières, d'où le Trieur.
 
 ## Les 31 bâtiments
 
