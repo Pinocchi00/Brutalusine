@@ -21,7 +21,7 @@ const PARTICLE_CAP = 1200;
 /** Le rythme de l'animation : `now` avance deux fois plus vite que l'horloge réelle. */
 const PACE = 2;
 
-/** Une sorte de rafale, comme dans l'ancien rendu. */
+/** Une sorte de rafale de particules. */
 export type BurstKind = 'leaf' | 'dust' | 'spark' | 'chip' | 'star' | 'smoke';
 
 /** Une particule vivante, en pixels monde. */

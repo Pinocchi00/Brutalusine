@@ -215,7 +215,7 @@ describe('position des objets du jeu', () => {
     expectContinuous(p, points);
   });
 
-  it('la position est celle de l’ancien rendu, à la case près', () => {
+  it('la position d’un tapis suit la case, à la case près', () => {
     const g = sandbox();
     clear(g, 8, 8, 24, 12);
     place(g, 10, 10, 0);

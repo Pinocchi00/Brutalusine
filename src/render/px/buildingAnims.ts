@@ -30,8 +30,8 @@ export function wheelAngle(progress: number): number {
   return (progress / CYCLE) * (Math.PI / 4) + 0.2;
 }
 
-/** Trace un contour d'un pixel autour d'un rectangle, avant de le remplir. */
-function contour(P: Pen, x: number, y: number, w: number, h: number): void {
+/** Trace un liseré d'un pixel autour d'un rectangle, avant de le remplir. */
+function border(P: Pen, x: number, y: number, w: number, h: number): void {
   P.r(x - 1, y - 1, w + 2, 1, C.ink2);
   P.r(x - 1, y + h, w + 2, 1, C.ink2);
   P.r(x - 1, y, 1, h, C.ink2);
@@ -40,7 +40,7 @@ function contour(P: Pen, x: number, y: number, w: number, h: number): void {
 
 /** Le seau de l'ère 1, aux mêmes pixels que la maquette mais décalé de `drop`. */
 function bucketE1(P: Pen, X: number, Y: number, drop: number): void {
-  contour(P, X + 32, Y + 29 + drop, 8, 7);
+  border(P, X + 32, Y + 29 + drop, 8, 7);
   P.r(X + 32, Y + 30 + drop, 8, 6, C.e2);
   P.r(X + 32, Y + 30 + drop, 8, 1, C.e1);
   P.r(X + 32, Y + 33 + drop, 8, 1, C.s3);
@@ -49,7 +49,7 @@ function bucketE1(P: Pen, X: number, Y: number, drop: number): void {
 
 /** Le seau de l'ère 2, aux mêmes pixels que la maquette mais décalé de `drop`. */
 function bucketE2(P: Pen, X: number, Y: number, drop: number): void {
-  contour(P, X + 42, Y + 23 + drop, 9, 8);
+  border(P, X + 42, Y + 23 + drop, 9, 8);
   P.r(X + 42, Y + 24 + drop, 9, 7, C.e2);
   P.r(X + 42, Y + 24 + drop, 9, 1, C.e1);
   P.r(X + 42, Y + 27 + drop, 9, 1, C.s3);
@@ -57,7 +57,7 @@ function bucketE2(P: Pen, X: number, Y: number, drop: number): void {
 }
 
 /** Dessine ce qui bouge sur un Puits, à l'origine du sprite (`X + 1`, `Y + 1`). */
-export function drawPuitsMotion(P: Pen, era: Era, X: number, Y: number, up: number, progress: number): void {
+export function drawShaftMotion(P: Pen, era: Era, X: number, Y: number, up: number, progress: number): void {
   if (era === 1) {
     const drop = bucketDrop(progress, 8);
     P.r(X + 36, Y + up - 3, 1, 34 + drop, C.c3);

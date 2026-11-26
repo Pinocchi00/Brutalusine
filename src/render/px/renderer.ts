@@ -1,6 +1,6 @@
 /**
- * Le rendu pixel complet du jeu : sol en cache, tapis, ombres, objets hauts, effets, repères
- * et lumière. Il assemble les modules de `src/render/px/` et laisse l'ancien rendu intact.
+ * Le rendu du jeu : sol en cache, tapis, ombres, objets hauts, effets, repères et lumière.
+ * Il assemble les modules de `src/render/px/`.
  */
 import type { Game } from '../../sim/game';
 import type { Ent } from '../../sim/ent';
@@ -8,7 +8,7 @@ import { Status } from '../../sim/ent';
 import { B, DX, DY, TREE_MIN } from '../../sim/data';
 import { outputPorts } from '../../sim/belts';
 import { CHUNK } from '../../sim/world';
-import type { Camera, PlayerView, RenderOpts, Ring, RouteView } from '../renderer';
+import type { Camera, PlayerView, RenderOpts, Ring, RouteView } from './types';
 import { computeView, TILE_PX, type PixelView } from './view';
 import { DrawQueue } from './scene';
 import { C } from './palette';
@@ -24,7 +24,7 @@ import { drawBuilderFrame, lensForColor } from './builderArt';
 import { BUILDER_ANCHOR, idlePose } from './builderMotion';
 import type { BuilderFrame } from './builderTypes';
 import { buildingSilhouette, buildingSprite, prepareBuildings } from './buildings';
-import { drawPuitsMotion, isBurning, smokeVent } from './buildingAnims';
+import { drawShaftMotion, isBurning, smokeVent } from './buildingAnims';
 import { forcedEra, versionEra, type Era } from './eras';
 import {
   TREE_RADIUS,
@@ -170,7 +170,7 @@ function drawChute(P: Pen, e: Ent): void {
   chev(P, Math.round(x), Math.round(y), d, C.o1);
 }
 
-/** Le rendu pixel : mêmes méthodes publiques que l'ancien `Renderer`. */
+/** Le rendu pixel : la seule image du jeu. */
 export class PxRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -673,7 +673,7 @@ export class PxRenderer {
         }
         ctx.drawImage(sprite.img, X, Y);
         if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {
-          drawPuitsMotion(P, era, X + 1, Y + 1, sprite.up, e.progress);
+          drawShaftMotion(P, era, X + 1, Y + 1, sprite.up, e.progress);
         }
         drawLights(P, sprite.lights, X + 1, Y + 1, now);
         if (outputPorts(e).length) drawChute(P, e);

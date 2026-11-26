@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Pen } from '../src/render/px/pen';
 import type { Sprite } from '../src/render/px/sprite';
-import type { Ring, RouteView } from '../src/render/renderer';
+import type { Ring, RouteView } from '../src/render/px/types';
 import { Status } from '../src/sim/ent';
 import { C } from '../src/render/px/palette';
 import { drawCauseBubble, drawGhost, drawRange, drawRing, drawRoute } from '../src/render/px/overlays';

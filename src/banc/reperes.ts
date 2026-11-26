@@ -11,7 +11,7 @@ import { box, cyl } from '../render/px/volumes';
 import { finish } from '../render/px/finish';
 import { Status } from '../sim/ent';
 import { I } from '../sim/data';
-import type { Ring, RouteView } from '../render/renderer';
+import type { Ring, RouteView } from '../render/px/types';
 import {
   drawBrackets,
   drawCauseBubble,

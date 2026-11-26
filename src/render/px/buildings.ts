@@ -8,16 +8,16 @@ import type { Pen } from './pen';
 import { build, type Light, type Sprite } from './sprite';
 import { placeholderSprite } from './placeholders';
 import { towerE1, towerE2 } from './artTower';
-import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from './artWorks';
+import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from './artWorks';
 import {
-  aiguillageE1,
-  aiguillageE2,
-  bruleurE1,
-  bruleurE2,
-  scierieE1,
-  scierieE2,
+  splitterE1,
+  splitterE2,
+  burnerE1,
+  burnerE2,
+  sawmillE1,
+  sawmillE2,
 } from './artFirst';
-import { fourE2, trieurE2 } from './artStone';
+import { furnaceE2, sorterE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
 /** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
@@ -36,8 +36,8 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
     { up: 30, draw: towerE2 },
   ],
   puits: [
-    { up: 10, draw: (P, U, L) => puitsE1(P, U, L, false, true) },
-    { up: 42, draw: (P, U, L) => puitsE2(P, U, L, false, true) },
+    { up: 10, draw: (P, U, L) => shaftE1(P, U, L, false, true) },
+    { up: 42, draw: (P, U, L) => shaftE2(P, U, L, false, true) },
   ],
   charbonniere: [
     { up: 2, draw: kilnE1 },
@@ -48,24 +48,24 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
     { up: 20, draw: storeE2 },
   ],
   scierie: [
-    { up: 18, draw: scierieE1 },
-    { up: 22, draw: scierieE2 },
+    { up: 18, draw: sawmillE1 },
+    { up: 22, draw: sawmillE2 },
   ],
   bruleur: [
-    { up: 10, draw: bruleurE1 },
-    { up: 40, draw: bruleurE2 },
+    { up: 10, draw: burnerE1 },
+    { up: 40, draw: burnerE2 },
   ],
   aiguillage: [
-    { up: 6, draw: aiguillageE1 },
-    { up: 6, draw: aiguillageE2 },
+    { up: 6, draw: splitterE1 },
+    { up: 6, draw: splitterE2 },
   ],
   four: [
-    { up: 44, draw: fourE2 },
-    { up: 44, draw: fourE2 },
+    { up: 44, draw: furnaceE2 },
+    { up: 44, draw: furnaceE2 },
   ],
   trieur: [
-    { up: 8, draw: trieurE2 },
-    { up: 8, draw: trieurE2 },
+    { up: 8, draw: sorterE2 },
+    { up: 8, draw: sorterE2 },
   ],
 };
 
@@ -103,8 +103,8 @@ export function buildingSilhouette(def: BuildingDef, w: number, h: number, era: 
   if (!arts) return buildingSprite(def, w, h, era);
   const art = arts[version - 1];
   const draw = version === 1
-    ? (P: Pen, U: number, L: Light[]): void => puitsE1(P, U, L, false, false)
-    : (P: Pen, U: number, L: Light[]): void => puitsE2(P, U, L, false, false);
+    ? (P: Pen, U: number, L: Light[]): void => shaftE1(P, U, L, false, false)
+    : (P: Pen, U: number, L: Light[]): void => shaftE2(P, U, L, false, false);
   const sprite = build(def.w * 24, def.h * 24, art.up, draw);
   sprites.set(key, sprite);
   return sprite;

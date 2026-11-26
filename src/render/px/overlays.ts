@@ -5,7 +5,7 @@
  */
 import type { Sprite } from './sprite';
 import type { Pen } from './pen';
-import type { RouteView, Ring } from '../renderer';
+import type { RouteView, Ring } from './types';
 import { Status } from '../../sim/ent';
 import { B, DX, DY, ITEMS } from '../../sim/data';
 import { SAW_RANGE } from '../../sim/game';

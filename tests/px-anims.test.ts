@@ -3,10 +3,10 @@
  * Un faux crayon enregistre les rectangles et les traits, sans aucune API du navigateur.
  */
 import { describe, expect, it } from 'vitest';
-import { bucketDrop, drawPuitsMotion, isBurning, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
-import { puitsE1, puitsE2 } from '../src/render/px/artWorks';
-import { bruleurE1, bruleurE2 } from '../src/render/px/artFirst';
-import { fourE2 } from '../src/render/px/artStone';
+import { bucketDrop, drawShaftMotion, isBurning, smokeVent, wheelAngle } from '../src/render/px/buildingAnims';
+import { shaftE1, shaftE2 } from '../src/render/px/artWorks';
+import { burnerE1, burnerE2 } from '../src/render/px/artFirst';
+import { furnaceE2 } from '../src/render/px/artStone';
 import { B } from '../src/sim/data';
 import { Ent, Status } from '../src/sim/ent';
 import type { Pen } from '../src/render/px/pen';
@@ -73,7 +73,7 @@ describe('isBurning', () => {
 
 describe('les foyers éteints', () => {
   it('n’émettent aucune lumière, et un seul feu allumés', () => {
-    for (const draw of [bruleurE1, bruleurE2, fourE2]) {
+    for (const draw of [burnerE1, burnerE2, furnaceE2]) {
       const off: Light[] = [];
       draw(fakePen().P, 0, off, false);
       expect(off).toHaveLength(0);
@@ -108,50 +108,50 @@ describe('wheelAngle', () => {
 describe('le seau du Puits', () => {
   it('garde la corde et le seau quand le dessin est fixe', () => {
     const one = fakePen();
-    puitsE1(one.P, 0, [], false, false);
+    shaftE1(one.P, 0, [], false, false);
     expect(hasRect(one.rects, 36, -3, 1, 34)).toBe(true);
     expect(hasRect(one.rects, 32, 30, 8, 6)).toBe(true);
     const two = fakePen();
-    puitsE2(two.P, 0, [], false, false);
+    shaftE2(two.P, 0, [], false, false);
     expect(hasRect(two.rects, 46, -26, 1, 52)).toBe(true);
     expect(hasRect(two.rects, 42, 24, 9, 7)).toBe(true);
   });
 
   it('retire la corde et le seau du dessin animé', () => {
     const one = fakePen();
-    puitsE1(one.P, 0, [], false, true);
+    shaftE1(one.P, 0, [], false, true);
     expect(hasRect(one.rects, 36, -3, 1, 34)).toBe(false);
     expect(hasRect(one.rects, 32, 30, 8, 6)).toBe(false);
     const two = fakePen();
-    puitsE2(two.P, 0, [], false, true);
+    shaftE2(two.P, 0, [], false, true);
     expect(hasRect(two.rects, 46, -26, 1, 52)).toBe(false);
     expect(hasRect(two.rects, 42, 24, 9, 7)).toBe(false);
     expect(hasRect(two.rects, 25, -22, 22, 3)).toBe(true);
   });
 });
 
-describe('drawPuitsMotion', () => {
+describe('drawShaftMotion', () => {
   it('descend le seau et allonge la corde au milieu du cycle', () => {
     const one = fakePen();
-    drawPuitsMotion(one.P, 1, 0, 0, 10, 30);
+    drawShaftMotion(one.P, 1, 0, 0, 10, 30);
     expect(hasRect(one.rects, 36, 7, 1, 42)).toBe(true);
     expect(hasRect(one.rects, 32, 48, 8, 6)).toBe(true);
   });
 
   it('tourne les huit rayons de la roue de Pierre', () => {
     const two = fakePen();
-    drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
+    drawShaftMotion(two.P, 2, 0, 0, 42, 30);
     expect(two.lines).toHaveLength(9);
     expect(hasRect(two.rects, 46, 23, 1, 52)).toBe(true);
   });
 
   it('redessine les montants par-dessus la corde et le seau', () => {
     const one = fakePen();
-    drawPuitsMotion(one.P, 1, 0, 0, 10, 30);
+    drawShaftMotion(one.P, 1, 0, 0, 10, 30);
     expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 15, y1: 68 });
     expect(one.lines).toContainEqual({ x0: 36, y0: 4, x1: 59, y1: 66 });
     const two = fakePen();
-    drawPuitsMotion(two.P, 2, 0, 0, 42, 30);
+    drawShaftMotion(two.P, 2, 0, 0, 42, 30);
     expect(two.lines).toContainEqual({ x0: 58, y0: 98, x1: 42, y1: 22 });
   });
 });

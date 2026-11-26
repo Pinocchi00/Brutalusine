@@ -10,13 +10,13 @@ import { CHUNK, GROUND_WATER, GROUND_BANK } from './sim/world';
 import { serialize, deserialize, writeSave, readSave, SAVE_VERSION } from './sim/save';
 import { Game, rotatable } from './sim/game';
 import { beltRoute } from './sim/route';
-import { Renderer, type Camera, type PlayerView, type RenderOpts, type Ring, type RouteView } from './render/renderer';
+import type { Camera, PlayerView, Ring, RouteView } from './render/px/types';
 import { PxRenderer, coopScale } from './render/px/renderer';
 import { chooseHarvest, type HarvestPick } from './render/px/oreField';
 import { BuilderAnimator, type MotionResult } from './render/px/builderMotion';
 import { PLAYER_COLORS } from './render/px/builderArt';
 import { TILE_PX, pickScale, renderZoom, scaleBounds, stepScale } from './render/px/view';
-import { PAL } from './render/terrain';
+import { C } from './render/px/palette';
 import { hexToRgb } from './render/px/noise';
 import { Hud } from './ui/hud';
 import { costText } from './ui/eraText';
@@ -26,19 +26,9 @@ interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; 
 interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
 /** La cible d'un coup porté : un arbre ou un gisement, à sa case. */
 interface StrikeTarget { kind: 'tree' | 'ore'; x: number; y: number; color: string }
-/** Ce que la boucle attend d'un rendu, quel qu'il soit. */
-interface WorldRenderer {
-  render(g: Game, cam: Camera, opts: RenderOpts): void;
-  reset(): void;
-  burst(kind: 'leaf' | 'dust' | 'spark' | 'chip' | 'star', x: number, y: number, color: string, n: number): void;
-  hit(x: number, y: number, power?: number): void;
-  fell(g: Game, x: number, y: number, size: number): void;
-  oreTileAt?(g: Game, x: number, y: number): { x: number; y: number } | null;
-}
-
 const COLORS = PLAYER_COLORS;
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
-const MIN_ZOOM = 16, MAX_ZOOM = 76, REACH = 2.1;
+const MIN_ZOOM = 16, REACH = 2.1;
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
 
 /** Un bâtisseur : clavier et souris (id 0) ou une manette. */
@@ -49,7 +39,6 @@ class Player implements PlayerView {
   cx = 0; cy = 5; ox = 0; oy = 5; ok = false; reason = '';
   gx = 0; gy = 0; gprog = 0; beam = 0;
   task: Task | null = null;
-  hitTimer = 0;
   animator = new BuilderAnimator();
   motion: MotionResult | null = null;
   strikeTile: { x: number; y: number } | null = null;
@@ -75,8 +64,7 @@ class Player implements PlayerView {
 
 class App {
   game: Game;
-  renderer: WorldRenderer;
-  private readonly pixel: boolean;
+  renderer: PxRenderer;
   private scale = 0;
   private loadMessage = 'Aucune sauvegarde';
   hud: Hud;
@@ -96,9 +84,7 @@ class App {
 
   constructor() {
     this.game = new Game((Math.random() * 1e9) | 0);
-    this.pixel = new URLSearchParams(location.search).get('rendu') === 'pixel';
-    if (this.pixel) document.documentElement.dataset.rendu = 'pixel';
-    this.renderer = this.pixel ? new PxRenderer(this.canvas) : new Renderer(this.canvas);
+    this.renderer = new PxRenderer(this.canvas);
     this.hud = new Hud({
       game: () => this.game,
       tool: () => this.players[0].tool,
@@ -110,7 +96,7 @@ class App {
       feed: (e) => { const n = this.game.feed(e); if (n) this.audio.place(1); else { this.audio.deny(); this.hud.toast('Rien à donner : ton stock n’a pas ce qu’il lui faut'); } },
       take: (e) => { const n = this.game.take(e); if (n) { this.audio.place(1); this.hud.toast(`+${n} dans ton stock`); } },
       ping: (list) => {
-        for (const e of list.slice(0, 6)) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: PAL.signalHi, size: 4, dur: 1.6 });
+        for (const e of list.slice(0, 6)) this.rings.push({ x: e.cx, y: e.cy, t0: this.time, color: C.o1, size: 4, dur: 1.6 });
         if (list[0]) this.players[0].task = { kind: 'walk', x: Math.floor(list[0].cx), y: Math.floor(list[0].y + list[0].h + 1), stuck: 0, best: 1e9 };
       },
       menu: (a, v) => this.menu(a, v),
@@ -143,7 +129,6 @@ class App {
 
   /** Garde l'échelle pixel entière dans les bornes de l'écran et met `zoom` en accord. */
   private fitPixelScale(): void {
-    if (!this.pixel) return;
     const b = scaleBounds(this.canvas.width, this.canvas.height);
     if (!this.scale) this.scale = pickScale(this.canvas.width, this.canvas.height);
     this.scale = Math.min(b.max, Math.max(b.min, this.scale));
@@ -196,10 +181,8 @@ class App {
     cv.addEventListener('wheel', (ev) => {
       ev.preventDefault();
       if (!this.started) return;
-      if (this.pixel) {
-        const step = -Math.sign(ev.deltaY);
-        if (step) this.setPixelScale(stepScale(this.scale, step, this.canvas.width, this.canvas.height));
-      } else this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom * Math.exp(-ev.deltaY * 0.0011)));
+      const step = -Math.sign(ev.deltaY);
+      if (step) this.setPixelScale(stepScale(this.scale, step, this.canvas.width, this.canvas.height));
     }, { passive: false });
     document.getElementById('btn-new')!.addEventListener('click', () => this.begin(true));
     document.getElementById('btn-continue')!.addEventListener('click', () => { void this.load().then((ok) => this.begin(!ok)); });
@@ -352,7 +335,7 @@ class App {
     // un débris : on s'arrête juste au sud, pour ne pas le cacher sous le bâtisseur (c'est à lui de cliquer dessus)
     const dy = pl === 'debris' ? 1 : 0;
     p.task = { kind: 'walk', x: Math.floor(t.x), y: Math.floor(t.y) + dy, stuck: 0, best: 1e9 };
-    this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.2, color: PAL.signalHi, size: 5, dur: 2 });
+    this.rings.push({ x: t.x, y: t.y, t0: this.time + 0.2, color: C.o1, size: 5, dur: 2 });
   }
 
   /** Où pointer la flèche du guide pour l'étape en cours (ramenée au bord de l'écran si c'est loin). */
@@ -627,7 +610,7 @@ class App {
   private strike(target: StrikeTarget, power: number): void {
     if (target.kind === 'tree') {
       this.renderer.hit(target.x, target.y, power);
-      this.renderer.burst('leaf', target.x + 0.5, target.y + 0.2, PAL.leaf[3], 2);
+      this.renderer.burst('leaf', target.x + 0.5, target.y + 0.2, C.g2, 2);
       this.audio.cut(0.7, 0);
       return;
     }
@@ -636,9 +619,8 @@ class App {
     this.audio.machine(0.8, 0);
   }
 
-  /** Ce que rapporte un geste à la main : un texte qui monte au-dessus de la case en rendu pixel, une bulle sinon. */
+  /** Ce que rapporte un geste à la main : un texte qui monte au-dessus de la case. */
   private gain(text: string, x: number, y: number): void {
-    if (!this.pixel) { this.hud.toast(text); return; }
     const z = this.cam.zoom / this.dpr;
     const sx = (x + 0.5 - this.cam.x) * z + window.innerWidth / 2;
     const sy = (y - 0.4 - this.cam.y) * z + window.innerHeight / 2;
@@ -687,14 +669,8 @@ class App {
       if (down(1)) this.secondaryDown(p);
       else if (b[1] && p.gesture && moved) this.removeAt(p);
       if (up(1)) this.endGesture(p);
-      if (down(12)) {
-        if (this.pixel) this.setPixelScale(stepScale(this.scale, 1, this.canvas.width, this.canvas.height));
-        else this.zoom = Math.min(MAX_ZOOM, this.zoom * 1.25);
-      }
-      if (down(13)) {
-        if (this.pixel) this.setPixelScale(stepScale(this.scale, -1, this.canvas.width, this.canvas.height));
-        else this.zoom = Math.max(MIN_ZOOM, this.zoom / 1.25);
-      }
+      if (down(12)) this.setPixelScale(stepScale(this.scale, 1, this.canvas.width, this.canvas.height));
+      if (down(13)) this.setPixelScale(stepScale(this.scale, -1, this.canvas.width, this.canvas.height));
       if (down(9)) { if (this.hud.menuOpen) this.menu('resume'); else this.menu('pause'); }
       p.prev = b;
     }
@@ -719,14 +695,10 @@ class App {
         } else {
           const size = w.canopy(t.x, t.y);
           p.gx = t.x; p.gy = t.y;
-          const color = t.kind === 'tree' ? PAL.leaf[3] : DEPOSITS[w.deposit(t.x, t.y)]!.color;
+          const color = t.kind === 'tree' ? C.g2 : DEPOSITS[w.deposit(t.x, t.y)]!.color;
           strikeTarget = { kind: t.kind, x: t.x, y: t.y, color };
           p.gprog += dt / (t.kind === 'tree' ? 0.45 + 0.5 * (size / 255) : 0.5);
           p.swing = (p.swing + dt * 3.4) % 1 || 0.001;
-          if (!this.pixel && (p.hitTimer -= dt) <= 0) {
-            p.hitTimer = 0.29;
-            this.strike(strikeTarget, 1);
-          }
           if (p.gprog >= 1) {
             p.gprog = 0;
             if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.gain(`+${n.toFixed(1).replace('.', ',')} Bois`, t.x, t.y); }
@@ -764,22 +736,20 @@ class App {
     p.blink = (this.time * 0.31 + p.id * 0.37) % 1;
     p.beam = Math.max(0, p.beam - dt * 5);
 
-    if (this.pixel) {
-      const result = p.animator.step(dt, {
-        walk: p.walk,
-        speed: p.speed,
-        fx: p.fx,
-        acting: strikeTarget !== null,
-        harvesting: p.task?.kind === 'tree' || p.task?.kind === 'ore',
-        targetDx: strikeTarget ? (strikeTarget.x + 0.5 - p.x) * TILE_PX : 0,
-        targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
-        isFree: strikeTarget ? (ox, oy) => !this.solid(p.x + ox / TILE_PX, p.y + oy / TILE_PX) : undefined,
-      });
-      p.motion = result;
-      p.strikeTile = strikeTarget ? { x: strikeTarget.x, y: strikeTarget.y } : null;
-      if (strikeTarget) {
-        for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
-      }
+    const result = p.animator.step(dt, {
+      walk: p.walk,
+      speed: p.speed,
+      fx: p.fx,
+      acting: strikeTarget !== null,
+      harvesting: p.task?.kind === 'tree' || p.task?.kind === 'ore',
+      targetDx: strikeTarget ? (strikeTarget.x + 0.5 - p.x) * TILE_PX : 0,
+      targetDy: strikeTarget ? (strikeTarget.y + (strikeTarget.kind === 'tree' ? 0.9 : 0.5) - p.y) * TILE_PX : 0,
+      isFree: strikeTarget ? (ox, oy) => !this.solid(p.x + ox / TILE_PX, p.y + oy / TILE_PX) : undefined,
+    });
+    p.motion = result;
+    p.strikeTile = strikeTarget ? { x: strikeTarget.x, y: strikeTarget.y } : null;
+    if (strikeTarget) {
+      for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
     }
   }
 
@@ -811,59 +781,51 @@ class App {
       const tx = (x0 + x1) / 2 + this.look.x, ty = (y0 + y1) / 2 + this.look.y;
       const k = Math.min(1, dt * 6);
       this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
-      if (this.pixel) {
-        // échelle entière : le minimum de l'échelle choisie et de celle qui tient tout le monde
-        const b = scaleBounds(this.canvas.width, this.canvas.height);
-        let s: number;
-        if (this.players.length > 1) {
-          const fitPx = Math.min(window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)) * this.dpr;
-          s = coopScale(this.scale, fitPx / TILE_PX, b);
-        } else {
-          s = Math.round((this.zoom * this.dpr) / TILE_PX);
-          this.scale = Math.max(b.min, Math.min(b.max, s));
-          s = this.scale;
-        }
-        this.cam.zoom = TILE_PX * s;
+      // échelle entière : le minimum de l'échelle choisie et de celle qui tient tout le monde
+      const b = scaleBounds(this.canvas.width, this.canvas.height);
+      let s: number;
+      if (this.players.length > 1) {
+        const fitPx = Math.min(window.innerWidth / (x1 - x0 + 12), window.innerHeight / (y1 - y0 + 10)) * this.dpr;
+        s = coopScale(this.scale, fitPx / TILE_PX, b);
       } else {
-        this.cam.zoom += (fit * this.dpr - this.cam.zoom) * Math.min(1, dt * 9);
+        s = Math.round((this.zoom * this.dpr) / TILE_PX);
+        this.scale = Math.max(b.min, Math.min(b.max, s));
+        s = this.scale;
       }
+      this.cam.zoom = TILE_PX * s;
       this.aim(p0);
       const e = m.over ? g.entAt(p0.cx, p0.cy) : null;
       this.hover = e && (!p0.tool || p0.tool === 'demolir' || p0.tool === 'marteau') ? e : null;
     } else {
       // écran-titre : la vue dérive lentement autour de la clairière
       this.cam.x = 0.5 + Math.cos(this.time * 0.05) * 6; this.cam.y = 2 + Math.sin(this.time * 0.07) * 4;
-      this.cam.zoom = this.pixel ? TILE_PX * pickScale(this.canvas.width, this.canvas.height) : 38 * this.dpr;
+      this.cam.zoom = TILE_PX * pickScale(this.canvas.width, this.canvas.height);
       g.step();
     }
 
     this.drain();
-    const zoom = this.pixel ? renderZoom(this.cam.zoom) : this.cam.zoom;
+    const zoom = renderZoom(this.cam.zoom);
     const z = zoom / this.dpr, hw = window.innerWidth / 2 / z, hh = window.innerHeight / 2 / z;
     g.world.ensureArea(Math.floor(this.cam.x - hw) - 3, Math.floor(this.cam.y - hh) - 3, Math.ceil(this.cam.x + hw) + 3, Math.ceil(this.cam.y + hh) + 3);   // le monde se génère devant soi
-    if (this.pixel) {
-      // prépare un bloc manquant par image dans une marge de 32 cases, le plus proche de la vue d'abord
-      const margin = 32;
-      const cx0 = Math.floor((this.cam.x - hw - margin) / CHUNK);
-      const cx1 = Math.floor((this.cam.x + hw + margin) / CHUNK);
-      const cy0 = Math.floor((this.cam.y - hh - margin) / CHUNK);
-      const cy1 = Math.floor((this.cam.y + hh + margin) / CHUNK);
-      let best = Infinity, bestCx = 0, bestCy = 0;
-      for (let cy = cy0; cy <= cy1; cy++) {
-        for (let cx = cx0; cx <= cx1; cx++) {
-          if (g.world.chunk(cx, cy, false)) continue;
-          const dx = cx * CHUNK + CHUNK / 2 - this.cam.x;
-          const dy = cy * CHUNK + CHUNK / 2 - this.cam.y;
-          const d = dx * dx + dy * dy;
-          if (d < best) { best = d; bestCx = cx; bestCy = cy; }
-        }
+    // prépare un bloc manquant par image dans une marge de 32 cases, le plus proche de la vue d'abord
+    const margin = 32;
+    const cx0 = Math.floor((this.cam.x - hw - margin) / CHUNK);
+    const cx1 = Math.floor((this.cam.x + hw + margin) / CHUNK);
+    const cy0 = Math.floor((this.cam.y - hh - margin) / CHUNK);
+    const cy1 = Math.floor((this.cam.y + hh + margin) / CHUNK);
+    let best = Infinity, bestCx = 0, bestCy = 0;
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        if (g.world.chunk(cx, cy, false)) continue;
+        const dx = cx * CHUNK + CHUNK / 2 - this.cam.x;
+        const dy = cy * CHUNK + CHUNK / 2 - this.cam.y;
+        const d = dx * dx + dy * dy;
+        if (d < best) { best = d; bestCx = cx; bestCy = cy; }
       }
-      if (best < Infinity) g.world.chunk(bestCx, bestCy);
     }
-    // le rendu classique ne connaît pas le marteau : on lui cache l'outil (pas d'aperçu), la surbrillance reste
-    const views = this.players.map((p) => (!this.pixel && p.tool === 'marteau' ? { ...p, color: p.color, tool: null } : p));
+    if (best < Infinity) g.world.chunk(bestCx, bestCy);
     this.renderer.render(g, this.cam, {
-      time: this.time, frame: this.frame, dt, players: this.started ? views : [],
+      time: this.time, frame: this.frame, dt, players: this.started ? this.players : [],
       selected: this.hud.selected, hover: this.hover, rings: this.rings, marker: this.started ? this.marker() : null,
     });
     this.rings = this.rings.filter((r) => this.time - r.t0 < r.dur);
@@ -929,10 +891,10 @@ class App {
       const pan = Math.max(-1, Math.min(1, (ev.x - this.cam.x) / (span * 0.7)));
       switch (ev.type) {
         case 'craft': case 'mine': this.audio.machine(near, pan); break;
-        case 'cut': r.hit(ev.x, ev.y); r.burst('leaf', ev.x, ev.y - 0.3, PAL.leaf[3], 3); this.audio.cut(near, pan); break;
+        case 'cut': r.hit(ev.x, ev.y); r.burst('leaf', ev.x, ev.y - 0.3, C.g2, 3); this.audio.cut(near, pan); break;
         case 'fell': r.fell(g, ev.x, ev.y, ev.a); this.audio.cut(near, pan); break;
         case 'hand': r.burst('chip', ev.x, ev.y, ITEMS[ev.a].color, 6); break;
-        case 'pick': r.burst('spark', ev.x, ev.y, PAL.signalHi, 10); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: PAL.signalHi, size: 1.2, dur: 0.4 }); if (this.started) this.audio.place(1); break;
+        case 'pick': r.burst('spark', ev.x, ev.y, C.o1, 10); this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: C.o1, size: 1.2, dur: 0.4 }); if (this.started) this.audio.place(1); break;
         case 'place': if (this.started) this.audio.place(ev.a); r.burst('dust', ev.x, ev.y + 0.3, 'rgba(190,180,160,', 3 + Math.min(8, ev.a)); break;
         case 'upgrade': {
           if (this.started) this.audio.place(2);
@@ -940,11 +902,11 @@ class App {
           r.burst('dust', ev.x, ev.y + 0.3, `rgba(${cr},${cg},${cb},`, 10);
           break;
         }
-        case 'remove': if (this.started) this.audio.remove(); r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4 + Math.min(8, ev.a)); r.burst('chip', ev.x, ev.y, PAL.steelHi, 5); break;
+        case 'remove': if (this.started) this.audio.remove(); r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4 + Math.min(8, ev.a)); r.burst('chip', ev.x, ev.y, C.s2, 5); break;
         case 'quota':
           if (this.started) { this.audio.quota(); this.hud.banner(g); }
-          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? PAL.glow : PAL.signalHi, size: 22 + i * 18, dur: 2.6 });
-          r.burst('star', ev.x, ev.y - 0.8, PAL.signalHi, 40); r.burst('star', ev.x, ev.y - 0.8, PAL.white, 25);
+          for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? C.q2 : C.o1, size: 22 + i * 18, dur: 2.6 });
+          r.burst('star', ev.x, ev.y - 0.8, C.o1, 40); r.burst('star', ev.x, ev.y - 0.8, C.white, 25);
           break;
         default: break;
       }
