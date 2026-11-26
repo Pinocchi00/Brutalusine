@@ -83,11 +83,12 @@ describe('tracé de convoyeur en L', () => {
 });
 
 describe('le raccord annoncé est celui que la simulation fera', () => {
-  it('une Scierie ne prend rien ; un Répartiteur ne prend que par l’arrière', () => {
+  it('une Scierie ne prend la graisse que par ses entrées, jamais par sa sortie', () => {
     const g = sandbox();
     clear(g, 10, 10, 30, 30);
-    g.place('scierie', 14, 10, 0, { free: true });                      // 2×2 en (14..15, 10..11)
-    expect(beltRoute(g, 10, 10, 13, 10, true, 0).into).toBe(null);
+    g.place('scierie', 14, 10, 0, { free: true });                      // 2×2 en (14..15, 10..11), sortie à l'est
+    expect(beltRoute(g, 10, 10, 13, 10, true, 0).into).toBe('ent');     // par l'ouest : une entrée
+    expect(beltRoute(g, 20, 10, 16, 10, true, 2).into).toBe(null);      // par l'est : sa sortie
     g.place('aiguillage', 20, 20, 0, { free: true });                   // entrée par l'ouest (il pousse vers l'est)
     expect(beltRoute(g, 16, 20, 19, 20, true, 0).into).toBe('ent');    // par l'arrière
     expect(beltRoute(g, 20, 16, 20, 19, true, 1).into).toBe(null);     // par le flanc nord
