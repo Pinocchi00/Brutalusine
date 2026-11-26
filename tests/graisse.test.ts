@@ -232,6 +232,30 @@ describe('ne pas gaspiller', () => {
     expect(well.status).toBe(Status.NoPower);
     expect(well.buf![I.graisse]).toBe(2);
     expect(well.greased).toBe(5);
+
+    // à l'arrêt et sans graisse en cours, elle n'en prend pas une nouvelle
+    const idle = stoneGame(405);
+    const well0 = wellRig(idle);
+    idle.power.base = 0;
+    run(idle, 10);                                       // la coupure prend effet au pas suivant
+    expect(well0.status).toBe(Status.NoPower);
+    well0.buf![I.graisse] = 2;
+    well0.greased = 0;
+    run(idle, 2 * 60 * 60);
+    expect(well0.status).toBe(Status.NoPower);
+    expect(well0.buf![I.graisse]).toBe(2);
+    expect(well0.greased).toBe(0);
+  });
+
+  it('une Scierie ne prend pas la graisse par sa sortie', () => {
+    const g = stoneGame(406);
+    clear(g, 28, 28, 44, 44);
+    expect(g.place('scierie', 34, 34, 0, { free: true }).ok).toBe(true);   // sortie à l'est
+    const e = g.entAt(34, 34)!;
+    expect(g.accept(e, I.graisse, 2)).toBe(false);                       // arrive de l'est, par la sortie
+    expect(e.buf![I.graisse]).toBe(0);
+    expect(g.accept(e, I.graisse, 0)).toBe(true);                        // arrive de l'ouest
+    expect(e.buf![I.graisse]).toBe(1);
   });
 });
 
