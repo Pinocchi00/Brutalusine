@@ -106,22 +106,23 @@ export class Rng {
   }
 }
 
-/** Une case praticable par une bête : ni eau, ni entité, ni dalle, et loin du départ. */
+/** Une case praticable par une bête : ni eau, ni entité, ni dalle, ni épave, et loin du départ. */
 function passable(world: World, x: number, y: number): boolean {
   if (Math.hypot(x + 0.5, y + 0.5) < SPAWN_MIN_DIST) return false;
   if (world.ground(x, y) === GROUND_WATER) return false;
   if (world.ent(x, y) !== 0) return false;
   if (world.slab(x, y) !== 0) return false;
+  if (world.wreck(x, y)) return false;
   return true;
 }
 
-/** La case porte-t-elle une entité ou une dalle ? L'eau et la distance ne changent jamais sous une bête. */
+/** La case porte-t-elle une entité, une dalle ou une épave ? L'eau et la distance ne changent jamais sous une bête. */
 function occupied(world: World, x: number, y: number): boolean {
   const c = world.at(x, y, false);
   if (!c) return false;
   const m = CHUNK - 1;
   const i = ((y & m) << 5) | (x & m);
-  return c.ent[i] !== 0 || c.slab[i] !== 0;
+  return c.ent[i] !== 0 || c.slab[i] !== 0 || c.wreck[i] !== 0;
 }
 
 /** Les zones et les bêtes d'une partie. */
@@ -375,12 +376,17 @@ export class Fauna {
       b.timer = this.grazeTicks();
       return;
     }
-    const nx = b.x + (dx / d) * BEAST_SPEED;
-    const ny = b.y + (dy / d) * BEAST_SPEED;
+    let nx = b.x + (dx / d) * BEAST_SPEED;
+    let ny = b.y + (dy / d) * BEAST_SPEED;
     if (!passable(world, Math.floor(nx), Math.floor(ny))) {
-      b.state = 'graze';
-      b.timer = this.grazeTicks();
-      return;
+      // Un obstacle (bâtiment, dalle, épave) : on glisse le long de son bord plutôt que de s'arrêter.
+      if (dx !== 0 && passable(world, Math.floor(nx), Math.floor(b.y))) ny = b.y;
+      else if (dy !== 0 && passable(world, Math.floor(b.x), Math.floor(ny))) nx = b.x;
+      else {
+        b.state = 'graze';
+        b.timer = this.grazeTicks();
+        return;
+      }
     }
     b.x = nx;
     b.y = ny;

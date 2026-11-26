@@ -4,6 +4,7 @@ import { B, R, type Dir } from './data';
 import { Game } from './game';
 import { Status } from './ent';
 import type { Beast, Zone } from './fauna';
+import type { Wreck } from './wrecks';
 
 export const SAVE_VERSION = 5;
 
@@ -19,6 +20,7 @@ export interface SaveData {
   zones: Zone[];
   faunaRng: number;
   beastNextId: number;
+  wrecks: Wreck[];
   extra?: unknown;
 }
 
@@ -77,6 +79,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     zones: g.fauna.zones.map((z) => ({ ...z })),
     faunaRng: g.fauna.rng.state,
     beastNextId: g.fauna.nextId,
+    wrecks: g.wrecks.map((w) => ({ ...w })),
     extra,
   };
 }
@@ -92,6 +95,7 @@ export function deserialize(d: SaveData): Game {
     for (let i = 0; i < c.slab.length; i++) if (c.slab[i]) c.slabCount++;
     c.version++;
   }
+  g.restoreWrecks(d.wrecks ?? []);
   for (const s of d.ents) {
     g.nextId = s.id;
     const e = g.spawn(B[s.key], s.x, s.y, s.rot as Dir, s.era ?? B[s.key].era);

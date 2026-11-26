@@ -7,6 +7,7 @@ import type { Game } from './sim/game';
 
 export function buildDemo(g: Game): string[] {
   const log: string[] = [];
+  g.stock[I.noyau] += 6;   // la démo pose six machines à noyau
   // le stock se remplit par les tapis, pas d'avance : une pose refusée est notée dans le journal
   // et son tampon est alors un tampon factice, sans effet
   const sink = { buf: new Int32Array(64) };

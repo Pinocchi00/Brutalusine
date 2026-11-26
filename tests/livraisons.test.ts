@@ -1,7 +1,7 @@
 // Les livraisons de la Tour et ce que la démo promet : tout doit être atteignable avec ce qui est débloqué.
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { B, BUILDINGS, DAY_TICKS, I, ITEMS, LOOT_WOOD, QUOTAS, TREE_MIN } from '../src/sim/data';
+import { B, BUILDINGS, DAY_TICKS, I, ITEMS, LOOT_WOOD, QUOTAS, TREE_MIN, needsCore } from '../src/sim/data';
 import { serialize, deserialize } from '../src/sim/save';
 import { GROUND_BANK } from '../src/sim/world';
 
@@ -58,6 +58,16 @@ describe('les livraisons', () => {
     QUOTAS.forEach((q, index) => {
       for (const [id] of q.need) expect(producedBy(id, index), `${q.title} · ${ITEMS[id].name}`).toBe(true);
     });
+  });
+
+  it('aucune livraison ne demande plus de dix machines à noyau', () => {
+    for (const q of QUOTAS) {
+      const keys = new Set<string>();
+      for (const s of q.steps) if (s.t === 'build') keys.add(s.key);
+      let cores = 0;
+      for (const key of keys) if (needsCore(B[key])) cores++;
+      expect(cores, `${q.title} · six de la capsule et quatre de l’épave garantie`).toBeLessThanOrEqual(10);
+    }
   });
 
   it('l’Argilière se débloque après les cuirs, le Four après l’argile', () => {
@@ -184,6 +194,7 @@ describe('conservation pendant la nuit', () => {
     g.stock[I.pierre] = 200;
     g.stock[I.argile] = 10;
     g.stock[I.carbone] = 10;
+    g.stock[I.noyau] = 1;                          // une usine de test : les noyaux viennent d'épaves
 
     const baseline = snap(g);
     const loot = findLoot(g);

@@ -27,6 +27,7 @@ export class Chunk {
   loot = new Uint8Array(CHUNK * CHUNK);      // débris à ramasser (1 = ferraille)
   cap = new Uint8Array(CHUNK * CHUNK);       // taille adulte de l'arbre de cette case (0 = pas d'arbre)
   ent = new Int32Array(CHUNK * CHUNK);       // identifiant d'entité (0 = vide)
+  wreck = new Uint8Array(CHUNK * CHUNK);     // 1 = case d'une épave (recalculé depuis les épaves)
   region = new Uint16Array(CHUNK * CHUNK);   // réseau électrique
   shore = new Float32Array((CHUNK + 1) * (CHUNK + 1));   // le champ de rivage aux 33×33 coins
   ford = new Float32Array((CHUNK + 1) * (CHUNK + 1));    // la profondeur du gué aux 33×33 coins
@@ -422,6 +423,15 @@ export class World {
   slab(x: number, y: number): number { return this.at(x, y)!.slab[((y & 31) << 5) | (x & 31)]; }
   ent(x: number, y: number): number { return this.at(x, y)!.ent[((y & 31) << 5) | (x & 31)]; }
   loot(x: number, y: number): number { return this.at(x, y)!.loot[((y & 31) << 5) | (x & 31)]; }
+  /** Cette case est-elle couverte par une épave ? Ne crée aucun bloc. */
+  wreck(x: number, y: number): boolean {
+    const c = this.at(x, y, false);
+    return c ? c.wreck[((y & 31) << 5) | (x & 31)] !== 0 : false;
+  }
+  setWreck(x: number, y: number, v: number): void {
+    const c = this.at(x, y)!;
+    c.wreck[((y & 31) << 5) | (x & 31)] = v;
+  }
   tree(x: number, y: number): boolean { return this.canopy(x, y) >= TREE_MIN; }
   takeLoot(x: number, y: number): boolean {
     const c = this.at(x, y)!; const i = ((y & 31) << 5) | (x & 31);
