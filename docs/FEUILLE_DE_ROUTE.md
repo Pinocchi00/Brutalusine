@@ -2,22 +2,26 @@
 
 ## Où en est-on
 
-Le jeu passe des quotas aux **ères** (`docs/ERES.md`). La démo jouable en cours : les ères Bois et Pierre,
-13 bâtiments, la Tour comme inventaire, ses livraisons, le marteau qui refait un bâtiment dans la matière de l'ère,
-et le rendu pixel art (`?rendu=pixel`), où chaque bâtiment se dessine dans sa version.
+Le jeu passe des quotas aux **ères** (`docs/ERES.md`). **La démo est terminée** : les ères Bois et Pierre se
+jouent jusqu'à la Tour de brique, avec 15 bâtiments, la Tour comme inventaire, ses livraisons, le marteau qui
+refait un bâtiment dans la matière de l'ère, et un seul rendu, en pixel art, où chaque bâtiment se dessine dans sa
+version. La chasse aux cabiais, le Piège, la Tannerie, les épaves et les noyaux comptés, la burette de graisse et
+la sauvegarde v5 sont en place.
 
 Retirés : le Savoir, les formules chimiques et le CO₂, les gaz et la fumée toxique, la santé de la jungle, les neuf
-quotas et le Colosse, le Lampadaire, les plaques de fer.
+quotas et le Colosse, le Lampadaire, les plaques de fer, l'ancien rendu.
 
-**Non vérifié à ce jour** : la musique n'a pas été écoutée par un humain ; les manettes n'ont pas été essayées
-sur du matériel réel ; la fluidité sur une grande usine n'a pas été mesurée (seule la simulation l'a été).
+**Non vérifié à ce jour** : la musique et les sons nouveaux n'ont pas été écoutés par un humain ; les manettes
+n'ont pas été essayées sur du matériel réel ; la fluidité sur une grande usine n'a pas été mesurée (seule la
+simulation l'a été).
 
-## Suite immédiate : finir la démo
+## Étape 8 — finir la démo : faite
 
-- La chasse : les animaux, le Piège, la Tannerie, le cuir (et la bande de cuir des tapis de Pierre)
-- Les épaves et les noyaux comptés ; la burette de graisse
-- Les dessins qui manquent : Piège, Argilière, Tannerie, Roue à eau, la Tour en brique
-- La démo se termine quand la Tour passe en brique
+La démo se termine quand la Tour passe en brique. Elle comprend la chasse aux cabiais, le Piège, la Tannerie, les
+épaves et les noyaux comptés, la burette de graisse, et les dessins qui manquaient.
+
+Ensuite vient le confort de construction (section 0.4) ; la surcharge des noyaux et les éclats viendront avec les
+ères suivantes.
 
 ## 0.4 — Confort de construction
 

@@ -5,7 +5,7 @@ les noyaux. Il a été décidé en discussion avec l'auteur du jeu. Les chiffres
 régler en jouant ; ce qui est marqué « ouvert » n'est pas tranché.
 
 Il remplace, dans `AGENTS.md` et `docs/CONCEPTION.md`, la règle « pas d'améliorations », les neuf quotas et la
-liste des 24 bâtiments. Ces deux fichiers seront mis à jour quand on passera au code.
+liste des 24 bâtiments. Ces deux fichiers sont à jour.
 
 ## L'idée en une phrase
 
@@ -123,8 +123,10 @@ Le noyau se voit : une petite lueur orange au cœur de la machine, comme l'œil 
 Les tapis, dalles, ponts, répartiteurs, trieurs et stockages n'en ont pas.
 
 1. **Un objet qui compte.** La capsule en apporte 6. On en trouve d'autres dans les **épaves** d'anciennes
-   capsules, en explorant. On ne sait les fabriquer qu'à l'ère Cuivre, à l'Atelier. Démolir une machine rend
-   son noyau. Au début, c'est donc l'exploration qui décide combien de machines on peut avoir.
+   capsules, en explorant : une épave est garantie entre 25 et 40 cases du départ et garde 4 noyaux ; les autres,
+   plus rares, se trouvent au-delà de 60 cases et en gardent 1 ou 2. On ne sait les fabriquer qu'à l'ère Cuivre,
+   à l'Atelier. Démolir une machine rend son noyau. Au début, c'est donc l'exploration qui décide combien de
+   machines on peut avoir.
 2. **La surcharge.** Chaque machine a un réglage de 100 % à 250 %. La vitesse suit le réglage, le courant
    monte plus vite : deux fois plus à 150 %, environ quatre fois et demie plus à 250 %. Une machine en
    surcharge a une lueur plus vive, qui bat plus vite.
@@ -139,7 +141,8 @@ Les tapis, dalles, ponts, répartiteurs, trieurs et stockages n'en ont pas.
 C'est une seule règle : une machine à qui on apporte un extra par un tapis va 1,5 fois plus vite, tant qu'elle
 en reçoit. Cela se voit sur elle.
 
-- **La graisse** (ère 2), pour les machines à rouages : une burette, des engrenages qui luisent.
+- **La graisse** (ère 2) : la Scierie, le Puits et l'Argilière, les machines à rouages, l'acceptent par un tapis.
+  Une graisse couvre 10 cycles ; une burette, des engrenages qui luisent.
 - **L'eau** (ère 4), pour les machines qui chauffent : un tuyau qui fume.
 
 La lampe à résine est retirée : la nuit ne ralentit aucune machine.
@@ -179,6 +182,14 @@ La lampe à résine est retirée : la nuit ne ralentit aucune machine.
 | Éclat | lieux remarquables, paliers | monter le niveau d'un noyau |
 
 Le calcaire disparaît : la chaux vient des os.
+
+### La chasse
+
+Les **cabiais** vivent en troupeaux de 2 à 4, dans des zones de 32×32 cases situées au-delà de 40 cases du départ.
+Ils broutent et errent lentement — un troupeau dérive dans sa zone — et ne fuient pas le bâtisseur. Trois coups
+de poing les abattent ; une bête donne 1 peau, 1 graisse et 1 os. Une bête revient toutes les 20 secondes dans une
+zone sous son plafond. Le **Piège** les attire à 6 cases, par un vrai chemin autour des obstacles, et en prend une
+environ toutes les 11 secondes ; sa sortie mélange les trois matières, d'où le Trieur.
 
 ## Les 31 bâtiments
 
@@ -302,11 +313,7 @@ On commence petit, et tout viendra peu à peu.
 
 - **Les quantités** : toutes les livraisons à partir de l'ère 3, les paliers sans fin, le prix exact de chaque
   amélioration. Elles se règlent en jouant.
-- **La chasse** : à quoi ressemblent les animaux, comment ils vivent et reviennent, ce que donne un coup de
-  poing, la portée du Piège.
-- **Les épaves et les lieux** : leur distance au départ, combien de noyaux et d'éclats chacun contient. Il faut
-  au moins une épave garantie assez près du départ, pour ne pas dépendre de la chance.
-- **Quelles machines prennent la graisse**, et lesquelles prennent l'eau.
+- **Quelles machines prennent l'eau.**
 - **La surcharge des machines qui chauffent** : elles n'ont pas besoin de courant ; surchargées, elles
   brûleraient plutôt plus de charbon.
 - **La vitesse du premier tapis** : une case par seconde, deux fois moins que le tapis actuel.
@@ -314,6 +321,3 @@ On commence petit, et tout viendra peu à peu.
 - **La bande de convoyeur de l'ère Verre.**
 - **L'aluminium** : une ère de plus, peut-être, après le Cuivre.
 - **L'allure des ères 3 à 8**, bâtiment par bâtiment.
-- **Les autres documents** : mettre à jour `AGENTS.md`, `docs/CONCEPTION.md` et `docs/FEUILLE_DE_ROUTE.md`.
-  Dans le code, `src/sim/data.ts` sera réécrit, et le test d'équilibre des atomes (`tests/chem.test.ts`)
-  disparaîtra avec les formules.
