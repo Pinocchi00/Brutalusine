@@ -2,7 +2,8 @@
 // Le brut de l'automatisation : extraire, transporter, transformer, livrer. Rien ne disparaît.
 
 import {
-  B, CANOPY_UNIT, DEPOSITS, ERAS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
+  B, CANOPY_UNIT, DEPOSITS, ERAS, ERA_POWER, ERA_SPEED, FUEL, GREASE_BOOST, GREASE_BUF, GREASE_CYCLES,
+  I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
   costOf, needsCore, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
 import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
@@ -24,7 +25,7 @@ export interface Power {
 
 export interface GameEvent {
   type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade'
-    | 'strike' | 'kill' | 'catch' | 'search';
+    | 'strike' | 'kill' | 'catch' | 'search' | 'grease';
   x: number; y: number; a: number;
 }
 export interface PlaceResult { ok: boolean; reason: string; }
@@ -549,7 +550,13 @@ export class Game {
         }
         return false;
       }
-      default: return false;
+      default:
+        if (e.def.grease && type === I.graisse && dir !== ((e.rot + 2) & 3)) {
+          if (!e.buf || e.buf[I.graisse] >= GREASE_BUF) return false;
+          e.buf[I.graisse]++;
+          return true;
+        }
+        return false;
     }
   }
 
@@ -559,6 +566,8 @@ export class Game {
       case 'hub': case 'storage': case 'generator': return true;
       case 'splitter': return dir === e.rot;
       case 'machine': return e.recipe !== null;
+      case 'sawmill': case 'miner': case 'clay':
+        return e.def.grease && dir !== ((e.rot + 2) & 3);
       default: return false;
     }
   }
@@ -645,6 +654,22 @@ export class Game {
     }
   }
 
+  /** La cadence d'une machine : 1,5 fois plus vite tant qu'elle est graissée. */
+  private speedFactor(e: Ent): number { return e.greased > 0 ? GREASE_BOOST : 1; }
+
+  /** Prend une graisse du tampon quand la machine avance : la consommation se compte comme un combustible. */
+  private takeGrease(e: Ent): void {
+    if (!e.def.grease || e.greased > 0 || !e.buf) return;
+    if (e.buf[I.graisse] <= 0) return;
+    e.buf[I.graisse]--;
+    e.greased = GREASE_CYCLES;
+    this.stats.cons[I.graisse * Stats.WIN + this.stats.cur]++;
+    this.emit('grease', e.cx, e.cy, 0);
+  }
+
+  /** Un cycle de plus est terminé : il décompte la graisse en cours. */
+  private endCycle(e: Ent): void { if (e.greased > 0) e.greased--; }
+
   private draw(e: Ent): number { this.power.demand += e.def.power * ERA_POWER[e.era - 1]; return this.power.sat; }
 
   private produce(id: number, n: number): void {
@@ -689,10 +714,15 @@ export class Game {
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     if (!this.minerHasOre(e)) { e.status = Status.NoResource; return; }
     const sat = this.draw(e);
-    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat * ERA_SPEED[e.era - 1];
+    const moving = sat >= 0.02;
+    e.status = moving ? Status.Working : Status.NoPower;
+    if (moving) {
+      this.takeGrease(e);
+      e.progress += sat * ERA_SPEED[e.era - 1] * this.speedFactor(e);
+    }
     if (e.progress < 60) return;
     e.progress = 0;
+    this.endCycle(e);
     const cells = e.cells!, n = cells.length >> 1, w = this.world;
     for (let k = 0; k < n; k++) {
       const idx = (e.ptr + k) % n;
@@ -714,10 +744,15 @@ export class Game {
     this.pushOut(e);
     if (e.outCount >= 4) { e.status = Status.Blocked; return; }
     const sat = this.draw(e);
-    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat * ERA_SPEED[e.era - 1];
+    const moving = sat >= 0.02;
+    e.status = moving ? Status.Working : Status.NoPower;
+    if (moving) {
+      this.takeGrease(e);
+      e.progress += sat * ERA_SPEED[e.era - 1] * this.speedFactor(e);
+    }
     if (e.progress < 120) return;
     e.progress = 0;
+    this.endCycle(e);
     e.out![I.argile]++; e.outCount++; e.done++;
     this.produce(I.argile, 1);
     this.emit('mine', e.cx, e.cy, I.argile);
@@ -779,12 +814,17 @@ export class Game {
       return;
     }
     const sat = this.draw(e);
-    e.status = sat < 0.02 ? Status.NoPower : Status.Working;
-    e.progress += sat * ERA_SPEED[e.era - 1];
+    const moving = sat >= 0.02;
+    e.status = moving ? Status.Working : Status.NoPower;
+    if (moving) {
+      this.takeGrease(e);
+      e.progress += sat * ERA_SPEED[e.era - 1] * this.speedFactor(e);
+    }
     if (e.progress < 90) return;
     e.progress = 0;
     const best = this.biggestTree(e);
     if (!best) { e.progress = -1; e.status = Status.NoResource; return; }
+    this.endCycle(e);
     const left = best.canopy - CANOPY_UNIT;
     this.world.setCanopy(best.x, best.y, left);
     e.out![I.bois]++; e.outCount++; e.done++;

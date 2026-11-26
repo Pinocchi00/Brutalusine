@@ -31,6 +31,7 @@ export class Ent {
   outCount = 0;
   progress = 0;
   working = false;
+  greased = 0;                        // cycles graissés restants
   status: Status = Status.Idle;
   missing = -1;                      // objet manquant (si NoInput)
   outT: Target = NO_TARGET;

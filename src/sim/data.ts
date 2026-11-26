@@ -111,6 +111,13 @@ export const ERA_SPEED = [1, 1.4, 2, 2.7, 3.8, 5.4, 7.5, 10.5];
 /** Courant consommé par une machine, par ère (indice ère − 1). */
 export const ERA_POWER = [1, 1.5, 2.3, 3.4, 5.1, 7.6, 11.4, 17];
 
+/** Cycles que couvre une graisse. */
+export const GREASE_CYCLES = 10;
+/** Cadence d'une machine graissée. */
+export const GREASE_BOOST = 1.5;
+/** Graisses en attente au plus dans le tampon d'une machine. */
+export const GREASE_BUF = 2;
+
 /** Unités par pas d'un tapis de cette ère : 4 en Bois (une case par seconde), arrondi à l'entier. */
 export function beltSpeed(era: number): number {
   return Math.round(BELT_SPEED * ERA_SPEED[era - 1]);
@@ -150,6 +157,7 @@ export interface BuildingDef {
   power: number;        // W consommés en travail (ou produits pour les sources)
   unlock: number;       // livraisons accomplies requises
   heat: boolean;        // machine qui chauffe : charbon dans sa recette, pas de courant
+  grease: boolean;      // machine à rouages : accepte la graisse et va plus vite
   desc: string;         // une phrase : à quoi ça sert
   recipes: Recipe[];
   fuels: number[];
@@ -160,12 +168,13 @@ function building(
   key: string, name: string, kind: Kind, cat: Category | null, w: number, h: number,
   o: {
     era: number; height?: number; power?: number; unlock?: number; desc: string;
-    recipes?: string[]; fuels?: string[]; filter?: boolean; heat?: boolean;
+    recipes?: string[]; fuels?: string[]; filter?: boolean; heat?: boolean; grease?: boolean;
   },
 ): BuildingDef {
   const def: BuildingDef = {
     key, name, kind, cat, w, h, cost: [], era: o.era,
-    height: o.height ?? 1, power: o.power ?? 0, unlock: o.unlock ?? 0, heat: o.heat ?? false, desc: o.desc,
+    height: o.height ?? 1, power: o.power ?? 0, unlock: o.unlock ?? 0, heat: o.heat ?? false,
+    grease: o.grease ?? false, desc: o.desc,
     recipes: (o.recipes ?? []).map((k) => R[k]), fuels: (o.fuels ?? []).map((k) => I[k]),
     filter: o.filter ?? false,
   };
@@ -184,10 +193,10 @@ export const BUILDINGS: BuildingDef[] = [
   building('trieur', 'Trieur', 'splitter', 'logistique', 1, 1, { era: 2, height: 0.4, unlock: 3, filter: true, desc: 'L’objet choisi passe tout droit, les autres partent sur les côtés.' }),
 
   // --- extraction
-  building('scierie', 'Scierie', 'sawmill', 'extraction', 2, 2, { era: 1, height: 0.8, power: 40, unlock: 0, desc: 'Coupe les arbres à 5 cases à la ronde et sort du bois. Les arbres repoussent.' }),
-  building('puits', 'Puits', 'miner', 'extraction', 3, 3, { era: 1, height: 0.7, power: 60, unlock: 2, desc: 'Extrait la roche sous lui : 1 pierre par seconde. À poser sur des rochers.' }),
+  building('scierie', 'Scierie', 'sawmill', 'extraction', 2, 2, { era: 1, height: 0.8, power: 40, unlock: 0, grease: true, desc: 'Coupe les arbres à 5 cases à la ronde et sort du bois. Les arbres repoussent. Graissée par un tapis, elle va 1,5 fois plus vite.' }),
+  building('puits', 'Puits', 'miner', 'extraction', 3, 3, { era: 1, height: 0.7, power: 60, unlock: 2, grease: true, desc: 'Extrait la roche sous lui : 1 pierre par seconde. À poser sur des rochers. Graissé par un tapis, il va 1,5 fois plus vite.' }),
   building('piege', 'Piège', 'trap', 'extraction', 2, 2, { era: 2, height: 0.5, power: 0, unlock: 3, desc: 'Des baies en appât attirent les bêtes à 6 cases ; il les prend une à une. Sa sortie mélange peau, graisse et os : trie-la.' }),
-  building('argiliere', 'Argilière', 'clay', 'extraction', 2, 2, { era: 2, height: 0.6, power: 40, unlock: 4, desc: 'Drague la berge et sort de l’argile, sans jamais l’épuiser. À poser sur la berge.' }),
+  building('argiliere', 'Argilière', 'clay', 'extraction', 2, 2, { era: 2, height: 0.6, power: 40, unlock: 4, grease: true, desc: 'Drague la berge et sort de l’argile, sans jamais l’épuiser. À poser sur la berge. Graissée par un tapis, elle va 1,5 fois plus vite.' }),
 
   // --- fonte
   building('charbonniere', 'Charbonnière', 'machine', 'fonte', 2, 2, { era: 1, height: 1, unlock: 1, heat: true, recipes: ['charbon'], desc: 'Cuit le bois sans flamme : 2 bois donnent 1 charbon. Pas besoin de courant.' }),
