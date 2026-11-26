@@ -96,3 +96,39 @@ export function smokeVent(key: string, era: Era, up: number): { x: number; y: nu
   }
   return null;
 }
+
+/** Un petit engrenage d'acier dont un reflet clair tourne avec le temps. */
+function greaseGear(P: Pen, cx: number, cy: number, rad: number, now: number): void {
+  P.disc(cx, cy, rad + 1, C.s4);
+  P.disc(cx, cy, rad, C.s1);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * TAU;
+    P.p(cx + Math.cos(a) * (rad + 1), cy + Math.sin(a) * (rad + 1), C.s2);
+  }
+  const a = now * 1.7;
+  P.p(cx + Math.cos(a) * (rad - 1), cy + Math.sin(a) * (rad - 1), C.s0);
+  P.p(cx + Math.cos(a + 2.4) * (rad - 1), cy + Math.sin(a + 2.4) * (rad - 1), C.c0);
+  P.p(cx, cy, C.s3);
+}
+
+/** Montre la graisse d'une machine : des engrenages qui luisent et une burette posée à côté. */
+export function drawGrease(P: Pen, e: Ent, X: number, Y: number, up: number, now: number): void {
+  if (e.greased <= 0 || !e.def.grease) return;
+  const footY = Y + up + e.h * 24;
+  const cx = X + e.w * 24 * 0.7;
+  const cy = footY - 10;
+  greaseGear(P, cx, cy, 4, now);
+  greaseGear(P, cx - 7, cy + 3, 3, now + 2);
+  const bx = X + 3;
+  const by = footY - 8;
+  P.r(bx + 1, by - 2, 3, 2, C.s3);
+  P.r(bx + 1, by - 2, 3, 1, C.s2);
+  P.r(bx, by, 6, 6, C.s3);
+  P.r(bx, by, 6, 1, C.s1);
+  P.r(bx, by, 1, 6, C.s2);
+  P.r(bx + 5, by + 1, 1, 5, C.s4);
+  P.r(bx, by + 5, 6, 1, C.ink2);
+  P.line(bx + 6, by + 1, bx + 9, by - 2, C.e2, 2);
+  P.line(bx + 6, by + 1, bx + 9, by - 2, C.e1);
+  P.p(bx + 9, by - 3, C.o1);
+}

@@ -5,7 +5,7 @@
 import type { Game } from '../../sim/game';
 import type { Ent } from '../../sim/ent';
 import { Status } from '../../sim/ent';
-import { B, DX, DY, TREE_MIN } from '../../sim/data';
+import { B, DX, DY, TREE_MIN, needsCore, type BuildingDef } from '../../sim/data';
 import { outputPorts } from '../../sim/belts';
 import { CHUNK } from '../../sim/world';
 import type { Camera, PlayerView, RenderOpts, Ring, RouteView } from './types';
@@ -18,14 +18,16 @@ import { animTime } from './clock';
 import { PixelFx, type BurstKind } from './fx';
 import { GroundLayer } from './groundLayer';
 import { drawBelts } from './belts';
-import { drawLights } from './lights';
+import { drawCore, drawLights } from './lights';
 import { placeholderItem } from './placeholders';
 import { drawBuilderFrame, lensForColor } from './builderArt';
 import { BUILDER_ANCHOR, idlePose } from './builderMotion';
 import type { BuilderFrame } from './builderTypes';
 import { buildingSilhouette, buildingSprite, prepareBuildings } from './buildings';
-import { drawShaftMotion, isBurning, smokeVent } from './buildingAnims';
+import { drawGrease, drawShaftMotion, isBurning, smokeVent } from './buildingAnims';
 import { forcedEra, versionEra, type Era } from './eras';
+import { beastFrame, beastSprite, beastVisible, drawBeast } from './beasts';
+import { prepareWrecks, wreckLit, wreckSprite, wreckVisible } from './wrecks';
 import {
   TREE_RADIUS,
   canopySolid,
@@ -198,6 +200,7 @@ export class PxRenderer {
     prepareTrees();
     prepareOutcrops();
     prepareBuildings();
+    prepareWrecks();
     this.ground.prepare();
   }
 
@@ -269,6 +272,8 @@ export class PxRenderer {
     if (fade > 0) this.queue.add('cast', () => { ctx.globalAlpha = fade; });
     this.addTrees(frame);
     this.addBuildings(frame);
+    this.addWrecks(frame);
+    this.addBeasts(frame);
     if (fade > 0) this.queue.add('cast', () => { ctx.globalAlpha = 1; });
     this.addPlayers(frame);
     this.addEffects(frame);
@@ -675,6 +680,8 @@ export class PxRenderer {
         if (e.def.key === 'puits' && e.w === e.def.w && e.h === e.def.h) {
           drawShaftMotion(P, era, X + 1, Y + 1, sprite.up, e.progress);
         }
+        if (needsCore(e.def)) drawCore(P, e.cx * TILE_PX, (e.y + e.h * 0.55) * TILE_PX, e.status, now);
+        drawGrease(P, e, X, Y, sprite.up, now);
         drawLights(P, sprite.lights, X + 1, Y + 1, now);
         if (outputPorts(e).length) drawChute(P, e);
         if (stretched) ctx.restore();
@@ -682,6 +689,43 @@ export class PxRenderer {
       f.shown.push({ e, sprite });
     }
     this.lastSmokeTick = g.tick;
+  }
+
+  /** L'ère du dessin d'un aperçu : la version qui sera posée, ou l'ère forcée. */
+  private previewEra(g: Game, def: BuildingDef): Era {
+    return this.forced ?? versionEra(g.versionFor(def));
+  }
+
+  /** Ajoute les épaves visibles : leur ombre, leur coque et la lueur de leurs noyaux. */
+  private addWrecks(f: Frame): void {
+    const { g, view, ctx } = f;
+    for (const w of g.wrecks) {
+      if (!wreckVisible(w.x, w.y, view.tileX0, view.tileY0, view.tileX1, view.tileY1)) continue;
+      const sprite = wreckSprite(w.searched);
+      const X = w.x * TILE_PX - 1;
+      const Y = w.y * TILE_PX - sprite.up - 1;
+      const foot = (w.y + 2) * TILE_PX;
+      if (f.fade > 0) this.queue.add('cast', () => castShadow(ctx, sprite, X, Y));
+      if (wreckLit(w) && sprite.lights.length) this.lit.push({ sprite, X, Y });
+      this.queue.addTall(foot, X, () => {
+        ctx.drawImage(sprite.img, X, Y);
+        drawLights(f.P, sprite.lights, X + 1, Y + 1, f.now);
+      });
+    }
+  }
+
+  /** Ajoute les cabiais visibles, triés avec les bâtiments et le bâtisseur par leur pied. */
+  private addBeasts(f: Frame): void {
+    const { g, view, ctx, P } = f;
+    for (const b of g.beasts) {
+      if (!beastVisible(b.x, b.y, view.tileX0, view.tileY0, view.tileX1, view.tileY1)) continue;
+      const frame = beastFrame(b.state, g.tick, b.id, b.face, b.struck);
+      const sprite = beastSprite(frame);
+      const X = b.x * TILE_PX - sprite.ax;
+      const foot = b.y * TILE_PX + 6;
+      if (f.fade > 0) this.queue.add('cast', () => P.ell(b.x * TILE_PX, foot - 1, 14, 3, C.shade));
+      this.queue.addTall(foot, X, () => drawBeast(ctx, sprite, b.x, b.y, frame.face, frame.flinch));
+    }
   }
 
   /** Ajoute les bâtisseurs boxeurs, triés avec le reste par leur pied. */
@@ -746,6 +790,16 @@ export class PxRenderer {
         drawRange(P, selected.def.key, selected.x, selected.y, selected.w, selected.h, now);
       });
     }
+    for (const p of opts.players) {
+      if (!p.prey) continue;
+      if (p.prey.kind === 'beast') {
+        const b = g.beasts.find((q) => q.id === p.prey?.id);
+        if (b) this.queue.add('fx', () => drawBrackets(P, b.x - 0.8, b.y - 0.8, 1.6, 1.6, C.o1, now));
+      } else {
+        const w = g.wrecks.find((q) => q.id === p.prey?.id);
+        if (w) this.queue.add('fx', () => drawBrackets(P, w.x, w.y, 2, 2, C.o1, now));
+      }
+    }
 
     let beltInHand = false;
     for (const p of opts.players) {
@@ -765,7 +819,7 @@ export class PxRenderer {
         if (p.route) {
           const route: readonly RouteView[] = p.route;
           const into = p.routeInto;
-          this.queue.add('fx', () => drawRoute(P, route, into, now));
+          this.queue.add('fx', () => drawRoute(P, route, into, now, this.previewEra(g, def)));
         }
         continue;
       }
@@ -840,9 +894,11 @@ export class PxRenderer {
     const H = h * TILE_PX;
     const ctx = f.ctx;
     const P = f.P;
+    const def = B.dalle;
+    const wood = this.previewEra(f.g, def) === 1;
     ctx.save();
     ctx.globalAlpha = 0.55;
-    ctx.fillStyle = C.c1;
+    ctx.fillStyle = wood ? C.e1 : C.st1;
     ctx.fillRect(X, Y, W, H);
     ctx.restore();
     const col = p.ok ? C.q1 : C.red;

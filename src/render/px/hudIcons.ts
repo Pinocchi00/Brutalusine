@@ -16,12 +16,14 @@ import { ROCK, boulder } from './outcrops';
 export type HudIconKey =
   | 'belt' | 'puits' | 'kiln' | 'crate' | 'fist'
   | 'slab' | 'splitter' | 'sorter' | 'sawmill' | 'furnace' | 'burner' | 'tower' | 'demolish' | 'hammer'
+  | 'trap' | 'tannery' | 'clayPit' | 'waterWheel'
   | 'neutral';
 
 /** Toutes les clés d'icône, dans l'ordre de la planche. */
 export const HUD_ICON_KEYS: readonly HudIconKey[] = [
   'belt', 'puits', 'kiln', 'crate', 'fist',
-  'slab', 'splitter', 'sorter', 'sawmill', 'furnace', 'burner', 'tower', 'demolish', 'hammer', 'neutral',
+  'slab', 'splitter', 'sorter', 'sawmill', 'furnace', 'burner', 'tower', 'demolish', 'hammer',
+  'trap', 'tannery', 'clayPit', 'waterWheel', 'neutral',
 ];
 
 /** L'icône de chaque bâtiment du jeu ; tout le reste tombe sur `neutral`. */
@@ -40,6 +42,10 @@ const BUILDING_ICONS: Readonly<Record<string, HudIconKey>> = {
   tour: 'tower',
   demolir: 'demolish',
   marteau: 'hammer',
+  piege: 'trap',
+  tannerie: 'tannery',
+  argiliere: 'clayPit',
+  roue: 'waterWheel',
 };
 
 /** L'icône d'un bâtiment du jeu (ou de `poings`, `demolir`) ; `neutral` s'il n'a pas encore de dessin. */
@@ -360,6 +366,116 @@ function paintHammer(P: Pen): void {
   P.p(12, 8, C.o1);
 }
 
+/** Un enclos de pieux liés, une trappe à contrepoids de pierre, des baies rouges en appât. */
+function paintTrap(P: Pen): void {
+  P.ell(15, 21, 12, 5, C.sd3);
+  P.ell(15, 20, 10, 4, C.sd2);
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    const x = 15 + Math.cos(a) * 10;
+    const y = 20 + Math.sin(a) * 4;
+    P.line(x, y, x, y - 7, C.e3, 2);
+    P.line(x, y - 1, x, y - 7, C.e1);
+    P.p(x, y - 8, C.e0);
+  }
+  P.r(10, 15, 10, 2, C.e3);
+  P.r(10, 15, 10, 1, C.e1);
+  P.r(13, 17, 4, 3, C.st2);
+  P.r(13, 17, 4, 1, C.st1);
+  P.p(14, 18, C.st0);
+  for (const [x, y] of [[14, 19], [16, 18], [15, 21]]) {
+    P.r(x, y, 2, 2, C.red);
+    P.p(x, y, C.pink);
+  }
+  P.p(4, 23, C.st2);
+  P.p(25, 23, C.st2);
+}
+
+/** Deux cuves de pierre, l'une d'eau sombre, l'autre brune, une peau tendue sur un cadre de bois. */
+function paintTannery(P: Pen): void {
+  P.r(2, 15, 11, 9, C.st3);
+  P.r(3, 16, 9, 7, C.st1);
+  P.ell(7.5, 16, 4.5, 2, C.q5);
+  P.ell(7.5, 16, 3.5, 1.5, C.q4);
+  P.r(17, 15, 11, 9, C.st3);
+  P.r(18, 16, 9, 7, C.st1);
+  P.ell(22.5, 16, 4.5, 2, C.e4);
+  P.ell(22.5, 16, 3.5, 1.5, C.e3);
+  P.r(4, 3, 22, 10, C.e2);
+  P.r(4, 3, 22, 1, C.e1);
+  P.r(5, 4, 20, 8, C.sd1);
+  P.r(5, 4, 20, 2, C.sd0);
+  P.r(5, 11, 20, 1, C.sd3);
+  for (let i = 5; i <= 25; i += 3) {
+    P.p(i, 3, C.e3);
+    P.p(i, 12, C.e3);
+  }
+  for (let j = 4; j <= 11; j += 3) P.p(4, j, C.e3);
+  P.p(27, 7, C.e3);
+  P.line(1, 23, 29, 23, C.st4);
+}
+
+/** Un bac creusé dans la berge, bordé de pierre, une roue à godets et de l'argile ocre. */
+function paintClayPit(P: Pen): void {
+  P.ell(15, 18, 13, 7, C.sd3);
+  P.ell(15, 18, 11, 5, C.ir2);
+  P.ell(15, 18, 9, 4, C.ir3);
+  P.ell(12, 19, 4, 2, C.q5);
+  P.p(11, 19, C.q4);
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    P.p(15 + Math.cos(a) * 12, 18 + Math.sin(a) * 6, C.st2);
+  }
+  P.line(22, 12, 22, 5, C.e3, 2);
+  P.line(22, 12, 22, 5, C.e1);
+  P.line(24, 13, 24, 4, C.e3, 2);
+  P.line(24, 13, 24, 4, C.e1);
+  P.disc(23, 4, 2.5, C.s3);
+  P.disc(23, 4, 1.5, C.s1);
+  P.line(23, 6, 14, 16, C.e2, 2);
+  for (const t of [0.25, 0.5, 0.75]) {
+    const x = 23 - 9 * t;
+    const y = 6 + 10 * t;
+    P.r(x - 1, y, 3, 3, C.s3);
+    P.r(x - 1, y, 3, 1, C.s2);
+    P.p(x, y + 1, C.ir1);
+  }
+  for (const [x, y] of [[3, 24], [9, 25], [18, 24], [25, 25]]) {
+    P.ell(x, y, 2, 1, C.e4);
+    P.ell(x, y - 1, 2, 1, C.sd2);
+  }
+}
+
+/** Une roue à aubes de bois sur un axe de pierre, l'eau bleue qui écume au pied. */
+function paintWaterWheel(P: Pen): void {
+  P.r(2, 21, 26, 4, C.q4);
+  P.r(2, 21, 26, 1, C.q2);
+  P.r(4, 23, 7, 1, C.c0);
+  P.r(19, 24, 6, 1, C.c0);
+  P.r(1, 14, 4, 9, C.st2);
+  P.r(25, 14, 4, 9, C.st2);
+  P.r(1, 14, 4, 1, C.st1);
+  P.r(25, 14, 4, 1, C.st1);
+  P.r(0, 17, 30, 2, C.s3);
+  P.r(0, 17, 30, 1, C.s1);
+  const cx = 15;
+  const cy = 13;
+  for (let a = 0; a < Math.PI * 2; a += 0.08) {
+    P.p(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9, C.e2);
+    P.p(cx + Math.cos(a) * 8, cy + Math.sin(a) * 8, C.e1);
+  }
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.2;
+    const x = cx + Math.cos(a) * 8;
+    const y = cy + Math.sin(a) * 8;
+    P.line(cx, cy, x, y, C.e2);
+    P.line(x - Math.sin(a) * 2, y + Math.cos(a) * 2, x + Math.sin(a) * 2, y - Math.cos(a) * 2, C.e1, 2);
+  }
+  P.disc(cx, cy, 3, C.s3);
+  P.disc(cx, cy, 2, C.s1);
+  P.p(cx - 1, cy - 1, C.s0);
+}
+
 /** Un engrenage d'acier à huit dents, un moyeu sombre. */
 function paintNeutral(P: Pen): void {
   const cx = 15;
@@ -394,6 +510,10 @@ const PAINTERS: Readonly<Record<HudIconKey, IconPainter>> = {
   tower: paintTower,
   demolish: paintDemolish,
   hammer: paintHammer,
+  trap: paintTrap,
+  tannery: paintTannery,
+  clayPit: paintClayPit,
+  waterWheel: paintWaterWheel,
   neutral: paintNeutral,
 };
 

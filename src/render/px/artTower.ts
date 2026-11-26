@@ -4,7 +4,7 @@
  */
 import type { Pen } from './pen';
 import type { Light } from './sprite';
-import { C, M, PANEL, PANEL2, STONE, STONE_F } from './palette';
+import { C, M, PANEL, PANEL2, STONE, STONE_F, type Material } from './palette';
 import { hash, rng } from './noise';
 import { box, courses, crate, cyl, logEnds, moss } from './volumes';
 
@@ -142,4 +142,109 @@ export function towerE2(P: Pen, U: number, L: Light[]): void {
   L.push({ k: 'fire', x: 57, y: U - 24, w: 9 });
   moss(P, 2, U + 58, 68, 12, 12, 30);
   moss(P, 18, U + 22, 36, 6, 13, 10);
+}
+
+/** La brique de la Tour : terre cuite sourde, arêtes claires, joints de chaux. */
+const BRICK: Material = {
+  t: C.ir1,
+  hi: C.ir0,
+  sh: C.ir2,
+  f: C.ir2,
+  fl: C.ir3,
+  seam: '#d9b79a',
+};
+
+/** Les pierres d'une façade de brique : la teinte, l'arête, l'ombre et le joint clair. */
+const BRICK_F: readonly string[] = [C.ir0, C.ir1, C.ir2, '#8a5545', '#d9b79a'];
+
+/** Ère 3 · Brique : la Tour de Pierre rebâtie en brique, un étage de plus, l'œil de la capsule au cœur. */
+export function towerE3(P: Pen, U: number, L: Light[]): void {
+  // le soubassement de pierre, hérité de la Tour de Pierre
+  box(P, 0, U + 4, 72, 64, 4, STONE, false);
+  courses(P, 0, U + 68, 72, 4, 7, STONE_F);
+  P.r(0, U + 4, 72, 1, C.st0);
+  P.r(0, U + 4, 1, 64, C.st0);
+
+  // le hall trapu, en brique
+  box(P, 4, U - 8, 64, 50, 20, BRICK, false);
+  courses(P, 4, U - 7, 64, 18, 11, BRICK_F);
+  courses(P, 4, U + 42, 64, 20, 13, BRICK_F);
+  P.r(4, U - 8, 64, 1, C.ir0);
+  P.r(4, U - 8, 1, 50, C.ir0);
+  P.r(67, U - 7, 1, 49, C.ir3);
+  P.r(4, U + 41, 64, 1, C.ir3);
+
+  // quatre pilastres de brique sur la façade
+  for (const x of [5, 23, 47, 66]) {
+    P.r(x, U + 41, 4, 22, C.ir1);
+    P.r(x, U + 41, 1, 22, C.ir0);
+    P.r(x + 3, U + 42, 1, 21, C.ir3);
+    for (let y = U + 45; y < U + 62; y += 4) P.r(x + 1, y, 2, 1, '#d9b79a');
+  }
+
+  // les arcades du hall : deux baies et la grande porte du sud
+  const arch = (cx: number, top: number, rx: number, h: number): void => {
+    const X = Math.round(cx - rx);
+    P.ell(cx, top + rx, rx + 1, rx, C.ir3);
+    P.r(X - 1, top, (rx + 1) * 2, h, C.ir3);
+    P.ell(cx, top + rx, rx, Math.max(1, rx - 1), C.ink2);
+    P.r(X, top + rx, rx * 2, h - rx, C.ink2);
+  };
+  arch(14, U + 45, 5, 17);
+  arch(58, U + 45, 5, 17);
+  arch(36, U + 43, 7, 19);
+  for (const cx of [14, 58, 36]) {
+    P.p(cx - 2, U + 48, C.o4);
+    P.p(cx + 2, U + 52, C.o3);
+  }
+
+  // la trémie de l'ouest et le linteau du sud
+  box(P, 0, U + 28, 10, 12, 8, M.steel, false);
+  P.r(2, U + 30, 6, 8, C.ink2);
+  P.r(0, U + 40, 10, 1, C.o3);
+  P.r(6, U + 62, 16, 3, C.ir3);
+  P.r(6, U + 62, 16, 1, C.ir0);
+
+  // le fût de brique, haut et étroit, avec ses deux arêtes
+  box(P, 22, U - 50, 28, 18, 52, BRICK, false);
+  courses(P, 22, U - 49, 28, 16, 17, BRICK_F);
+  courses(P, 22, U - 32, 28, 52, 19, BRICK_F);
+  P.r(22, U - 32, 2, 52, C.ir0);
+  P.r(47, U - 32, 3, 52, C.ir3);
+  P.r(22, U - 50, 28, 1, C.ir0);
+
+  // un étage de plus : un tambour de brique, ses meurtrières et sa corniche
+  box(P, 27, U - 64, 18, 14, 14, BRICK, false);
+  courses(P, 27, U - 52, 18, 14, 23, BRICK_F);
+  P.r(27, U - 64, 18, 1, C.ir0);
+  P.r(27, U - 64, 1, 14, C.ir0);
+  P.r(44, U - 63, 1, 13, C.ir3);
+  for (const x of [31, 36, 41]) {
+    P.r(x, U - 58, 2, 7, C.ink2);
+    P.p(x, U - 58, C.s3);
+  }
+  box(P, 25, U - 69, 22, 5, 2, M.dark, false);
+  P.r(25, U - 72, 22, 1, C.ir0);
+  for (let i = 26; i < 46; i += 4) P.r(i, U - 71, 1, 3, C.ir3);
+
+  // l'œil de la capsule, toujours visible au cœur du hall
+  P.disc(36, U + 9, 7, C.ir3);
+  P.disc(36, U + 9, 6, C.st1);
+  P.disc(36, U + 9, 5, C.ink2);
+  P.disc(36, U + 9, 3, C.o3);
+  P.disc(36, U + 9, 2, C.o2);
+  P.p(35, U + 8, C.o0);
+  L.push({ k: 'lens', x: 36, y: U + 9, r: 2.5 });
+
+  // deux fenêtres basses, une lueur d'atelier dans le hall
+  P.r(10, U + 30, 4, 6, C.ink2);
+  P.r(54, U + 30, 4, 6, C.ink2);
+  L.push({ k: 'win', x: 11, y: U + 31, w: 2, h: 4, per: 9 });
+  L.push({ k: 'win', x: 55, y: U + 31, w: 2, h: 4, per: 11 });
+
+  // les mousses et les herbes des vieux murs
+  moss(P, 3, U + 58, 66, 7, 31, 24);
+  moss(P, 0, U + 66, 72, 5, 32, 18);
+  moss(P, 8, U + 4, 20, 5, 33, 7);
+  moss(P, 44, U + 2, 20, 5, 34, 6);
 }

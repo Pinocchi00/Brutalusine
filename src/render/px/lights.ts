@@ -2,6 +2,7 @@
  * Les lumières animées des bâtiments : fanal, œil de capsule, fenêtres, feux, flammes, braises.
  * Portage exact de `drawLights` de la maquette `docs/maquettes/heure-doree.html`.
  */
+import { Status } from '../../sim/ent';
 import { C } from './palette';
 import { bump, vnoise } from './noise';
 import type { Pen } from './pen';
@@ -55,6 +56,32 @@ export function drawLights(P: Pen, lights: readonly Light[], X: number, Y: numbe
       // Des braises : ça rougeoie, ça ne flambe pas.
       const v = vnoise(x * 0.7 + y, t * 0.45, 4);
       P.r(x, y, l.w || 2, l.h || 1, v > 0.62 ? C.o1 : v > 0.36 ? C.o2 : C.o3);
+    } else if (l.k === 'glow') {
+      // Une lueur de noyau : lente, faible, un peu plus vive quand la machine travaille.
+      const b = (Math.sin(t * Math.PI * 2 / (l.per || 6)) + 1) / 2;
+      const r = (l.r || 2) * (0.8 + b * 0.3);
+      P.disc(x, y, r, b > 0.55 ? C.o2 : C.o3);
+      P.disc(x, y, Math.max(1, r - 1), b > 0.7 ? C.o1 : C.o2);
+      if (b > 0.8) P.p(x - 1, y - 1, C.o0);
     }
+  }
+}
+
+/** L'intensité d'un noyau : vive quand la machine travaille, faible et fixe sinon. */
+export function coreIntensity(status: Status): number {
+  return status === Status.Working ? 1 : 0.35;
+}
+
+/** La lueur du noyau d'un bâtiment, au cœur de son emprise. */
+export function drawCore(P: Pen, cx: number, cy: number, status: Status, now: number): void {
+  const working = status === Status.Working;
+  const b = working ? (Math.sin(now * Math.PI * 2 / 3.2) + 1) / 2 : 0;
+  P.disc(cx, cy, 2.4, working ? C.o3 : C.o4);
+  P.disc(cx, cy, 1.6, working ? C.o2 : C.o3);
+  if (working) {
+    P.p(cx, cy, b > 0.5 ? C.o0 : C.o1);
+    if (b > 0.75) P.p(cx - 1, cy - 1, C.white);
+  } else {
+    P.p(cx, cy, C.o3);
   }
 }

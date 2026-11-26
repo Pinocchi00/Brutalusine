@@ -231,22 +231,26 @@ export function eraBeltTile(P: Pen, X: number, Y: number, inD: number, outD: num
   }
 }
 
+/** Les deux dessins de bande : les rondins et le cuir. La Brique garde le cuir, son dernier dessin. */
+type BeltEra = 1 | 2;
+
 /** Le cache des tapis d'ère : seize directions, cinq phases pour les rondins, huit pour le cuir. */
-const eraCaches: Record<Era, (HTMLCanvasElement | undefined)[]> = {
+const eraCaches: Record<BeltEra, (HTMLCanvasElement | undefined)[]> = {
   1: new Array(TILES * 5),
   2: new Array(TILES * 8),
 };
 
 /** La même tuile d'ère, en cache ; mêmes pixels que `eraBeltTile` direct. */
 export function eraBeltTileImage(inD: number, outD: number, off: number, era: Era): HTMLCanvasElement {
-  const phase = era === 1 ? logPhase(off) : leatherPhase(off);
-  const phases = era === 1 ? 5 : 8;
+  const drawn: BeltEra = era === 1 ? 1 : 2;
+  const phase = drawn === 1 ? logPhase(off) : leatherPhase(off);
+  const phases = drawn === 1 ? 5 : 8;
   const key = ((inD & 3) * 4 + (outD & 3)) * phases + phase;
-  const cache = eraCaches[era];
+  const cache = eraCaches[drawn];
   const hit = cache[key];
   if (hit) return hit;
   const { canvas, ctx } = makeSurface(T, T);
-  eraBeltTile(pen(ctx), 0, 0, inD & 3, outD & 3, off, era);
+  eraBeltTile(pen(ctx), 0, 0, inD & 3, outD & 3, off, drawn);
   cache[key] = canvas;
   return canvas;
 }

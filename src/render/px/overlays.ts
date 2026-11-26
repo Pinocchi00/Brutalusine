@@ -10,6 +10,7 @@ import { Status } from '../../sim/ent';
 import { B, DX, DY, ITEMS } from '../../sim/data';
 import { SAW_RANGE } from '../../sim/game';
 import { C } from './palette';
+import type { Era } from './eras';
 import { TILE_PX } from './view';
 import { chev } from './volumes';
 import { makeSurface } from './surface';
@@ -211,14 +212,15 @@ export function drawGhost(ctx: CanvasRenderingContext2D, sprite: Sprite, X: numb
 }
 
 /** Le tracé d'un convoyeur case par case : chevrons dans le sens de marche, rouge sur les refus. */
-export function drawRoute(P: Pen, route: readonly RouteView[], into: boolean, now: number): void {
+export function drawRoute(P: Pen, route: readonly RouteView[], into: boolean, now: number, era: Era = 2): void {
+  const wood = era === 1;
   for (const t of route) {
     const X = t.x * TILE_PX;
     const Y = t.y * TILE_PX;
     P.r(X + 1, Y + 1, TILE_PX - 2, TILE_PX - 2, C.ink);
-    P.r(X + 2, Y + 2, TILE_PX - 4, TILE_PX - 4, t.ok ? C.s3 : REFUSED);
-    P.r(X + 2, Y + 2, TILE_PX - 4, 1, t.ok ? C.s1 : REFUSED_HI);
-    P.r(X + 2, Y + TILE_PX - 3, TILE_PX - 4, 1, t.ok ? C.s4 : C.ink);
+    P.r(X + 2, Y + 2, TILE_PX - 4, TILE_PX - 4, t.ok ? (wood ? C.e2 : C.s3) : REFUSED);
+    P.r(X + 2, Y + 2, TILE_PX - 4, 1, t.ok ? (wood ? C.e1 : C.s1) : REFUSED_HI);
+    P.r(X + 2, Y + TILE_PX - 3, TILE_PX - 4, 1, t.ok ? (wood ? C.e4 : C.s4) : C.ink);
     const col = t.ok ? C.o1 : C.red;
     chev(P, Math.round(X + TILE_PX / 2) + 1, Math.round(Y + TILE_PX / 2) + 1, t.dir, C.ink);
     chev(P, Math.round(X + TILE_PX / 2), Math.round(Y + TILE_PX / 2), t.dir, col);
