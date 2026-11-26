@@ -1032,10 +1032,10 @@ const app = new App();
 if (import.meta.env.DEV) {
   void import('./dev').then((dev) => {
     (app as unknown as { demo: () => string[] }).demo = () => dev.buildDemo(app.game);
-    (app as unknown as { cuirs: () => string[] }).cuirs = () => {
+    (app as unknown as { leather: () => string[] }).leather = () => {
       app.game = new Game(app.game.seed);
       app.restart();
-      return dev.buildCuirs(app.game);
+      return dev.buildLeatherRun(app.game);
     };
   });
 }

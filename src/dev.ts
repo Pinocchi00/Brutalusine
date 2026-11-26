@@ -126,7 +126,7 @@ function findBank(g: Game): { x: number; y: number } | null {
 }
 
 /** Prépare le rejeu « 30 cuirs » : la Tour en Pierre après trois livraisons, et le stock de départ. */
-export function buildCuirs(g: Game): string[] {
+export function buildLeatherRun(g: Game): string[] {
   // les trois premières livraisons passent par les vraies méthodes : la réception, puis le pas de simulation
   for (let q = 0; q < 3; q++) {
     const need = QUOTAS[q].need;

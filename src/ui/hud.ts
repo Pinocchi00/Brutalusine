@@ -293,7 +293,7 @@ export class Hud {
       <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${hudIconUrl(b.key)}" alt="" width="64" height="56"><span class="nm">${esc(b.name)}</span>
       ${this.toolTipbox(b, g)}</button>`;
     }).join('');
-    const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
+    const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse, abats une bête ou fouille une épave. Clic droit lâche aussi l’outil.</span></span></button>`;
     const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
     const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><img src="${hudIconUrl('marteau')}" alt="" width="64" height="56"><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
     $('tools').innerHTML = hint + tools + hands + demolish + hammer;

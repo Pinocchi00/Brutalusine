@@ -7,7 +7,7 @@ import { toolHint } from '../src/ui/px/barHint';
 
 describe('phrase d’aide de la barre pixel', () => {
   it('décrit les mains libres quand aucun outil n’est tenu', () => {
-    expect(toolHint(null, null)).toBe('<b>Poings</b> · clique un arbre, un rocher ou un débris');
+    expect(toolHint(null, null)).toBe('<b>Poings</b> · clique un arbre, un rocher, un débris, une bête ou une épave');
   });
 
   it('décrit la démolition', () => {
@@ -35,6 +35,6 @@ describe('phrase d’aide de la barre pixel', () => {
   });
 
   it('retombe sur les Poings quand la définition manque', () => {
-    expect(toolHint('inconnu', null)).toBe('<b>Poings</b> · clique un arbre, un rocher ou un débris');
+    expect(toolHint('inconnu', null)).toBe('<b>Poings</b> · clique un arbre, un rocher, un débris, une bête ou une épave');
   });
 });

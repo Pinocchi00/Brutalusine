@@ -7,7 +7,7 @@ function escapeName(name: string): string {
 
 /** La phrase d'aide de la barre : le nom de l'outil en gras, puis ce que fait le clic. HTML échappé. */
 export function toolHint(tool: string | null, def: { name: string; kind: string } | null): string {
-  if (tool === null || (tool !== 'demolir' && tool !== 'marteau' && def === null)) return '<b>Poings</b> · clique un arbre, un rocher ou un débris';
+  if (tool === null || (tool !== 'demolir' && tool !== 'marteau' && def === null)) return '<b>Poings</b> · clique un arbre, un rocher, un débris, une bête ou une épave';
   if (tool === 'demolir') return '<b>Démolir</b> · clique ou glisse · tout est remboursé';
   if (tool === 'marteau') return '<b>Marteau</b> · clique ou glisse · refait dans la matière de l’ère';
   if (def!.kind === 'belt') return '<b>Convoyeur</b> · glisse pour tracer';
