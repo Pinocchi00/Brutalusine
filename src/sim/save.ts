@@ -2,6 +2,7 @@
 
 import { B, R, type Dir } from './data';
 import { Game } from './game';
+import { Status } from './ent';
 import type { Beast, Zone } from './fauna';
 
 export const SAVE_VERSION = 5;
@@ -26,6 +27,7 @@ interface EntSave {
   isOut?: boolean; held?: number; rr?: number; filter?: number; recipe?: string;
   buf?: number[]; out?: number[]; progress?: number; working?: boolean; outRR?: number;
   energy?: number; ptr?: number; level?: number; done?: number; light?: number;
+  status?: number;
   items?: number[];
 }
 
@@ -59,6 +61,7 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     if (e.ptr) s.ptr = e.ptr;
     if (e.level) s.level = e.level;
     if (e.done) s.done = e.done;
+    if (e.status) s.status = e.status;
     const it = items.get(e.id);
     if (it) s.items = it;
     ents.push(s);
@@ -98,6 +101,7 @@ export function deserialize(d: SaveData): Game {
     e.progress = s.progress ?? 0; e.working = !!s.working; e.outRR = s.outRR ?? 0;
     e.energy = s.energy ?? 0; e.ptr = s.ptr ?? 0; e.born = -999;
     e.level = s.level ?? 0; e.done = s.done ?? 0; e.light = s.light ?? 1;
+    e.status = s.status ?? Status.Idle;
     if (s.items) e.saved = s.items.slice();
     if (e.def.kind === 'hub') g.hub = e;
   }

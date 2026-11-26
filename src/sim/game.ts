@@ -10,7 +10,7 @@ import { Ent, Status } from './ent';
 import { rebuildBelts, type BeltPath } from './belts';
 import { sunAt, type Sun } from './sun';
 import { valueNoise } from './rng';
-import { Fauna, type Beast } from './fauna';
+import { Fauna, TRAP_OUT_MAX, TRAP_TICKS, type Beast, type TrapBait } from './fauna';
 
 export const STORE_CAP = 240;
 export const SAW_RANGE = 5;
@@ -23,7 +23,7 @@ export interface Power {
 
 export interface GameEvent {
   type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade'
-    | 'strike' | 'kill';
+    | 'strike' | 'kill' | 'catch';
   x: number; y: number; a: number;
 }
 export interface PlaceResult { ok: boolean; reason: string; }
@@ -33,7 +33,7 @@ export interface RemoveInfo { key: string; x: number; y: number; rot: number; re
 /** Ce qui a une direction : une sortie (machines, puits, argilière, entrepôt), un sens (convoyeur, répartiteur). */
 export function rotatable(def: BuildingDef): boolean {
   const k = def.kind;
-  return k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage' || k === 'splitter' || k === 'belt';
+  return k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'trap' || k === 'storage' || k === 'splitter' || k === 'belt';
 }
 
 export class Stats {
@@ -102,6 +102,13 @@ export class Game {
   /** La bête la plus proche du point à moins de `r` cases, ou null. */
   beastAt(x: number, y: number, r: number): Beast | null { return this.fauna.beastAt(x, y, r); }
 
+  /** Les Pièges posés, tels que la faune les voit pour suivre l'appât. */
+  private trapBaits(): TrapBait[] {
+    const out: TrapBait[] = [];
+    for (const e of this.tickers) if (e.def.kind === 'trap') out.push({ x: e.x, y: e.y, w: e.w, h: e.h });
+    return out;
+  }
+
   /** Un coup de poing sur une bête : elle perd 1 point de vie, et la matière entre au stock si elle tombe. */
   strikeBeast(id: number): { ok: boolean; reason: string; killed: boolean } {
     const b = this.fauna.beasts.find((q) => q.id === id);
@@ -161,7 +168,7 @@ export class Game {
     if (k === 'belt' || k === 'bridge') this.belts.push(e);
     else {
       this.tickers.push(e);
-      if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'storage' || k === 'generator') {
+      if (k === 'machine' || k === 'miner' || k === 'sawmill' || k === 'clay' || k === 'trap' || k === 'storage' || k === 'generator') {
         e.buf = new Int32Array(NITEMS); e.out = new Int32Array(NITEMS);
       }
       if (def.recipes.length) e.recipe = def.recipes[0];
@@ -552,7 +559,7 @@ export class Game {
     for (let i = 0; i < ts.length; i++) this.tickEnt(ts[i]);
     this.tickPower();
     this.tickGrowth();
-    this.fauna.step(this.world);
+    this.fauna.step(this.world, this.trapBaits());
     if (this.tick % 60 === 0) {
       this.stats.roll(); this.checkQuota();
       this.wind = 0.35 + 0.65 * valueNoise(this.tick / 2400, 0.5, this.seed + 99);
@@ -566,6 +573,7 @@ export class Game {
       case 'machine': this.tickMachine(e); break;
       case 'miner': this.tickMiner(e); break;
       case 'clay': this.tickClay(e); break;
+      case 'trap': this.tickTrap(e); break;
       case 'sawmill': this.tickSawmill(e); break;
       case 'storage': this.pushOut(e); e.status = e.outCount > 0 ? Status.Working : Status.Idle; break;
       default: break;
@@ -678,6 +686,37 @@ export class Game {
     e.out![I.argile]++; e.outCount++; e.done++;
     this.produce(I.argile, 1);
     this.emit('mine', e.cx, e.cy, I.argile);
+  }
+
+  /** Un Piège : il pousse sa sortie, attire une bête par seconde et la prend quand son compte est plein. */
+  private tickTrap(e: Ent): void {
+    this.pushOut(e);
+    if (e.outCount >= TRAP_OUT_MAX) { e.status = Status.Blocked; return; }
+    if ((this.tick + e.id) % 60 === 0) {
+      const res = this.fauna.attract(this.world, e.x, e.y, e.w, e.h);
+      const waiting = e.progress > 0 && e.progress < TRAP_TICKS;
+      if (waiting || res.attracted > 0) e.status = Status.Working;
+      else if (res.noPath > 0) e.status = Status.NoPath;
+      else e.status = Status.NoBeast;
+    }
+    if (e.progress < TRAP_TICKS) e.progress = Math.min(TRAP_TICKS, e.progress + ERA_SPEED[e.era - 1]);
+    if (e.progress >= TRAP_TICKS) this.trapCatch(e);
+  }
+
+  /** Prend la bête collée au bord du Piège : sa sortie reçoit 1 peau, 1 graisse et 1 os. */
+  private trapCatch(e: Ent): void {
+    const b = this.fauna.beastNearRect(e.x, e.y, e.w, e.h, 1.2);
+    if (!b) return;
+    const x = b.x, y = b.y, id = b.id;
+    this.fauna.remove(b);
+    for (const item of [I.peau, I.graisse, I.os]) {
+      e.out![item]++;
+      e.outCount++;
+      this.produce(item, 1);
+    }
+    e.done++;
+    e.progress = 0;
+    this.emit('catch', x, y, id);
   }
 
   /** Le plus gros arbre à portée de la Scierie, ou null s'il n'y a que des pousses. */
