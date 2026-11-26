@@ -28,6 +28,7 @@ describe('marteau sur un bâtiment', () => {
     g.quota = 3;                                   // ère de la Pierre
     g.stock.fill(0);
     g.stock[I.bois] = 100;
+    g.stock[I.noyau] = 1;                           // une usine de test : les noyaux viennent d'épaves
     clear(g, 8, 8, 16, 16);
     expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
     const saw = g.entAt(10, 10)!;
@@ -212,6 +213,7 @@ describe('refus du marteau', () => {
     old.quota = 0;                                 // ère du Bois
     old.stock.fill(0);
     old.stock[I.bois] = 100;
+    old.stock[I.noyau] = 1;                         // une usine de test : les noyaux viennent d'épaves
     clear(old, 8, 8, 16, 16);
     expect(old.place('scierie', 10, 10, 0).ok).toBe(true);
     const ancient = old.entAt(10, 10)!;
@@ -228,6 +230,7 @@ describe('refus du marteau', () => {
     poor.quota = 3;
     poor.stock.fill(0);
     poor.stock[I.bois] = 100;
+    poor.stock[I.noyau] = 1;                        // une usine de test : les noyaux viennent d'épaves
     clear(poor, 8, 8, 16, 16);
     expect(poor.place('scierie', 10, 10, 0).ok).toBe(true);
     const broke = poor.entAt(10, 10)!;
@@ -305,6 +308,7 @@ describe('aperçu du marteau (checkUpgrade)', () => {
     g.quota = 3;
     g.stock.fill(0);
     g.stock[I.bois] = 100;
+    g.stock[I.noyau] = 1;                           // une usine de test : les noyaux viennent d'épaves
     clear(g, 8, 8, 16, 16);
     expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
     g.stock[I.pierre] = 100;
@@ -334,6 +338,7 @@ describe('la version visée', () => {
     g.quota = 6;                                   // ère de la Brique
     g.stock.fill(0);
     g.stock[I.bois] = 100;
+    g.stock[I.noyau] = 1;                           // une usine de test : les noyaux viennent d'épaves
     clear(g, 8, 8, 16, 16);
     expect(g.era).toBe(3);
     expect(g.place('scierie', 10, 10, 0).ok).toBe(true);
@@ -353,6 +358,7 @@ describe('conservation et sauvegarde', () => {
     g.stock.fill(0);
     g.stock[I.bois] = 500;
     g.stock[I.cuir] = 0;
+    g.stock[I.noyau] = 1;                                    // une usine de test : les noyaux viennent d'épaves
     clear(g, 8, 8, 24, 16);
     expect(g.place('scierie', 10, 10, 0).ok).toBe(true);     // version 1
     expect(g.place('convoyeur', 14, 10, 0).ok).toBe(true);   // version 1
@@ -381,6 +387,7 @@ describe('conservation et sauvegarde', () => {
       g.quota = 3;
       g.stock.fill(0);
       g.stock[I.bois] = 200;
+      g.stock[I.noyau] = 1;                                  // une usine de test : les noyaux viennent d'épaves
       clear(g, 8, 8, 20, 20);
       expect(g.place('scierie', 10, 10, 0).ok).toBe(true);   // version 1
       g.stock[I.pierre] = 100;

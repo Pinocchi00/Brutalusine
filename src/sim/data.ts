@@ -37,6 +37,7 @@ export const ITEMS: ItemDef[] = [
   item('cuir', 'Cuir', '#8A5A36', 'plaque', 'Une peau tannée. La bande des tapis de l’ère de la Pierre.'),
   item('argile', 'Argile', '#B5714A', 'boule', 'La terre grasse des berges. Cuite, elle donne la brique.'),
   item('brique', 'Brique', '#A4503A', 'bloc', 'De l’argile cuite au four.'),
+  item('noyau', 'Noyau', '#E8742A', 'rouage', 'Un petit moteur venu d’une capsule. Chaque machine en garde un en son cœur.'),
 ];
 ITEMS.forEach((it, i) => { it.id = i; });
 export const NITEMS = ITEMS.length;
@@ -200,6 +201,21 @@ export const BUILDINGS: BuildingDef[] = [
   building('roue', 'Roue à eau', 'hydro', 'energie', 2, 2, { era: 2, height: 0.7, power: 200, unlock: 3, desc: '200 W constants, jour et nuit. À poser au bord de l’eau.' }),
 ];
 export const B: Record<string, BuildingDef> = Object.fromEntries(BUILDINGS.map((b) => [b.key, b]));
+
+/** Ce bâtiment garde-t-il un noyau ? Tout sauf la Tour, les tapis, les dalles, les ponts et la logistique. */
+export function needsCore(def: BuildingDef): boolean {
+  switch (def.kind) {
+    case 'hub':
+    case 'belt':
+    case 'slab':
+    case 'bridge':
+    case 'storage':
+    case 'splitter':
+      return false;
+    default:
+      return true;
+  }
+}
 
 // ---------------------------------------------------------------- livraisons
 /** Lieu que le jeu peut montrer au joueur (bouton « Y aller »). */

@@ -374,6 +374,7 @@ describe('sauvegarde et conservation', () => {
     g.stock.fill(0);
     g.stock[I.pierre] = 500;
     g.stock[I.bois] = 500;
+    g.stock[I.noyau] = 1;                           // une usine de test : les noyaux viennent d'épaves
 
     const baseline = snap(g);
     expect(g.place('charbonniere', 2, 2, 0).ok).toBe(true);   // sur le socle déjà dallé de la Tour

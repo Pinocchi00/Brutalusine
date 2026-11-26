@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, LOOT_WOOD, TREE_MIN, DAY_TICKS, costOf } from '../src/sim/data';
+import { I, R, SPACING, TILE_U, BELT_SPEED, UPS, B, BUILDINGS, QUOTAS, RECIPES, LOOT_WOOD, TREE_MIN, DAY_TICKS, ITEMS, costOf } from '../src/sim/data';
 import { Status, type Ent } from '../src/sim/ent';
 import { serialize, deserialize } from '../src/sim/save';
 
@@ -275,6 +275,7 @@ describe('lois de conservation', () => {
     let tx = 0, ty = 0;
     search: for (let y = -60; y <= 60; y++) for (let x = -60; x <= 60; x++) if (g.world.tree(x, y)) { tx = x; ty = y; break search; }
     g.stock[I.bois] = 100; g.stock[I.pierre] = 100;
+    g.stock[I.noyau] = 2;                          // une usine de test : les noyaux viennent d'épaves
     const before = [g.ledger(I.bois), g.ledger(I.pierre)];
 
     let scierie: Ent | null = null;
@@ -347,9 +348,9 @@ describe('contenu et progression', () => {
     expect(g.unlocked(B.charbonniere)).toBe(true);
   });
 
-  it('le départ est vide', () => {
+  it('le départ n’a que les six noyaux de la capsule', () => {
     const g = new Game(9);
-    expect(Array.from(g.stock).every((n) => n === 0)).toBe(true);
+    ITEMS.forEach((it) => expect(g.stock[it.id], it.name).toBe(it.key === 'noyau' ? 6 : 0));
     expect(g.quota).toBe(0);
     expect(g.era).toBe(1);
   });

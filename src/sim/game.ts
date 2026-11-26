@@ -3,7 +3,7 @@
 
 import {
   B, CANOPY_UNIT, DEPOSITS, ERAS, ERA_POWER, ERA_SPEED, FUEL, I, ITEMS, LOOT_WOOD, MAX_VERSION, NITEMS, R, QUOTAS, TREE_MIN,
-  costOf, quotaAt, type BuildingDef, type Dir, type Recipe,
+  costOf, needsCore, quotaAt, type BuildingDef, type Dir, type Recipe,
 } from './data';
 import { World, GROUND_WATER, GROUND_BANK, CHUNK, type Chunk } from './world';
 import { Ent, Status } from './ent';
@@ -11,6 +11,7 @@ import { rebuildBelts, type BeltPath } from './belts';
 import { sunAt, type Sun } from './sun';
 import { valueNoise } from './rng';
 import { Fauna, TRAP_OUT_MAX, TRAP_TICKS, type Beast, type TrapBait } from './fauna';
+import { placeWrecks, wreckAt, type Wreck } from './wrecks';
 
 export const STORE_CAP = 240;
 export const SAW_RANGE = 5;
@@ -23,7 +24,7 @@ export interface Power {
 
 export interface GameEvent {
   type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade'
-    | 'strike' | 'kill' | 'catch';
+    | 'strike' | 'kill' | 'catch' | 'search';
   x: number; y: number; a: number;
 }
 export interface PlaceResult { ok: boolean; reason: string; }
@@ -73,6 +74,7 @@ export class Game {
   quotaStart = 0;
   sun: Sun = sunAt(0);
   fauna: Fauna;
+  private wreckList: Wreck[] = [];
   stats = new Stats();
   events: GameEvent[] = [];
   records: { quota: number; ticks: number; buildings: number }[] = [];
@@ -93,6 +95,35 @@ export class Game {
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) this.pave(x, y, 1);
     this.hub = this.spawn(B.tour, -1, -1, 3 as Dir);
     this.fauna.init(this.world);
+    this.stock[I.noyau] = 6;
+    this.restoreWrecks(placeWrecks(this.world, this.seed, this.fauna.beasts));
+  }
+
+  /** Les épaves de la partie, en lecture seule. */
+  get wrecks(): readonly Wreck[] { return this.wreckList; }
+
+  /** Remplace les épaves et marque leurs cases dans le monde (partie neuve ou chargée). */
+  restoreWrecks(list: Wreck[]): void {
+    this.wreckList = list;
+    for (const w of list) {
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) this.world.setWreck(w.x + i, w.y + j, 1);
+    }
+  }
+
+  /** L'épave qui couvre cette case, ou null. */
+  wreckAt(x: number, y: number): Wreck | null { return wreckAt(this.wreckList, x, y); }
+
+  /** Fouille une épave : ses noyaux entrent au stock et elle reste, vide, comme décor. */
+  searchWreck(id: number): { ok: boolean; reason: string; cores: number } {
+    const w = this.wreckList.find((q) => q.id === id);
+    if (!w) return { ok: false, reason: 'Plus d’épave ici', cores: 0 };
+    if (w.searched) return { ok: false, reason: 'Déjà fouillée : elle est vide', cores: 0 };
+    const cores = w.cores;
+    w.searched = true;
+    w.cores = 0;
+    this.gain(I.noyau, cores);
+    this.emit('search', w.x + 1, w.y + 1, cores);
+    return { ok: true, reason: '', cores };
   }
 
   // ================================================================ faune
@@ -217,6 +248,7 @@ export class Game {
     for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
       const cx = x + i, cy = y + j;
       if (w.ground(cx, cy) === GROUND_WATER) { res.reason = 'Impossible sur l’eau'; return res; }
+      if (this.wreckAt(cx, cy)) { res.reason = 'Une épave est là : fouille-la'; return res; }
       const o = this.entAt(cx, cy);
       if (o && !(def.kind === 'belt' && o.def.kind === 'belt')) { res.reason = 'Case occupée'; return res; }
       if (def.kind === 'slab' && w.slab(cx, cy)) { res.reason = 'Déjà dallé'; return res; }
@@ -232,6 +264,7 @@ export class Game {
     if (def.kind === 'miner' && !ore) { res.reason = deadOre ? 'Ce gisement ne s’exploite pas encore' : 'À poser sur un gisement (rochers colorés)'; return res; }
     if (def.kind === 'clay' && !bank) { res.reason = 'À poser sur la berge (la terre humide au bord de l’eau)'; return res; }
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
+    if (needsCore(def) && this.stock[I.noyau] < 1) { res.reason = 'Plus de noyau : fouille une épave'; return res; }
     if (!free) {
       if (!this.unlocked(def)) { res.reason = 'Pas encore débloqué'; return res; }
       if (!this.anyVersionPayable(def)) {
@@ -257,6 +290,7 @@ export class Game {
       }
     }
     const v = this.versionFor(def, opts.free);
+    if (needsCore(def)) this.stock[I.noyau] -= 1;
     if (!opts.free) for (const [id, n] of costOf(def, v)) this.stock[id] -= n;
     const slabEra = def.kind === 'slab' ? v : 1;      // seule une Dalle posée prend son ère ; le reste est offert en Bois
     for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.pave(x + i, y + j, slabEra);
@@ -303,6 +337,7 @@ export class Game {
       return null;
     }
     if (e.def.kind === 'hub') return null;
+    if (needsCore(e.def)) this.stock[I.noyau] += 1;
     for (const [id, n] of costOf(e.def, e.era)) this.stock[id] += n;
     if (e.buf) for (let i = 0; i < NITEMS; i++) this.stock[i] += e.buf[i] + e.out![i];
     if (e.working && e.recipe) for (const [id, n] of e.recipe.inputs) this.stock[id] += n;
@@ -804,6 +839,7 @@ export class Game {
     for (let i = 0; i < CHUNK * CHUNK; i++) {
       const c0 = can[i], top = cap[i];
       if (c0 >= top || c.slab[i] || c.ent[i]) continue;
+      if (this.wreckAt(c.cx * CHUNK + (i & 31), c.cy * CHUNK + (i >> 5))) continue;   // rien ne pousse sur une épave
       if (c0 === 0 && this.nearSlab(c, i)) continue;          // rien ne repousse contre une dalle
       const nv = Math.min(top, c0 + step);
       can[i] = nv; dC += nv - c0;
@@ -843,6 +879,10 @@ export class Game {
   /** Compte les objets d'une sorte présents dans tout le monde (pour les tests de conservation). */
   ledger(item: number): number {
     let total = this.stock[item];
+    if (item === I.noyau) {
+      for (const e of this.tickers) if (!e.dead && needsCore(e.def)) total++;
+      for (const w of this.wreckList) total += w.cores;
+    }
     for (const p of this.paths) for (let i = p.head; i < p.types.length; i++) if (p.types[i] === item) total++;
     for (const e of this.tickers) {
       if (e.buf && e.out) total += e.buf[item] + e.out[item];
