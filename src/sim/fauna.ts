@@ -67,8 +67,8 @@ export interface Zone {
 /** La position d'un Piège vue par la faune : son coin nord-ouest et sa taille. */
 export interface TrapBait { x: number; y: number; w: number; h: number; }
 
-/** Le bilan d'une attraction : bêtes attirées et bêtes à portée sans chemin. */
-export interface AttractResult { attracted: number; noPath: number; }
+/** Le bilan d'une attraction : bêtes à portée avec un chemin et bêtes à portée sans chemin. */
+export interface AttractResult { reachable: number; noPath: number; }
 
 interface Tile { x: number; y: number; }
 
@@ -204,24 +204,37 @@ export class Fauna {
 
   /**
    * Attire les bêtes qui broutent à portée par le plus court chemin praticable jusqu'au bord d'un Piège.
-   * Renvoie le nombre de bêtes attirées et celui des bêtes à portée qui n'ont aucun chemin.
+   * Renvoie le nombre de bêtes à portée avec un chemin et celui sans chemin.
    */
   attract(world: World, x: number, y: number, w: number, h: number): AttractResult {
+    return this.scan(world, x, y, w, h, true);
+  }
+
+  /** Le bilan d'une portée sans rien changer : bêtes à portée avec un chemin et bêtes sans chemin. */
+  reachability(world: World, x: number, y: number, w: number, h: number): AttractResult {
+    return this.scan(world, x, y, w, h, false);
+  }
+
+  /**
+   * Compte les bêtes à portée du centre d'un Piège et cherche leur chemin. Celles qui broutent sont
+   * attirées quand `apply` est vrai ; celles qui marchent gardent leur cible, seul le chemin est cherché.
+   */
+  private scan(world: World, x: number, y: number, w: number, h: number, apply: boolean): AttractResult {
     const cx = x + w / 2, cy = y + h / 2;
-    let attracted = 0;
+    let reachable = 0;
     let noPath = 0;
     for (const b of this.beasts) {
-      if (b.state !== 'graze') continue;
       if (Math.hypot(b.x - cx, b.y - cy) > TRAP_RANGE) continue;
       const path = this.trapPath(world, Math.floor(b.x), Math.floor(b.y), x, y, w, h);
       if (!path) { noPath++; continue; }
+      reachable++;
+      if (!apply || b.state !== 'graze') continue;
       const t = this.segmentTarget(b, path);
       b.tx = t.x + 0.5;
       b.ty = t.y + 0.5;
       b.state = 'walk';
-      attracted++;
     }
-    return { attracted, noPath };
+    return { reachable, noPath };
   }
 
   /** La cible d'un pas : le centre de la case si la bête n'y est pas, sinon la fin du premier segment droit. */

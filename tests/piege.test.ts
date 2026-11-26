@@ -347,6 +347,22 @@ describe('la chaîne des 30 cuirs', () => {
     }, 240_000);
   }
 
+  for (const seed of [311, 312]) {
+    it(`ne dit jamais NoBeast quand une bête est à portée (graine ${seed})`, () => {
+      const { g, trap } = buildChain(seed);
+      const limit = 10 * 60 * 60;
+      let ticks = 0;
+      while (ticks < limit) {
+        g.step();
+        ticks++;
+        if (ticks % 30 !== 0) continue;
+        const near = g.beasts.some((b) => Math.hypot(b.x - trap.cx, b.y - trap.cy) <= TRAP_RANGE);
+        if (!near) continue;
+        expect(trap.status, `graine ${seed}, pas ${ticks}`).not.toBe(Status.NoBeast);
+      }
+    }, 120_000);
+  }
+
   it('rechargée au milieu de la chaîne, la partie suit exactement la même voie', () => {
     const straight = buildChain(312).g;
     run(straight, 2400);

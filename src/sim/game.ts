@@ -692,13 +692,14 @@ export class Game {
   private tickTrap(e: Ent): void {
     this.pushOut(e);
     if (e.outCount >= TRAP_OUT_MAX) { e.status = Status.Blocked; return; }
-    if ((this.tick + e.id) % 60 === 0) {
-      const res = this.fauna.attract(this.world, e.x, e.y, e.w, e.h);
-      const waiting = e.progress > 0 && e.progress < TRAP_TICKS;
-      if (waiting || res.attracted > 0) e.status = Status.Working;
-      else if (res.noPath > 0) e.status = Status.NoPath;
-      else e.status = Status.NoBeast;
-    }
+    const due = (this.tick + e.id) % 60 === 0;
+    const res = due
+      ? this.fauna.attract(this.world, e.x, e.y, e.w, e.h)
+      : this.fauna.reachability(this.world, e.x, e.y, e.w, e.h);
+    const waiting = e.progress > 0 && e.progress < TRAP_TICKS;
+    if (waiting || res.reachable > 0) e.status = Status.Working;
+    else if (res.noPath > 0) e.status = Status.NoPath;
+    else e.status = Status.NoBeast;
     if (e.progress < TRAP_TICKS) e.progress = Math.min(TRAP_TICKS, e.progress + ERA_SPEED[e.era - 1]);
     if (e.progress >= TRAP_TICKS) this.trapCatch(e);
   }
