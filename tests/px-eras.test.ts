@@ -70,7 +70,7 @@ describe('forcedEra', () => {
   it('lit les deux ères et ignore les autres paramètres', () => {
     expect(forcedEra('?ere=1')).toBe(1);
     expect(forcedEra('?ere=2')).toBe(2);
-    expect(forcedEra('?ere=2')).toBe(2);
+    expect(forcedEra('?graine=7&ere=2')).toBe(2);
   });
 
   it('ne force rien pour une valeur invalide', () => {
