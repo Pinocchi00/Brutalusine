@@ -13,7 +13,7 @@ export const HERD_MIN_DIST = 40;
 /** Distance minimale à (0, 0) où une bête peut se tenir. */
 export const SPAWN_MIN_DIST = 28;
 /** Pas entre deux reconstitutions d'une bête dans une zone. */
-export const RESPAWN_TICKS = 7200;
+export const RESPAWN_TICKS = 1200;
 /** Une zone est un bloc de 32×32 ; ce rayon donne un carré de 8×8 zones autour du départ. */
 export const ZONE_RANGE = 4;
 
@@ -101,6 +101,15 @@ function passable(world: World, x: number, y: number): boolean {
   if (world.ent(x, y) !== 0) return false;
   if (world.slab(x, y) !== 0) return false;
   return true;
+}
+
+/** La case porte-t-elle une entité ou une dalle ? L'eau et la distance ne changent jamais sous une bête. */
+function occupied(world: World, x: number, y: number): boolean {
+  const c = world.at(x, y, false);
+  if (!c) return false;
+  const m = CHUNK - 1;
+  const i = ((y & m) << 5) | (x & m);
+  return c.ent[i] !== 0 || c.slab[i] !== 0;
 }
 
 /** Les zones et les bêtes d'une partie. */
@@ -207,6 +216,20 @@ export class Fauna {
   }
 
   private tickBeast(world: World, b: Beast): void {
+    const cx = Math.floor(b.x);
+    const cy = Math.floor(b.y);
+    if (occupied(world, cx, cy)) {
+      const p = this.nearestPassable(world, cx, cy, 4);
+      if (p) {
+        b.x = p.x + 0.5;
+        b.y = p.y + 0.5;
+        b.tx = b.x;
+        b.ty = b.y;
+        b.state = 'graze';
+        b.timer = 60;
+      }
+      return;
+    }
     if (b.state === 'graze') {
       b.timer--;
       if (b.timer > 0) return;
@@ -283,6 +306,25 @@ export class Fauna {
       }
     }
     return null;
+  }
+
+  /**
+   * La case praticable la plus proche, à `max` cases au plus, en balayant dans un ordre fixe.
+   * Sert quand une dalle ou un bâtiment est posé sous une bête : elle sort sans contrôle de chemin.
+   */
+  private nearestPassable(world: World, x: number, y: number, max: number): Tile | null {
+    let best: Tile | null = null;
+    let bestD = Infinity;
+    for (let dy = -max; dy <= max; dy++) {
+      for (let dx = -max; dx <= max; dx++) {
+        const d = dx * dx + dy * dy;
+        if (d > max * max || d >= bestD) continue;
+        if (!passable(world, x + dx, y + dy)) continue;
+        bestD = d;
+        best = { x: x + dx, y: y + dy };
+      }
+    }
+    return best;
   }
 
   /** Déplace l'ancre de quelques cases, sans sortir de sa zone. */

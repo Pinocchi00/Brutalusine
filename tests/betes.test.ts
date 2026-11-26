@@ -1,7 +1,7 @@
 // Les cabiais : troupeaux fixes par la graine, dérive lente, frappe aux poings et reconstitution.
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/sim/game';
-import { B, I } from '../src/sim/data';
+import { I } from '../src/sim/data';
 import { CHUNK, GROUND_WATER } from '../src/sim/world';
 import { BEAST_HP, RESPAWN_TICKS, SPAWN_MIN_DIST, ZONE_RANGE } from '../src/sim/fauna';
 import { SAVE_VERSION, serialize, deserialize, type SaveData } from '../src/sim/save';
@@ -38,21 +38,32 @@ describe('les troupeaux', () => {
 
   it('les bêtes ne marchent ni sur l’eau, ni sur un bâtiment, ni sur une dalle', () => {
     const g = new Game(77);
-    const z = g.fauna.zones.find((q) => q.herd && q.count > 0)!;
-    const footprint = new Set(g.beasts.map((b) => `${Math.floor(b.x)},${Math.floor(b.y)}`));
-    let slab: { x: number; y: number } | null = null;
-    let belt: { x: number; y: number } | null = null;
-    for (let dy = -3; dy <= 3 && (!slab || !belt); dy++) {
-      for (let dx = -3; dx <= 3 && (!slab || !belt); dx++) {
-        const x = z.ax + dx;
-        const y = z.ay + dy;
-        if (footprint.has(`${x},${y}`)) continue;
-        if (!slab && g.canPlace(B.dalle, x, y, 0, true).ok) slab = { x, y };
-        else if (!belt && g.canPlace(B.convoyeur, x, y, 0, true).ok) belt = { x, y };
-      }
+    const tiles: { x: number; y: number }[] = [];
+    const seen = new Set<string>();
+    for (const b of g.beasts) {
+      const x = Math.floor(b.x);
+      const y = Math.floor(b.y);
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tiles.push({ x, y });
+      if (tiles.length === 2) break;
     }
-    if (slab) expect(g.place('dalle', slab.x, slab.y, 0, { free: true }).ok).toBe(true);
-    if (belt) expect(g.place('convoyeur', belt.x, belt.y, 0, { free: true }).ok).toBe(true);
+    expect(tiles.length).toBe(2);
+    expect(g.place('dalle', tiles[0].x, tiles[0].y, 0, { free: true }).ok).toBe(true);
+    expect(g.place('convoyeur', tiles[1].x, tiles[1].y, 0, { free: true }).ok).toBe(true);
+
+    const checkSolid = () => {
+      for (const b of g.beasts) {
+        const tx = Math.floor(b.x);
+        const ty = Math.floor(b.y);
+        expect(g.world.ground(tx, ty), `eau · bête ${b.id}`).not.toBe(GROUND_WATER);
+        expect(g.world.ent(tx, ty), `bâtiment · bête ${b.id}`).toBe(0);
+        expect(g.world.slab(tx, ty), `dalle · bête ${b.id}`).toBe(0);
+      }
+    };
+    run(g, 120);
+    checkSolid();
 
     const previous = new Map<number, { x: number; y: number }>();
     let moved = 0;
@@ -60,18 +71,32 @@ describe('les troupeaux', () => {
     for (let t = 0; t < total; t++) {
       g.step();
       if (g.tick % 60 !== 0) continue;
+      checkSolid();
       for (const b of g.beasts) {
-        const tx = Math.floor(b.x);
-        const ty = Math.floor(b.y);
-        expect(g.world.ground(tx, ty), `eau · bête ${b.id}`).not.toBe(GROUND_WATER);
-        expect(g.world.ent(tx, ty), `bâtiment · bête ${b.id}`).toBe(0);
-        expect(g.world.slab(tx, ty), `dalle · bête ${b.id}`).toBe(0);
         const old = previous.get(b.id);
         if (old) moved += Math.hypot(b.x - old.x, b.y - old.y);
         previous.set(b.id, { x: b.x, y: b.y });
       }
     }
     expect(moved).toBeGreaterThan(0);
+  }, 180_000);
+
+  it('aucun bloc n’est chargé en cours de partie, même après des frappes et une dalle sous une bête', () => {
+    const g = new Game(85);
+    const chunks = g.world.list.length;
+    const first = g.beasts[0];
+    expect(first).toBeDefined();
+    const x = Math.floor(first.x);
+    const y = Math.floor(first.y);
+    expect(g.place('dalle', x, y, 0, { free: true }).ok).toBe(true);
+    for (let t = 0; t < 108_000; t++) {
+      g.step();
+      if (t !== 600 && t !== 3600) continue;
+      const target = g.beasts[0];
+      if (!target) continue;
+      for (let k = 0; k < BEAST_HP; k++) expect(g.strikeBeast(target.id).ok).toBe(true);
+    }
+    expect(g.world.list.length).toBe(chunks);
   }, 180_000);
 
   it('une bête reste près de l’ancre et dans sa zone', () => {
@@ -195,6 +220,8 @@ describe('le coût de la faune', () => {
       z.count = 0;
     }
     const ticks = 36_000;
+    run(populated, 600);                       // échauffe le JIT avant la mesure
+    run(empty, 600);
     const t0 = performance.now();
     run(populated, ticks);
     const filledMs = performance.now() - t0;
