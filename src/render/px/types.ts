@@ -25,6 +25,7 @@ export interface PlayerView {
   routeInto: boolean;                  // son bout se déverse dans une machine ou un tapis
   motion?: MotionResult | null;        // l'image du bâtisseur boxeur en rendu pixel
   strikeTile?: { readonly x: number; readonly y: number } | null;   // case frappée pendant un coup, pour rester devant sa cible
+  prey?: { readonly kind: 'beast' | 'wreck'; readonly id: number } | null;   // bête ou épave visée à mains nues (lot 8g la remplit, 8f la souligne)
 }
 
 /** Une case du tracé d'un convoyeur : où, dans quel sens, et si elle peut être posée. */
