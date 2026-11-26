@@ -10,6 +10,7 @@ import { Ent, Status } from './ent';
 import { rebuildBelts, type BeltPath } from './belts';
 import { sunAt, type Sun } from './sun';
 import { valueNoise } from './rng';
+import { Fauna, type Beast } from './fauna';
 
 export const STORE_CAP = 240;
 export const SAW_RANGE = 5;
@@ -21,7 +22,8 @@ export interface Power {
 }
 
 export interface GameEvent {
-  type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade';
+  type: 'craft' | 'deliver' | 'quota' | 'place' | 'remove' | 'mine' | 'cut' | 'fell' | 'pick' | 'hand' | 'upgrade'
+    | 'strike' | 'kill';
   x: number; y: number; a: number;
 }
 export interface PlaceResult { ok: boolean; reason: string; }
@@ -70,6 +72,7 @@ export class Game {
   gathered = 0;                    // gestes de récolte à la main (étapes guidées)
   quotaStart = 0;
   sun: Sun = sunAt(0);
+  fauna: Fauna;
   stats = new Stats();
   events: GameEvent[] = [];
   records: { quota: number; ticks: number; buildings: number }[] = [];
@@ -78,6 +81,7 @@ export class Game {
 
   constructor(public seed: number, fresh = true) {
     this.world = new World(seed);
+    this.fauna = new Fauna(seed);
     if (fresh) this.init();
   }
 
@@ -88,6 +92,34 @@ export class Game {
     this.world.ensureArea(-48, -48, 48, 48);
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) this.pave(x, y, 1);
     this.hub = this.spawn(B.tour, -1, -1, 3 as Dir);
+    this.fauna.init(this.world);
+  }
+
+  // ================================================================ faune
+  /** Les bêtes vivantes, en lecture seule. */
+  get beasts(): readonly Beast[] { return this.fauna.beasts; }
+
+  /** La bête la plus proche du point à moins de `r` cases, ou null. */
+  beastAt(x: number, y: number, r: number): Beast | null { return this.fauna.beastAt(x, y, r); }
+
+  /** Un coup de poing sur une bête : elle perd 1 point de vie, et la matière entre au stock si elle tombe. */
+  strikeBeast(id: number): { ok: boolean; reason: string; killed: boolean } {
+    const b = this.fauna.beasts.find((q) => q.id === id);
+    if (!b) return { ok: false, reason: 'Plus de bête ici', killed: false };
+    b.hp--;
+    b.state = 'graze';
+    b.timer = 60;
+    b.struck = this.tick;
+    this.emit('strike', b.x, b.y, b.hp);
+    if (b.hp > 0) return { ok: true, reason: '', killed: false };
+    const x = b.x, y = b.y;
+    this.fauna.remove(b);
+    this.gain(I.peau, 1);
+    this.gain(I.graisse, 1);
+    this.gain(I.os, 1);
+    this.gathered++;
+    this.emit('kill', x, y, id);
+    return { ok: true, reason: '', killed: true };
   }
 
   // ============================================================== entités
@@ -520,6 +552,7 @@ export class Game {
     for (let i = 0; i < ts.length; i++) this.tickEnt(ts[i]);
     this.tickPower();
     this.tickGrowth();
+    this.fauna.step(this.world);
     if (this.tick % 60 === 0) {
       this.stats.roll(); this.checkQuota();
       this.wind = 0.35 + 0.65 * valueNoise(this.tick / 2400, 0.5, this.seed + 99);
