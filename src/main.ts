@@ -4,7 +4,7 @@
 
 import './ui/style.css';
 import './ui/px/theme.css';
-import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ERAS, ITEMS, LOOT_WOOD, R, TILE_U, TREE_MIN, CANOPY_UNIT, costOf, type Dir, type Place, type Step } from './sim/data';
+import { B, BUILDINGS, BELT_SPEED, DEPOSITS, DX, DY, ERAS, I, ITEMS, LOOT_WOOD, R, TILE_U, TREE_MIN, CANOPY_UNIT, costOf, type Dir, type Place, type Step } from './sim/data';
 import type { Ent } from './sim/ent';
 import { CHUNK, GROUND_WATER, GROUND_BANK } from './sim/world';
 import { serialize, deserialize, writeSave, readSave, SAVE_VERSION } from './sim/save';
@@ -21,11 +21,15 @@ import { hexToRgb } from './render/px/noise';
 import { Hud } from './ui/hud';
 import { costText } from './ui/eraText';
 import { AudioEngine } from './audio/audio';
+import {
+  clickTarget, followBeast, preyAt, searchStep, strikeStep, wreckNearestCell,
+  PREY_RADIUS, type ClickTarget, type Prey,
+} from './ui/gesture';
 
 interface UndoOp { type: 'place' | 'remove' | 'rotate'; key: string; x: number; y: number; rot: number; recipe?: string; filter?: number; isOut?: boolean; }
-interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk'; x: number; y: number; stuck: number; best: number; }
-/** La cible d'un coup porté : un arbre ou un gisement, à sa case. */
-interface StrikeTarget { kind: 'tree' | 'ore'; x: number; y: number; color: string }
+interface Task { kind: 'tree' | 'ore' | 'loot' | 'walk' | 'beast' | 'wreck'; x: number; y: number; stuck: number; best: number; id?: number; }
+/** La cible d'un coup porté : un arbre, un gisement ou une bête, à sa case. */
+interface StrikeTarget { kind: 'tree' | 'ore' | 'beast'; x: number; y: number; color: string }
 const COLORS = PLAYER_COLORS;
 const NAMES = ['Orange', 'Cyan', 'Lime', 'Rose'];
 const MIN_ZOOM = 16, REACH = 2.1;
@@ -39,6 +43,8 @@ class Player implements PlayerView {
   cx = 0; cy = 5; ox = 0; oy = 5; ok = false; reason = '';
   gx = 0; gy = 0; gprog = 0; beam = 0;
   task: Task | null = null;
+  beastTimer = 0;
+  prey: Prey | null = null;
   animator = new BuilderAnimator();
   motion: MotionResult | null = null;
   strikeTile: { x: number; y: number } | null = null;
@@ -146,6 +152,19 @@ class App {
   private pick(sx: number, sy: number): { x: number; y: number } {
     const z = this.cam.zoom / this.dpr;
     return { x: this.cam.x + (sx - window.innerWidth / 2) / z, y: this.cam.y + (sy - window.innerHeight / 2) / z };
+  }
+
+  /** Point du monde visé : sous le curseur, ou au bout de la visée d'une manette. */
+  private pointerPoint(p: Player): { x: number; y: number } {
+    return p.pad === null ? this.pick(this.mouse.x, this.mouse.y) : { x: p.x + p.aimX, y: p.y + p.aimY };
+  }
+
+  /** La bête ou l'épave visée à mains nues ; null si le curseur n'en montre pas. */
+  private preyOf(p: Player): Prey | null {
+    if (p.tool) return null;
+    if (p.pad === null && !this.mouse.over) return null;
+    const point = this.pointerPoint(p);
+    return preyAt(this.game, point.x, point.y, p.cx, p.cy);
   }
 
   private bind(): void {
@@ -267,7 +286,15 @@ class App {
     this.renderer.reset();
     this.hud.select(null);
     this.rings.length = 0;
-    for (const p of this.players) { p.undo.length = 0; p.tool = null; p.gesture = null; p.task = null; p.vx = p.vy = 0; p.animator = new BuilderAnimator(); p.motion = null; p.strikeTile = null; }
+    for (const p of this.players) { p.undo.length = 0; p.tool = null; p.gesture = null; p.task = null; p.vx = p.vy = 0; p.animator = new BuilderAnimator(); p.motion = null; p.strikeTile = null; p.beastTimer = 0; p.prey = null; }
+  }
+
+  /** Repart sur un monde neuf sans quitter la page : les joueurs reviennent au départ. */
+  restart(): void {
+    this.resetWorld();
+    for (const p of this.players) { p.x = 0.5 + p.id; p.y = 3.6; p.fx = 0; p.fy = 1; }
+    this.cam.x = this.players[0].x;
+    this.cam.y = this.players[0].y;
   }
 
   async save(): Promise<void> { await writeSave('auto', serialize(this.game, { players: this.players.map((p) => ({ x: p.x, y: p.y })), zoom: this.zoom })); }
@@ -410,9 +437,24 @@ class App {
       return;
     }
     this.hud.select(null);
-    const target = this.harvestTarget(p);
-    if (target) { p.task = { ...target, stuck: 0, best: 1e9 }; p.gprog = 0; }
-    else p.task = { kind: 'walk', x: p.cx, y: p.cy, stuck: 0, best: 1e9 };       // clic dans le vide : on y va
+    const point = this.pointerPoint(p);
+    const target: ClickTarget = clickTarget(this.game, p.cx, p.cy, point, this.harvestTarget(p));
+    if (target.kind === 'beast') {
+      p.task = { kind: 'beast', id: target.id, x: 0, y: 0, stuck: 0, best: 1e9 };
+      p.gprog = 0; p.beastTimer = 0;
+    } else if (target.kind === 'wreck') {
+      if (target.searched) { this.hud.toast('Déjà fouillée : elle est vide'); return; }
+      const wreck = this.game.wrecks.find((w) => w.id === target.id);
+      if (!wreck) return;
+      const cell = wreckNearestCell(wreck, p.x, p.y);
+      p.task = { kind: 'wreck', id: target.id, x: cell.x, y: cell.y, stuck: 0, best: 1e9 };
+      p.gprog = 0;
+    } else if (target.kind === 'harvest') {
+      p.task = { ...target.pick, stuck: 0, best: 1e9 };
+      p.gprog = 0;
+    } else if (target.kind === 'walk') {
+      p.task = { kind: 'walk', x: p.cx, y: p.cy, stuck: 0, best: 1e9 };      // clic dans le vide : on y va
+    }
   }
 
   private secondaryDown(p: Player): void {
@@ -678,34 +720,76 @@ class App {
     // --- la tâche en cours : y aller, puis agir
     let acting = false;
     let strikeTarget: StrikeTarget | null = null;
-    if (mx || my) { if (p.task) { p.task = null; p.gprog = 0; } }
+    if (mx || my) { if (p.task) { p.task = null; p.gprog = 0; p.beastTimer = 0; } }
     else if (p.task) {
-      const t = p.task, tx = t.x + 0.5, ty = t.y + 0.5, d = Math.hypot(tx - p.x, ty - p.y);
-      const need = t.kind === 'walk' ? 0.25 : t.kind === 'loot' ? 1.1 : REACH;
-      if (d > need) {
-        mx = (tx - p.x) / d; my = (ty - p.y) / d;
-        if (d < t.best - 0.05) { t.best = d; t.stuck = 0; } else if ((t.stuck += dt) > 0.9) { p.task = null; p.gprog = 0; if (t.kind !== 'walk') this.hud.toast('Le chemin est barré : fais le tour'); }
-      } else if (t.kind === 'walk') p.task = null;
-      else {
-        acting = true;
-        p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
-        if (this.gatherable(t.x, t.y) !== t.kind) { p.task = null; p.gprog = 0; }
-        else if (t.kind === 'loot') {
-          g.pickLoot(t.x, t.y); p.task = null; this.gain(`+${LOOT_WOOD} Bois`, t.x, t.y);
-        } else {
-          const size = w.canopy(t.x, t.y);
+      const t = p.task;
+      let tx = t.x + 0.5, ty = t.y + 0.5;
+      if (t.kind === 'beast') {
+        const follow = followBeast(g, t.id!, p.x, p.y, REACH);
+        if (!follow) { p.task = null; p.gprog = 0; p.beastTimer = 0; }
+        else {
+          if (follow.tileX !== t.x || follow.tileY !== t.y) { t.best = 1e9; t.stuck = 0; }   // la cible a bougé : ce n'est pas un blocage
+          t.x = follow.tileX; t.y = follow.tileY;
+          tx = follow.x; ty = follow.y;
+        }
+      }
+      if (p.task) {
+        const d = Math.hypot(tx - p.x, ty - p.y);
+        const need = t.kind === 'walk' ? 0.25 : t.kind === 'loot' || t.kind === 'wreck' ? 1.1 : REACH;
+        if (d > need) {
+          mx = (tx - p.x) / d; my = (ty - p.y) / d;
+          if (d < t.best - 0.05) { t.best = d; t.stuck = 0; } else if ((t.stuck += dt) > 0.9) { p.task = null; p.gprog = 0; p.beastTimer = 0; if (t.kind !== 'walk') this.hud.toast('Le chemin est barré : fais le tour'); }
+        } else if (t.kind === 'walk') p.task = null;
+        else if (t.kind === 'beast') {
+          acting = true;
+          p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
           p.gx = t.x; p.gy = t.y;
-          const color = t.kind === 'tree' ? C.g2 : DEPOSITS[w.deposit(t.x, t.y)]!.color;
-          strikeTarget = { kind: t.kind, x: t.x, y: t.y, color };
-          p.gprog += dt / (t.kind === 'tree' ? 0.45 + 0.5 * (size / 255) : 0.5);
           p.swing = (p.swing + dt * 3.4) % 1 || 0.001;
-          if (p.gprog >= 1) {
-            p.gprog = 0;
-            if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.gain(`+${n.toFixed(1).replace('.', ',')} Bois`, t.x, t.y); }
-            else g.handMine(t.x, t.y);
-            // bouton maintenu : on enchaîne sur ce que vise le curseur
-            const nk = hold ? this.harvestTarget(p) : null;
-            p.task = nk ? { ...nk, stuck: 0, best: 1e9 } : t.kind === 'ore' && hold ? t : null;
+          strikeTarget = { kind: 'beast', x: t.x, y: t.y, color: ITEMS[I.peau].color };
+          const clock = strikeStep(p.beastTimer, dt);
+          p.beastTimer = clock.timer;
+          if (clock.strike) {
+            const res = g.strikeBeast(t.id!);
+            if (!res.ok || res.killed) {
+              p.task = null; p.gprog = 0; p.beastTimer = 0;
+              // bouton maintenu : on enchaîne sur la bête visée
+              const next = hold ? preyAt(g, this.pointerPoint(p).x, this.pointerPoint(p).y, p.cx, p.cy) : null;
+              if (next?.kind === 'beast') p.task = { kind: 'beast', id: next.id, x: 0, y: 0, stuck: 0, best: 1e9 };
+            }
+          }
+        } else if (t.kind === 'wreck') {
+          acting = true;
+          p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
+          p.gx = t.x; p.gy = t.y;
+          const search = searchStep(p.gprog, dt);
+          p.gprog = search.progress;
+          if (search.done) {
+            const res = g.searchWreck(t.id!);
+            p.task = null; p.gprog = 0;
+            if (res.ok) this.gain(`+${res.cores} ${res.cores > 1 ? 'Noyaux' : 'Noyau'}`, t.x, t.y);
+            else this.hud.toast(res.reason);
+          }
+        } else {
+          acting = true;
+          p.fx = (tx - p.x) / (d || 1); p.fy = (ty - p.y) / (d || 1);
+          if (this.gatherable(t.x, t.y) !== t.kind) { p.task = null; p.gprog = 0; }
+          else if (t.kind === 'loot') {
+            g.pickLoot(t.x, t.y); p.task = null; this.gain(`+${LOOT_WOOD} Bois`, t.x, t.y);
+          } else {
+            const size = w.canopy(t.x, t.y);
+            p.gx = t.x; p.gy = t.y;
+            const color = t.kind === 'tree' ? C.g2 : DEPOSITS[w.deposit(t.x, t.y)]!.color;
+            strikeTarget = { kind: t.kind, x: t.x, y: t.y, color };
+            p.gprog += dt / (t.kind === 'tree' ? 0.45 + 0.5 * (size / 255) : 0.5);
+            p.swing = (p.swing + dt * 3.4) % 1 || 0.001;
+            if (p.gprog >= 1) {
+              p.gprog = 0;
+              if (t.kind === 'tree') { const n = g.uproot(t.x, t.y); this.gain(`+${n.toFixed(1).replace('.', ',')} Bois`, t.x, t.y); }
+              else g.handMine(t.x, t.y);
+              // bouton maintenu : on enchaîne sur ce que vise le curseur
+              const nk = hold ? this.harvestTarget(p) : null;
+              p.task = nk ? { ...nk, stuck: 0, best: 1e9 } : t.kind === 'ore' && hold ? t : null;
+            }
           }
         }
       }
@@ -748,9 +832,11 @@ class App {
     });
     p.motion = result;
     p.strikeTile = strikeTarget ? { x: strikeTarget.x, y: strikeTarget.y } : null;
-    if (strikeTarget) {
-      for (const contact of result.contacts) this.strike(strikeTarget, contact.pow);
+    if (strikeTarget && strikeTarget.kind !== 'beast') {
+      const target = strikeTarget;
+      for (const contact of result.contacts) this.strike(target, contact.pow);
     }
+    p.prey = this.preyOf(p);
   }
 
   // ================================================================ boucle
@@ -868,8 +954,13 @@ class App {
       const st = this.hud.statusLine(g, this.hover);
       html = `<b>${this.hover.def.name}</b><span class="${st.cls === 'bad' ? 'warn' : st.cls === 'ok' ? 'ok' : ''}">${st.text}</span><br><span class="k">Clic : ouvrir${rotatable(this.hover.def) ? ' · R : pivoter' : ''}</span>`;
     } else {
-      const target = this.harvestTarget(p);
-      if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_WOOD} Bois</span>`;
+      const point = this.pointerPoint(p);
+      const beast = g.beastAt(point.x, point.y, PREY_RADIUS);
+      const wreck = beast ? null : g.wreckAt(p.cx, p.cy);
+      const target = beast || wreck ? null : this.harvestTarget(p);
+      if (beast) html = `<b>Cabiai</b><span class="k">${beast.hp} coup${beast.hp > 1 ? 's' : ''} de poing</span>`;
+      else if (wreck) html = wreck.searched ? '<b>Épave fouillée</b><span class="k">vide</span>' : '<b>Épave</b><span class="k">clique pour la fouiller</span>';
+      else if (target?.kind === 'loot') html = `<b>Débris du module</b><span class="k">Clic : ramasser · +${LOOT_WOOD} Bois</span>`;
       else if (target?.kind === 'tree') html = `<b>Arbre</b><span class="k">Clic : déraciner · +${(w.canopy(target.x, target.y) / CANOPY_UNIT).toFixed(1).replace('.', ',')} Bois</span>`;
       else if (target?.kind === 'ore') { const d = DEPOSITS[w.deposit(target.x, target.y)]!; html = `<b>${d.name}</b><span class="k">Maintenir le clic : piocher à la main · ou pose un Puits dessus</span>`; }
       else {
@@ -903,6 +994,26 @@ class App {
           break;
         }
         case 'remove': if (this.started) this.audio.remove(); r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4 + Math.min(8, ev.a)); r.burst('chip', ev.x, ev.y, C.s2, 5); break;
+        case 'strike':
+          r.burst('chip', ev.x, ev.y - 0.2, ITEMS[I.peau].color, 4);
+          this.audio.punch(near, pan);
+          break;
+        case 'kill':
+          r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 8);   // mort sobre : pas de sang
+          this.gain('+1 Peau · +1 Graisse · +1 Os', ev.x, ev.y);
+          break;
+        case 'catch':
+          r.burst('dust', ev.x, ev.y, 'rgba(190,180,160,', 4);
+          this.audio.trap(near, pan);
+          break;
+        case 'search':
+          r.burst('spark', ev.x, ev.y, C.o1, 12);
+          this.rings.push({ x: ev.x, y: ev.y, t0: this.time, color: C.o1, size: 1.5, dur: 0.8 });
+          this.audio.core(near, pan);
+          break;
+        case 'grease':
+          r.burst('spark', ev.x, ev.y, C.q0, 3);   // une petite étincelle claire, sans son
+          break;
         case 'quota':
           if (this.started) { this.audio.quota(); this.hud.banner(g); }
           for (let i = 0; i < 4; i++) this.rings.push({ x: ev.x, y: ev.y, t0: this.time + i * 0.25, color: i % 2 ? C.q2 : C.o1, size: 22 + i * 18, dur: 2.6 });
@@ -919,5 +1030,12 @@ class App {
 const app = new App();
 (window as unknown as { brutalusine: App }).brutalusine = app;
 if (import.meta.env.DEV) {
-  void import('./dev').then((dev) => { (app as unknown as { demo: () => string[] }).demo = () => dev.buildDemo(app.game); });
+  void import('./dev').then((dev) => {
+    (app as unknown as { demo: () => string[] }).demo = () => dev.buildDemo(app.game);
+    (app as unknown as { cuirs: () => string[] }).cuirs = () => {
+      app.game = new Game(app.game.seed);
+      app.restart();
+      return dev.buildCuirs(app.game);
+    };
+  });
 }

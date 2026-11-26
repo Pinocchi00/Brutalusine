@@ -176,6 +176,28 @@ export class AudioEngine {
     this.budget--;
     this.click(this.ctx.currentTime, 3000, 0.05, 0.03 * near, pan);
   }
+  /** Un coup de poing sur une bête : sourd et court. */
+  punch(near: number, pan: number): void {
+    if (!this.ctx || near < 0.15) return;
+    const t = this.ctx.currentTime;
+    this.thud(t, 150, 72, 0.09, 0.22 * near, pan);
+    this.click(t, 520, 0.04, 0.05 * near, pan);
+  }
+  /** Le claquement d'un Piège qui se referme, près seulement. */
+  trap(near: number, pan: number): void {
+    if (!this.ctx || near < 0.15) return;
+    const t = this.ctx.currentTime;
+    this.click(t, 850, 0.05, 0.12 * near, pan);
+    this.click(t + 0.07, 620, 0.05, 0.09 * near, pan);
+    this.thud(t, 160, 95, 0.08, 0.08 * near, pan);
+  }
+  /** Un noyau trouvé dans une épave : un son clair. */
+  core(near: number, pan: number): void {
+    if (!this.ctx || near < 0.15) return;
+    const t = this.ctx.currentTime;
+    this.voice(hz(19, 1), 'sine', t, 0.01, 0.05, 1.6, 0.09 * near, 6000, this.sfx, 0.9, pan);
+    this.voice(hz(26, 1), 'sine', t + 0.09, 0.01, 0.05, 1.4, 0.05 * near, 7000, this.sfx, 0.9, -pan);
+  }
   /** Quota accompli : un arpège de cloches qui monte dans la réverbération. */
   quota(): void {
     if (!this.ctx) return;

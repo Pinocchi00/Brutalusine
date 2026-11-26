@@ -2,7 +2,7 @@
 // reconnaître plutôt que se souvenir (icône + mot), montrer la cause, dévoiler par couches, erreur récupérable.
 
 import {
-  B, BUILDINGS, CATEGORIES, ERAS, ERA_POWER, ERA_SPEED, ITEMS, MAX_VERSION, NITEMS, RECIPES, costOf, quotaAt,
+  B, BUILDINGS, CATEGORIES, ERAS, ERA_POWER, ERA_SPEED, I, ITEMS, MAX_VERSION, NITEMS, RECIPES, costOf, needsCore, quotaAt,
   type BuildingDef, type Category, type ItemDef, type Place, type Recipe, type Step,
 } from '../sim/data';
 import { STORE_CAP, type Game } from '../sim/game';
@@ -224,7 +224,7 @@ export class Hud {
     for (let i = 0; i < NITEMS; i++) {
       const n = g.stock[i];
       const rate = g.stats.rate(g.stats.prod, i) - g.stats.rate(g.stats.cons, i);
-      if (n < 1 && Math.abs(rate) < 0.5) continue;
+      if (ITEMS[i].key !== 'noyau' && n < 1 && Math.abs(rate) < 0.5) continue;
       html += `<button class="row" data-codex="i:${i}">${itemIcon(ITEMS[i])}<span class="name">${esc(ITEMS[i].name)}</span><span class="rate ${rate < -0.5 ? 'neg' : ''}">${Math.abs(rate) >= 0.5 ? (rate > 0 ? '+' : '−') + Math.abs(Math.round(rate)) + '/min' : ''}</span><b>${fmt(n)}</b></button>`;
     }
     $('stock').innerHTML = `<div class="eyebrow">Stock de la Tour</div>${html || '<p class="meta">Vide pour l’instant.</p>'}`;
@@ -259,7 +259,8 @@ export class Hud {
     const cost = costOf(b, g.versionFor(b)).map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${itemIcon(ITEMS[id], 15)}${n} ${esc(ITEMS[id].name)}</span>`).join(' · ');
     const rec = b.recipes.length ? `<span>${esc(recipeWords(b.recipes[0]))}</span>` : '';
     const pw = b.power ? `<span>${['generator', 'hydro', 'hub'].includes(b.kind) ? `Fournit jusqu’à ${b.power} W` : `Consomme ${b.power} W`}</span>` : '';
-    return `<span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}<span class="cost">${cost}</span></span>`;
+    const core = needsCore(b) ? `<span class="${g.stock[I.noyau] < 1 ? 'lack' : ''}">+ 1 noyau</span>` : '';
+    return `<span class="tipbox"><b>${esc(b.name)}</b><span>${esc(b.desc)}</span>${rec}${pw}${core}<span class="cost">${cost}</span></span>`;
   }
 
   private renderBar(g: Game): void {
@@ -279,12 +280,13 @@ export class Hud {
     const list = BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b));
     const toolDef = tool && tool !== 'demolir' && tool !== 'marteau' ? B[tool] ?? null : null;
     const price = toolDef ? costOf(toolDef, g.versionFor(toolDef)) : [];
+    const core = toolDef && needsCore(toolDef) ? ` · <span class="${g.stock[I.noyau] < 1 ? 'lack' : ''}">+ 1 noyau</span>` : '';
     const pays = toolDef ? price.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
-    const key = [this.cat, tool, g.era, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0) + g.versionFor(b)).join(), [...this.fresh].join(), pays, price.map(([id, n]) => `${id}:${n}`).join()].join('|');
+    const key = [this.cat, tool, g.era, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0) + g.versionFor(b)).join(), [...this.fresh].join(), pays, price.map(([id, n]) => `${id}:${n}`).join(), core ? Math.floor(g.stock[I.noyau]) : ''].join('|');
     if (key === this.barKey) return;
     this.barKey = key;
     $('cats').innerHTML = cats.map((c) => `<button class="${c.key === this.cat ? 'on' : ''} ${BUILDINGS.some((b) => b.cat === c.key && this.fresh.has(b.key)) ? 'fresh' : ''}" data-cat="${c.key}">${c.name}</button>`).join('');
-    const cost = price.length ? ` · ${price.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
+    const cost = price.length ? ` · ${price.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}${core}` : '';
     const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
     const tools = list.map((b, i) => {
       return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
@@ -357,6 +359,13 @@ export class Hud {
     } else if (k === 'hub') {
       body += `<p class="meta">Énergie fournie : ${e.def.power} W. Objets reçus : ${fmt(e.done)}.</p>`;
       if (g.records.length) body += `<div class="eyebrow">Tes records</div><table class="records"><tr><th>Livraison</th><th>Durée</th><th>Bâtiments</th></tr>${g.records.slice(-6).map((r) => `<tr><td>${esc(quotaAt(r.quota).title)}</td><td>${clock(r.ticks)}</td><td>${r.buildings}</td></tr>`).join('')}</table>`;
+    } else if (k === 'trap') {
+      body += `<p class="meta">Prises : <b>${fmt(e.done)}</b>. Sa sortie mélange peau, graisse et os : trie-la.</p>`;
+    }
+    if (e.def.grease) {
+      body += e.greased > 0
+        ? `<p class="meta">Graissée : ${e.greased} cycle${e.greased > 1 ? 's' : ''}.</p>`
+        : '<p class="meta">Graisse-la par un tapis : 1,5 fois plus vite.</p>';
     }
     const html = `<header><div><div class="eyebrow">${esc(CATEGORIES.find((c) => c.key === e.def.cat)?.name ?? 'Monument')}</div><h2>${esc(e.def.name)}</h2></div><button class="x" data-close="panel" aria-label="Fermer">✕</button></header>
       <div class="status ${st.cls}">${esc(st.text)}</div><p class="desc">${esc(e.def.desc)}</p><p class="meta">Version : ${esc(ERAS[versionEra - 1].name)}</p>${body}`;

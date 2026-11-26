@@ -1,7 +1,7 @@
 // Outil de développement (jamais chargé en production) : pose une usine de démonstration
 // pour juger le rendu et les systèmes d'un coup d'œil. Dans la console : brutalusine.demo()
 
-import { B, I, type BuildingDef } from './sim/data';
+import { B, ERAS, I, QUOTAS, type BuildingDef } from './sim/data';
 import { GROUND_BANK } from './sim/world';
 import type { Game } from './sim/game';
 
@@ -123,4 +123,30 @@ function findBank(g: Game): { x: number; y: number } | null {
     }
   }
   return null;
+}
+
+/** Prépare le rejeu « 30 cuirs » : la Tour en Pierre après trois livraisons, et le stock de départ. */
+export function buildCuirs(g: Game): string[] {
+  // les trois premières livraisons passent par les vraies méthodes : la réception, puis le pas de simulation
+  for (let q = 0; q < 3; q++) {
+    const need = QUOTAS[q].need;
+    for (const [id, n] of need) for (let i = 0; i < n; i++) g.accept(g.hub, id, 0);
+    for (let i = 0; i < 60; i++) g.step();   // `checkQuota` tombe une fois par seconde
+  }
+  g.stock.fill(0);
+  g.stock[I.pierre] = 60;
+  g.stock[I.bois] = 30;
+  g.stock[I.carbone] = 10;
+  g.stock[I.noyau] = 6;
+  g.events.length = 0;
+  const log = [`Tour en ${ERAS[g.era - 1].name}, ${g.quota} livraisons faites.`];
+  let nearest: { x: number; y: number } | null = null;
+  let best = Infinity;
+  for (const b of g.beasts) {
+    const d = Math.hypot(b.x, b.y);
+    if (d < best) { best = d; nearest = { x: b.x, y: b.y }; }
+  }
+  if (nearest) log.push(`Troupeau le plus proche : (${nearest.x.toFixed(1)}, ${nearest.y.toFixed(1)}) à ${best.toFixed(0)} cases.`);
+  else log.push('Aucun troupeau trouvé.');
+  return log;
 }
