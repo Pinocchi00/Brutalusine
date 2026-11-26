@@ -10,7 +10,7 @@ import { rng } from './noise';
 import { box, courses, logEnds, moss } from './volumes';
 
 /** Ère 1 · un tronc lisible sur deux chevalets en X, une scie verticale, quatre poteaux et un auvent. */
-export function scierieE1(P: Pen, U: number, L: Light[]): void {
+export function sawmillE1(P: Pen, U: number, L: Light[]): void {
   const r = rng(83);
 
   P.r(1, U + 34, 46, 14, C.sd1);
@@ -84,7 +84,7 @@ export function scierieE1(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · un bâti de pierre à deux montants, une grande lame dentée qui déborde, un tas de sciure. */
-export function scierieE2(P: Pen, U: number, L: Light[]): void {
+export function sawmillE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(97);
 
   // le socle de pierre, large, et son assise en contrebas
@@ -142,7 +142,7 @@ export function scierieE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 1 · un foyer au creux d'un cercle de bûches, un lit de braises et de courtes flammes. */
-export function bruleurE1(P: Pen, U: number, L: Light[], lit = true): void {
+export function burnerE1(P: Pen, U: number, L: Light[], lit = true): void {
   const r = rng(101);
 
   // des bûches empilées au nord, en arrière-plan
@@ -198,7 +198,7 @@ export function bruleurE1(P: Pen, U: number, L: Light[], lit = true): void {
 }
 
 /** Ère 2 · un poêle voûté de pierre, une porte à feu sous un arc, une cheminée de pierre. */
-export function bruleurE2(P: Pen, U: number, L: Light[], lit = true): void {
+export function burnerE2(P: Pen, U: number, L: Light[], lit = true): void {
   // la cheminée de pierre, en arrière-plan
   P.r(31, U - 38, 10, 52, C.st2);
   P.r(31, U - 38, 2, 52, C.st1);
@@ -251,7 +251,7 @@ export function bruleurE2(P: Pen, U: number, L: Light[], lit = true): void {
 }
 
 /** Ère 1 · un tourniquet de trois planches à plat sur un plateau, autour de son pivot. */
-export function aiguillageE1(P: Pen, U: number, L: Light[]): void {
+export function splitterE1(P: Pen, U: number, L: Light[]): void {
   // le socle rond, bas, en terre battue
   P.ell(12, U + 15, 10, 8, C.e4);
   P.ell(12, U + 13, 10, 8, C.e3);
@@ -280,7 +280,7 @@ export function aiguillageE1(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · un socle de pierre et un volet de bois qui bascule sur son axe. */
-export function aiguillageE2(P: Pen, U: number, L: Light[]): void {
+export function splitterE2(P: Pen, U: number, L: Light[]): void {
   // le socle de pierre
   box(P, 1, U + 14, 22, 4, 6, STONE, false);
   courses(P, 1, U + 18, 22, 6, 71, STONE_F);

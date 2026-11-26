@@ -9,7 +9,7 @@ import { rng } from './noise';
 import { box, courses, crate, cyl, logEnds, moss } from './volumes';
 
 /** Ère 1 · un trou creusé à la main, un trépied de perches, un seau, une échelle. */
-export function puitsE1(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
+export function shaftE1(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
   const r = rng(61);
   P.ell(36, U + 46, 27, 18, C.e3);
   P.ell(36, U + 45, 25, 16, C.e2);
@@ -57,7 +57,7 @@ export function puitsE1(P: Pen, U: number, L: Light[], chute = true, moving = fa
 }
 
 /** Ère 2 · un anneau de pierres sèches, un chevalement de bois, une grande roue. */
-export function puitsE2(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
+export function shaftE2(P: Pen, U: number, L: Light[], chute = true, moving = false): void {
   P.ell(36, U + 44, 30, 20, C.st4);
   P.ell(36, U + 44, 22, 13, C.e4);
   P.ell(36, U + 45, 18, 10, C.ink2);

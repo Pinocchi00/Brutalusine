@@ -10,7 +10,7 @@ import { rng } from './noise';
 import { box, courses, logEnds, moss } from './volumes';
 
 /** Ère 2 · un corps de pierre, une gueule voûtée avec son feu, une cheminée au nord-est, des briques devant. */
-export function fourE2(P: Pen, U: number, L: Light[], lit = true): void {
+export function furnaceE2(P: Pen, U: number, L: Light[], lit = true): void {
   courses(P, 31, 2, 12, U + 2, 41, STONE_F);
   P.r(31, 2, 2, U + 2, C.st1);
   P.r(40, 2, 3, U + 2, C.st3);
@@ -68,7 +68,7 @@ export function fourE2(P: Pen, U: number, L: Light[], lit = true): void {
 }
 
 /** Ère 2 · des murets de pierre en Y et un clapet de bois à contrepoids au centre. */
-export function trieurE2(P: Pen, U: number, L: Light[]): void {
+export function sorterE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(131);
 
   // un muret de pierre : contour sombre, dessus clair, arête éclairée
@@ -116,7 +116,7 @@ export function trieurE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · une fosse sombre bordée de pierres, un arceau de bois et son collet, des baies rouges. */
-export function piegeE2(P: Pen, U: number, L: Light[]): void {
+export function trapE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(151);
 
   // le sol battu autour de la fosse
@@ -198,7 +198,7 @@ export function piegeE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · une fosse d'argile humide, une drague à godets sur son bâti de bois, des mottes qui sèchent. */
-export function argiliereE2(P: Pen, U: number, L: Light[]): void {
+export function clayPitE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(163);
 
   // la fosse d'argile : bourrelet de terre, parois humides, fond sombre
@@ -266,7 +266,7 @@ export function argiliereE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · deux cuves de pierre au liquide brun, des peaux tendues sur des cadres de bois au nord. */
-export function tannerieE2(P: Pen, U: number, L: Light[]): void {
+export function tanneryE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(173);
 
   // une peau claire tendue sur son cadre, avec ses coutures et une traverse
@@ -348,7 +348,7 @@ export function tannerieE2(P: Pen, U: number, L: Light[]): void {
 }
 
 /** Ère 2 · une grande roue à aubes de face dans un bief de pierre, l'eau bleue et l'écume au pied. */
-export function roueEauE2(P: Pen, U: number, L: Light[]): void {
+export function waterWheelE2(P: Pen, U: number, L: Light[]): void {
   const r = rng(181);
   const cx = 24, cy = U + 10, R = 22;
 
@@ -434,8 +434,8 @@ export function roueEauE2(P: Pen, U: number, L: Light[]): void {
 
 /** Les dessins de Pierre que la simulation ne connaît pas encore, pour la planche du banc. */
 export const STONE_PREVIEWS = {
-  piege: { up: 16, draw: piegeE2 },
-  argiliere: { up: 24, draw: argiliereE2 },
-  tannerie: { up: 20, draw: tannerieE2 },
-  roue: { up: 26, draw: roueEauE2 },
+  piege: { up: 16, draw: trapE2 },
+  argiliere: { up: 24, draw: clayPitE2 },
+  tannerie: { up: 20, draw: tanneryE2 },
+  roue: { up: 26, draw: waterWheelE2 },
 } as const;

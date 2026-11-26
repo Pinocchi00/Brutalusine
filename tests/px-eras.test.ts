@@ -6,23 +6,23 @@ import { describe, expect, it } from 'vitest';
 import { eraFor, forcedEra, versionEra } from '../src/render/px/eras';
 import { eraArts } from '../src/render/px/buildings';
 import { towerE1, towerE2 } from '../src/render/px/artTower';
-import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../src/render/px/artWorks';
+import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../src/render/px/artWorks';
 import {
-  aiguillageE1,
-  aiguillageE2,
-  bruleurE1,
-  bruleurE2,
-  scierieE1,
-  scierieE2,
+  splitterE1,
+  splitterE2,
+  burnerE1,
+  burnerE2,
+  sawmillE1,
+  sawmillE2,
 } from '../src/render/px/artFirst';
 import {
-  argiliereE2,
-  fourE2,
-  piegeE2,
-  roueEauE2,
+  clayPitE2,
+  furnaceE2,
+  trapE2,
+  waterWheelE2,
   STONE_PREVIEWS,
-  tannerieE2,
-  trieurE2,
+  tanneryE2,
+  sorterE2,
 } from '../src/render/px/artStone';
 import type { Pen } from '../src/render/px/pen';
 import type { Light } from '../src/render/px/sprite';
@@ -70,7 +70,7 @@ describe('forcedEra', () => {
   it('lit les deux ères et ignore les autres paramètres', () => {
     expect(forcedEra('?ere=1')).toBe(1);
     expect(forcedEra('?ere=2')).toBe(2);
-    expect(forcedEra('?rendu=pixel&ere=2')).toBe(2);
+    expect(forcedEra('?graine=7&ere=2')).toBe(2);
   });
 
   it('ne force rien pour une valeur invalide', () => {
@@ -142,8 +142,8 @@ describe('les lumières des dessins', () => {
   });
 
   it('pose une lanterne sur chaque Puits', () => {
-    expect(lightKinds(puitsE1)).toEqual(['ember']);
-    expect(lightKinds(puitsE2)).toEqual(['ember']);
+    expect(lightKinds(shaftE1)).toEqual(['ember']);
+    expect(lightKinds(shaftE2)).toEqual(['ember']);
   });
 
   it('rougeoie quatre fois dans la meule et deux fois dans le four', () => {
@@ -157,49 +157,49 @@ describe('les lumières des dessins', () => {
   });
 
   it('n’allume aucune lumière dans les Scieries', () => {
-    expect(lightKinds(scierieE1)).toEqual([]);
-    expect(lightKinds(scierieE2)).toEqual([]);
+    expect(lightKinds(sawmillE1)).toEqual([]);
+    expect(lightKinds(sawmillE2)).toEqual([]);
   });
 
   it('n’allume aucune lumière dans les Répartiteurs', () => {
-    expect(lightKinds(aiguillageE1)).toEqual([]);
-    expect(lightKinds(aiguillageE2)).toEqual([]);
+    expect(lightKinds(splitterE1)).toEqual([]);
+    expect(lightKinds(splitterE2)).toEqual([]);
   });
 
   it('allume un seul feu dans chaque Brûleur', () => {
-    expect(lightKinds(bruleurE1)).toEqual(['fire']);
-    expect(lightKinds(bruleurE2)).toEqual(['fire']);
+    expect(lightKinds(burnerE1)).toEqual(['fire']);
+    expect(lightKinds(burnerE2)).toEqual(['fire']);
   });
 
   it('allume un seul feu dans la gueule du Four', () => {
-    expect(lightKinds(fourE2)).toEqual(['fire']);
+    expect(lightKinds(furnaceE2)).toEqual(['fire']);
   });
 
   it('n’allume rien dans le Trieur, le Piège, l’Argilière, la Tannerie ni la Roue à eau', () => {
-    expect(lightKinds(trieurE2)).toEqual([]);
-    expect(lightKinds(piegeE2)).toEqual([]);
-    expect(lightKinds(argiliereE2)).toEqual([]);
-    expect(lightKinds(tannerieE2)).toEqual([]);
-    expect(lightKinds(roueEauE2)).toEqual([]);
+    expect(lightKinds(sorterE2)).toEqual([]);
+    expect(lightKinds(trapE2)).toEqual([]);
+    expect(lightKinds(clayPitE2)).toEqual([]);
+    expect(lightKinds(tanneryE2)).toEqual([]);
+    expect(lightKinds(waterWheelE2)).toEqual([]);
   });
 });
 
 describe('la goulotte fixe du Puits', () => {
   it('disparaît du Puits Bois quand chute est faux', () => {
     const withChute = fakePen();
-    puitsE1(withChute.P, 0, [], true);
+    shaftE1(withChute.P, 0, [], true);
     expect(hasRect(withChute.rects, 54, 39, 16, 5)).toBe(true);
     const withoutChute = fakePen();
-    puitsE1(withoutChute.P, 0, [], false);
+    shaftE1(withoutChute.P, 0, [], false);
     expect(hasRect(withoutChute.rects, 54, 39, 16, 5)).toBe(false);
   });
 
   it('disparaît du Puits Pierre quand chute est faux', () => {
     const withChute = fakePen();
-    puitsE2(withChute.P, 0, [], true);
+    shaftE2(withChute.P, 0, [], true);
     expect(hasRect(withChute.rects, 54, 35, 16, 5)).toBe(true);
     const withoutChute = fakePen();
-    puitsE2(withoutChute.P, 0, [], false);
+    shaftE2(withoutChute.P, 0, [], false);
     expect(hasRect(withoutChute.rects, 54, 35, 16, 5)).toBe(false);
   });
 });

@@ -12,7 +12,7 @@ import { box, chev, courses, crate, cyl, logEnds, moss } from '../render/px/volu
 import { build, castShadow, type Light } from '../render/px/sprite';
 import { drawLights } from '../render/px/lights';
 import { towerE1, towerE2 } from '../render/px/artTower';
-import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
+import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../render/px/artWorks';
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
 import { drawBuilderFrame } from '../render/px/builderArt';
 import type { BuilderFrame, BuilderPose } from '../render/px/builderTypes';
@@ -191,6 +191,7 @@ function silhouette(api: Api): HTMLCanvasElement {
 /** Un dessin d'ère comparé à la maquette : son emprise, sa hauteur et sa fonction. */
 interface EraArtCase {
   name: string;
+  refName?: string;   // le nom de la fonction dans la maquette, quand le portage l'a renommée
   footprint: number;
   up: number;
   draw(P: Pen, U: number, L: Light[]): void;
@@ -200,8 +201,8 @@ interface EraArtCase {
 const ERA_ART_CASES: readonly EraArtCase[] = [
   { name: 'towerE1', footprint: 72, up: 16, draw: towerE1 },
   { name: 'towerE2', footprint: 72, up: 30, draw: towerE2 },
-  { name: 'puitsE1', footprint: 72, up: 10, draw: puitsE1 },
-  { name: 'puitsE2', footprint: 72, up: 42, draw: puitsE2 },
+  { name: 'shaftE1', refName: 'puitsE1', footprint: 72, up: 10, draw: shaftE1 },
+  { name: 'shaftE2', refName: 'puitsE2', footprint: 72, up: 42, draw: shaftE2 },
   { name: 'kilnE1', footprint: 48, up: 2, draw: kilnE1 },
   { name: 'kilnE2', footprint: 48, up: 4, draw: kilnE2 },
   { name: 'storeE1', footprint: 48, up: 2, draw: storeE1 },
@@ -640,7 +641,7 @@ async function main(): Promise<void> {
       draw: (api, ctx) => ctx.drawImage(api.build(art.footprint, art.footprint, art.up, art.draw).img, 0, 0),
       reference: (ref, ctx) => {
         const drawArt = (P: Pen, U: number, L: Light[]): void => {
-          ref.raw.ERA_ARTS[art.name](P, U, L);
+          ref.raw.ERA_ARTS[art.refName ?? art.name](P, U, L);
         };
         ctx.drawImage(ref.api.build(art.footprint, art.footprint, art.up, drawArt).img, 0, 0);
       },
@@ -650,7 +651,7 @@ async function main(): Promise<void> {
       name: `ère · ${art.name} · lumières`,
       compare: (refApi, port) => {
         const drawArt = (P: Pen, U: number, L: Light[]): void => {
-          raw.ERA_ARTS[art.name](P, U, L);
+          raw.ERA_ARTS[art.refName ?? art.name](P, U, L);
         };
         const reference = refApi.build(art.footprint, art.footprint, art.up, drawArt).lights;
         const ported = port.build(art.footprint, art.footprint, art.up, art.draw).lights;

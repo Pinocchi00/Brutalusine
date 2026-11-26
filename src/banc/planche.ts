@@ -6,16 +6,16 @@ import { BUILDINGS, DEPOSITS, ITEMS } from '../sim/data';
 import { C } from '../render/px/palette';
 import { build, castShadow, type Sprite } from '../render/px/sprite';
 import { towerE1, towerE2 } from '../render/px/artTower';
-import { kilnE1, kilnE2, puitsE1, puitsE2, storeE1, storeE2 } from '../render/px/artWorks';
+import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../render/px/artWorks';
 import {
-  aiguillageE1,
-  aiguillageE2,
-  bruleurE1,
-  bruleurE2,
-  scierieE1,
-  scierieE2,
+  splitterE1,
+  splitterE2,
+  burnerE1,
+  burnerE2,
+  sawmillE1,
+  sawmillE2,
 } from '../render/px/artFirst';
-import { fourE2, STONE_PREVIEWS, trieurE2 } from '../render/px/artStone';
+import { furnaceE2, STONE_PREVIEWS, sorterE2 } from '../render/px/artStone';
 import { placeholderItem, placeholderSprite, type DepositType } from '../render/px/placeholders';
 import { drawBuilderFrame, lensForColor, PLAYER_COLORS } from '../render/px/builderArt';
 import { idlePose } from '../render/px/builderMotion';
@@ -131,8 +131,8 @@ const ERAS = section('Bâtiments Bois et Pierre');
 for (const [label, footprint, up, draw] of [
   ['Tour · Bois', 72, 16, towerE1],
   ['Tour · Pierre', 72, 30, towerE2],
-  ['Puits · Bois', 72, 10, puitsE1],
-  ['Puits · Pierre', 72, 42, puitsE2],
+  ['Puits · Bois', 72, 10, shaftE1],
+  ['Puits · Pierre', 72, 42, shaftE2],
   ['Charbonnière · Bois', 48, 2, kilnE1],
   ['Charbonnière · Pierre', 48, 4, kilnE2],
   ['Stockage · Bois', 48, 2, storeE1],
@@ -144,14 +144,14 @@ for (const [label, footprint, up, draw] of [
 
 const TEMOINS = section('Témoins');
 for (const [label, footprint, up, draw] of [
-  ['Scierie · Bois', 48, 18, scierieE1],
-  ['Scierie · Pierre', 48, 22, scierieE2],
-  ['Brûleur · Bois', 48, 10, bruleurE1],
-  ['Brûleur · Pierre', 48, 40, bruleurE2],
-  ['Répartiteur · Bois', 24, 6, aiguillageE1],
-  ['Répartiteur · Pierre', 24, 6, aiguillageE2],
-  ['Four · Pierre', 48, 44, fourE2],
-  ['Trieur · Pierre', 24, 8, trieurE2],
+  ['Scierie · Bois', 48, 18, sawmillE1],
+  ['Scierie · Pierre', 48, 22, sawmillE2],
+  ['Brûleur · Bois', 48, 10, burnerE1],
+  ['Brûleur · Pierre', 48, 40, burnerE2],
+  ['Répartiteur · Bois', 24, 6, splitterE1],
+  ['Répartiteur · Pierre', 24, 6, splitterE2],
+  ['Four · Pierre', 48, 44, furnaceE2],
+  ['Trieur · Pierre', 24, 8, sorterE2],
   ['Piège · Pierre', 48, STONE_PREVIEWS.piege.up, STONE_PREVIEWS.piege.draw],
   ['Argilière · Pierre', 48, STONE_PREVIEWS.argiliere.up, STONE_PREVIEWS.argiliere.draw],
   ['Tannerie · Pierre', 48, STONE_PREVIEWS.tannerie.up, STONE_PREVIEWS.tannerie.draw],

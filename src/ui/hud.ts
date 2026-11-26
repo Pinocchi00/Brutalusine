@@ -7,7 +7,6 @@ import {
 } from '../sim/data';
 import { STORE_CAP, type Game } from '../sim/game';
 import { Status, STATUS_TEXT, type Ent } from '../sim/ent';
-import { buildingIcon } from '../render/sprites';
 import { hudIconUrl } from '../render/px/hudIcons';
 import './px/top.css';
 import './px/bottom.css';
@@ -60,7 +59,6 @@ export function recipeWords(r: Recipe): string {
 export class Hud {
   selected: Ent | null = null;
   cat: Category = 'extraction';
-  private readonly pixel = document.documentElement.dataset.rendu === 'pixel';
   private stepsOpen = false;
   private codexHistory: string[] = [];
   private seenUnlock = 0;
@@ -203,7 +201,6 @@ export class Hud {
       const go = now && (s.t === 'build' || s.t === 'gather') && s.go ? `<button class="go" data-go="${s.go}">Y aller</button>` : '';
       return `<li class="${done ? 'done' : now ? 'now' : ''}"><span>${esc(s.text)}</span>${go}</li>`;
     }).join('');
-    if (!this.pixel) return `<ul class="steps">${rows}</ul>`;
     const index = q.steps.findIndex((s) => !this.host.stepDone(s));
     const toggle = `<button class="steps-toggle" data-steps-toggle="1" aria-expanded="${this.stepsOpen}">${stepsToggleLabel(index, total)}</button>`;
     return `${toggle}<ul class="steps${this.stepsOpen ? ' open' : ''}">${rows}</ul>`;
@@ -216,9 +213,7 @@ export class Hud {
     const use = p.capacity > 0 ? Math.min(1, p.lastDemand / p.capacity) : 0;
     const time = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     const title = 'Un jour dure 10 minutes. Les Héliostats ne produisent que le jour.';
-    const dial = this.pixel
-      ? `<div class="chip dial" title="${title}">${sunDialSvg(s.t)}<b>${time}</b><span class="sr">${s.day ? 'jour' : 'nuit'}</span></div>`
-      : `<div class="chip" title="${title}"><b>${time}</b>${s.day ? 'jour' : 'nuit'}</div>`;
+    const dial = `<div class="chip dial" title="${title}">${sunDialSvg(s.t)}<b>${time}</b><span class="sr">${s.day ? 'jour' : 'nuit'}</span></div>`;
     $('topbar').innerHTML = `
       ${dial}
       <div class="chip ${low ? 'bad' : ''}" title="Énergie : ce que l’usine demande / ce que tu peux fournir. Si la demande dépasse, tout ralentit.">Énergie <b>${Math.round(p.lastDemand)}</b> / ${Math.round(p.capacity)} W<span class="meter"><i style="width:${Math.round(use * 100)}%"></i></span>${low ? `<b>${Math.round(p.sat * 100)} %</b>` : ''}</div>`;
@@ -284,31 +279,22 @@ export class Hud {
     const list = BUILDINGS.filter((b) => b.cat === this.cat && g.unlocked(b));
     const toolDef = tool && tool !== 'demolir' && tool !== 'marteau' ? B[tool] ?? null : null;
     const price = toolDef ? costOf(toolDef, g.versionFor(toolDef)) : [];
-    const pays = this.pixel && toolDef ? price.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
+    const pays = toolDef ? price.map(([id, n]) => (g.stock[id] >= n ? 1 : 0)).join('') : '';
     const key = [this.cat, tool, g.era, cats.length, list.map((b) => b.key + (g.affordable(b) ? 1 : 0) + g.versionFor(b)).join(), [...this.fresh].join(), pays, price.map(([id, n]) => `${id}:${n}`).join()].join('|');
     if (key === this.barKey) return;
     this.barKey = key;
     $('cats').innerHTML = cats.map((c) => `<button class="${c.key === this.cat ? 'on' : ''} ${BUILDINGS.some((b) => b.cat === c.key && this.fresh.has(b.key)) ? 'fresh' : ''}" data-cat="${c.key}">${c.name}</button>`).join('');
-    if (this.pixel) {
-      const cost = price.length ? ` · ${price.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
-      const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
-      const tools = list.map((b, i) => {
-        return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
-        <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${hudIconUrl(b.key)}" alt="" width="64" height="56"><span class="nm">${esc(b.name)}</span>
-        ${this.toolTipbox(b, g)}</button>`;
-      }).join('');
-      const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
-      const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
-      const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><img src="${hudIconUrl('marteau')}" alt="" width="64" height="56"><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
-      $('tools').innerHTML = hint + tools + hands + demolish + hammer;
-      return;
-    }
-    const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M14 44 30 28" stroke="#ff8a3c" stroke-width="6" stroke-linecap="square"/><path d="M30 16 42 28 34 36 22 24Z" fill="#ff8a3c"/></svg><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
-    $('tools').innerHTML = list.map((b, i) => {
+    const cost = price.length ? ` · ${price.map(([id, n]) => `<span class="${g.stock[id] < n ? 'lack' : ''}">${n} ${esc(ITEMS[id].name)}</span>`).join(' · ')}` : '';
+    const hint = `<p class="hint">${toolHint(tool, toolDef)}${cost}</p>`;
+    const tools = list.map((b, i) => {
       return `<button class="tool ${tool === b.key ? 'on' : ''} ${g.affordable(b) ? '' : 'poor'} ${this.fresh.has(b.key) ? 'fresh' : ''}" data-tool="${b.key}">
-        <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${buildingIcon(b.key)}" alt=""><span class="nm">${esc(b.name)}</span>
-        ${this.toolTipbox(b, g)}</button>`;
-    }).join('') + `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><path d="M17 17 41 41M41 17 17 41" stroke="#ff6a5a" stroke-width="6" stroke-linecap="square"/></svg><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>` + hammer;
+      <kbd>${i < 9 ? i + 1 : ''}</kbd><img src="${hudIconUrl(b.key)}" alt="" width="64" height="56"><span class="nm">${esc(b.name)}</span>
+      ${this.toolTipbox(b, g)}</button>`;
+    }).join('');
+    const hands = `<button class="tool hands ${tool === null ? 'on' : ''}" data-hands="1"><kbd></kbd><img src="${hudIconUrl('poings')}" alt="" width="64" height="56"><span class="nm">Poings</span><span class="tipbox"><b>Poings</b><span>Mains libres : déracine, pioche, ramasse. Clic droit lâche aussi l’outil.</span></span></button>`;
+    const demolish = `<button class="tool demolish ${tool === 'demolir' ? 'on' : ''}" data-tool="demolir"><kbd>X</kbd><img src="${hudIconUrl('demolir')}" alt="" width="64" height="56"><span class="nm">Démolir</span><span class="tipbox"><b>Démolir</b><span>Clique ou glisse sur ce que tu veux retirer. Tout est remboursé.</span></span></button>`;
+    const hammer = g.era >= 2 ? `<button class="tool hammer ${tool === 'marteau' ? 'on' : ''}" data-tool="marteau"><kbd>M</kbd><img src="${hudIconUrl('marteau')}" alt="" width="64" height="56"><span class="nm">Marteau</span><span class="tipbox"><b>Marteau</b><span>Clique un bâtiment ou glisse sur des dalles : il est refait dans la matière de l’ère. L’ancienne matière revient à la Tour.</span></span></button>` : '';
+    $('tools').innerHTML = hint + tools + hands + demolish + hammer;
   }
 
   /** Bâtiments de la catégorie affichée, dans l'ordre des touches 1 à 9. */
@@ -412,9 +398,8 @@ export class Hud {
     // on ne montre que ce qui a été découvert : pas de divulgâchage
     const seen = (id: number) => g.stock[id] > 0 || g.made[id] === 1 || RECIPES.some((r) => g.quota >= r.unlock && (r.inputs.some(([x]) => x === id) || r.outputs.some(([x]) => x === id)));
     const items = ITEMS.filter((it) => seen(it.id) && match(it.name)).map((it) => `<button data-codex="i:${it.id}">${itemIcon(it)} ${esc(it.name)}</button>`);
-    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) => this.pixel
-      ? `<button data-codex="b:${b.key}"><img src="${hudIconUrl(b.key)}" alt="" width="32" height="28"> ${esc(b.name)}</button>`
-      : `<button data-codex="b:${b.key}"><img src="${buildingIcon(b.key)}" alt="" width="24" height="24"> ${esc(b.name)}</button>`);
+    const builds = BUILDINGS.filter((b) => g.unlocked(b) && match(b.name)).map((b) =>
+      `<button data-codex="b:${b.key}"><img src="${hudIconUrl(b.key)}" alt="" width="32" height="28"> ${esc(b.name)}</button>`);
     const recs = RECIPES.filter((r) => g.quota >= r.unlock && match(r.name)).map((r) => `<button data-codex="r:${r.key}">${esc(r.name)}</button>`);
     $('codex-list').innerHTML = `<div class="eyebrow">Objets</div>${items.join('')}<div class="eyebrow">Bâtiments</div>${builds.join('')}<div class="eyebrow">Recettes</div>${recs.join('')}`;
   }
@@ -441,9 +426,7 @@ export class Hud {
     } else if (type === 'b') {
       const b = B[id];
       const recs = b.recipes.filter(known);
-      const icon = this.pixel
-        ? `<img src="${hudIconUrl(b.key)}" alt="" width="64" height="56">`
-        : `<img src="${buildingIcon(b.key)}" alt="" width="52" height="52">`;
+      const icon = `<img src="${hudIconUrl(b.key)}" alt="" width="64" height="56">`;
       const price = costOf(b, g.versionFor(b));
       const versions: string[] = [];
       for (let v = b.era; v <= MAX_VERSION; v++) versions.push(`${ERAS[v - 1].name} : ${costText(costOf(b, v))}`);
