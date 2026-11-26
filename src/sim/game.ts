@@ -265,7 +265,6 @@ export class Game {
     if (def.kind === 'miner' && !ore) { res.reason = deadOre ? 'Ce gisement ne s’exploite pas encore' : 'À poser sur un gisement (rochers colorés)'; return res; }
     if (def.kind === 'clay' && !bank) { res.reason = 'À poser sur la berge (la terre humide au bord de l’eau)'; return res; }
     if (def.kind === 'hydro' && !shore) { res.reason = 'À poser au bord de l’eau'; return res; }
-    if (needsCore(def) && this.stock[I.noyau] < 1) { res.reason = 'Plus de noyau : fouille une épave'; return res; }
     if (!free) {
       if (!this.unlocked(def)) { res.reason = 'Pas encore débloqué'; return res; }
       if (!this.anyVersionPayable(def)) {
@@ -274,6 +273,7 @@ export class Game {
         }
       }
     }
+    if (needsCore(def) && this.stock[I.noyau] < 1) { res.reason = 'Plus de noyau : fouille une épave'; return res; }
     res.ok = true;
     return res;
   }
@@ -551,7 +551,7 @@ export class Game {
         return false;
       }
       default:
-        if (e.def.grease && type === I.graisse && dir !== ((e.rot + 2) & 3)) {
+        if (e.def.grease && e.era >= 2 && type === I.graisse && dir !== ((e.rot + 2) & 3)) {
           if (!e.buf || e.buf[I.graisse] >= GREASE_BUF) return false;
           e.buf[I.graisse]++;
           return true;
@@ -567,7 +567,7 @@ export class Game {
       case 'splitter': return dir === e.rot;
       case 'machine': return e.recipe !== null;
       case 'sawmill': case 'miner': case 'clay':
-        return e.def.grease && dir !== ((e.rot + 2) & 3);
+        return e.def.grease && e.era >= 2 && dir !== ((e.rot + 2) & 3);
       default: return false;
     }
   }
@@ -766,8 +766,7 @@ export class Game {
     const res = due
       ? this.fauna.attract(this.world, e.x, e.y, e.w, e.h)
       : this.fauna.reachability(this.world, e.x, e.y, e.w, e.h);
-    const waiting = e.progress > 0 && e.progress < TRAP_TICKS;
-    if (waiting || res.reachable > 0) e.status = Status.Working;
+    if (res.reachable > 0) e.status = Status.Working;
     else if (res.noPath > 0) e.status = Status.NoPath;
     else e.status = Status.NoBeast;
     if (e.progress < TRAP_TICKS) e.progress = Math.min(TRAP_TICKS, e.progress + ERA_SPEED[e.era - 1]);

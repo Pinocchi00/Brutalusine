@@ -30,6 +30,9 @@ const GRAZE_MIN = 3 * 60;
 const GRAZE_MAX = 8 * 60;
 const TARGET_RADIUS = 3;
 const DRIFT_RADIUS = 6;
+const BAIT_MARGIN = 3;
+const CROWD_DIST = 0.9;
+const CROWD_TRIES = 8;
 const RNG_SALT = 701;
 
 /** L'état d'une bête, en marche ou en train de brouter. */
@@ -356,7 +359,7 @@ export class Fauna {
       b.timer--;
       if (b.timer > 0) return;
       const z = this.zones[b.zone];
-      const t = z ? this.nearTile(world, z.ax, z.ay, TARGET_RADIUS) : null;
+      const t = z ? this.grazeTile(world, z, b) : null;
       if (!t) {
         b.timer = this.grazeTicks();
         return;
@@ -418,6 +421,37 @@ export class Fauna {
     return null;
   }
 
+  /**
+   * Une case de broutage autour de l'ancre, en évitant les autres bêtes et leurs cibles.
+   * Quelques tirages par le générateur de la faune ; à défaut, on garde le dernier tirage.
+   */
+  private grazeTile(world: World, z: Zone, self: Beast): Tile | null {
+    let last: Tile | null = null;
+    for (let i = 0; i < CROWD_TRIES; i++) {
+      const dx = this.rng.int(-TARGET_RADIUS, TARGET_RADIUS);
+      const dy = this.rng.int(-TARGET_RADIUS, TARGET_RADIUS);
+      if (dx * dx + dy * dy > TARGET_RADIUS * TARGET_RADIUS) continue;
+      const x = z.ax + dx;
+      const y = z.ay + dy;
+      if (!passable(world, x, y)) continue;
+      last = { x, y };
+      if (this.crowded(z, self, x + 0.5, y + 0.5)) continue;
+      return last;
+    }
+    return last ?? this.nearTile(world, z.ax, z.ay, TARGET_RADIUS);
+  }
+
+  /** Cette case est-elle trop près d'une autre bête de la zone ou de sa cible ? */
+  private crowded(z: Zone, self: Beast, x: number, y: number): boolean {
+    const zi = zoneIndex(z.cx, z.cy);
+    for (const o of this.beasts) {
+      if (o === self || o.zone !== zi) continue;
+      if (Math.hypot(o.x - x, o.y - y) < CROWD_DIST) return true;
+      if (Math.hypot(o.tx - x, o.ty - y) < CROWD_DIST) return true;
+    }
+    return false;
+  }
+
   /** Une case praticable à `radius` cases au plus d'un point, ou null. */
   private nearTile(world: World, ax: number, ay: number, radius: number): Tile | null {
     for (let i = 0; i < 40; i++) {
@@ -455,19 +489,22 @@ export class Fauna {
   }
 
   /**
-   * Déplace l'ancre de quelques cases, sans sortir de sa zone. Si un Piège est à 12 cases au plus,
-   * le troupeau suit l'appât : la nouvelle ancre se pose à 4 cases au plus du Piège.
+   * Déplace l'ancre de quelques cases, sans sortir de sa zone. Un Piège proche de la zone attire le
+   * troupeau : la nouvelle ancre se pose à 4 cases au plus de lui, mais toujours dans la zone.
    */
   private moveAnchor(world: World, z: Zone, traps: readonly TrapBait[]): void {
+    const x0 = z.cx * CHUNK;
+    const y0 = z.cy * CHUNK;
     let bait: TrapBait | null = null;
     let best = 12;
     for (const t of traps) {
-      const d = Math.hypot(t.x + t.w / 2 - (z.ax + 0.5), t.y + t.h / 2 - (z.ay + 0.5));
+      const tx = t.x + t.w / 2;
+      const ty = t.y + t.h / 2;
+      if (rectDistance(tx, ty, x0, y0, CHUNK, CHUNK) > BAIT_MARGIN) continue;
+      const d = Math.hypot(tx - (z.ax + 0.5), ty - (z.ay + 0.5));
       if (d <= best) { best = d; bait = t; }
     }
     if (bait && this.anchorNearTrap(world, z, bait)) return;
-    const x0 = z.cx * CHUNK;
-    const y0 = z.cy * CHUNK;
     const x1 = x0 + CHUNK - 1;
     const y1 = y0 + CHUNK - 1;
     const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
@@ -499,13 +536,17 @@ export class Fauna {
     }
   }
 
-  /** Pose l'ancre à 4 cases au plus du centre d'un Piège, sur une case praticable. */
+  /** Pose l'ancre à 4 cases au plus du centre d'un Piège, sur une case praticable de sa zone. */
   private anchorNearTrap(world: World, z: Zone, t: TrapBait): boolean {
     const cx = Math.floor(t.x + t.w / 2), cy = Math.floor(t.y + t.h / 2);
+    const x0 = z.cx * CHUNK, y0 = z.cy * CHUNK;
+    const x1 = x0 + CHUNK - 1, y1 = y0 + CHUNK - 1;
+    const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
     for (let i = 0; i < 40; i++) {
       const dx = this.rng.int(-4, 4);
       const dy = this.rng.int(-4, 4);
       if (dx * dx + dy * dy > 16) continue;
+      if (!inside(cx + dx, cy + dy)) continue;
       if (passable(world, cx + dx, cy + dy)) {
         z.ax = cx + dx;
         z.ay = cy + dy;
@@ -515,6 +556,7 @@ export class Fauna {
     for (let dy = -4; dy <= 4; dy++) {
       for (let dx = -4; dx <= 4; dx++) {
         if (dx * dx + dy * dy > 16) continue;
+        if (!inside(cx + dx, cy + dy)) continue;
         if (passable(world, cx + dx, cy + dy)) {
           z.ax = cx + dx;
           z.ay = cy + dy;
