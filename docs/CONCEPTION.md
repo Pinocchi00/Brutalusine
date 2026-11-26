@@ -35,15 +35,16 @@ convoyeur — et l'usine finit par tourner toute seule.
 | Bois | 20 bois | un flux : arbre, Scierie, tapis, Tour |
 | Bois | 40 charbons | transformer : une machine prend une matière, en sort une autre |
 | Bois | 60 pierres — la Tour passe en pierre | extraire un gisement |
-| Pierre | 30 cuirs | chasser, puis trier (la chasse arrive à l'étape suivante) |
+| Pierre | 30 cuirs | chasser, puis trier |
 | Pierre | 60 argiles | prendre sur la berge |
 | Pierre | 100 briques — la Tour passe en brique | deux entrées dans le Four |
 
 ## Les bâtiments de la démo
 
 - **Logistique** : Convoyeur, Dalle, Stockage, Répartiteur, Trieur
-- **Extraction** : Scierie, Puits, Argilière
+- **Extraction** : Scierie, Puits, Piège, Argilière
 - **Fonte** : Charbonnière, Four (ils chauffent au charbon, sans courant)
+- **Fabrication** : Tannerie
 - **Énergie** : Brûleur, Roue à eau
 
 Chaque bâtiment a une version par ère. Les 31 bâtiments prévus et leur allure ère par ère : `docs/ERES.md`.
