@@ -144,6 +144,7 @@ describe('les dalles d’ère', () => {
     const lips: Record<Era, number[]> = {
       1: [pack(C.e1), pack(C.e2), pack(C.e3)],
       2: [pack(C.st1), pack(C.st2), pack(C.st3)],
+      3: [pack(C.st1), pack(C.st2), pack(C.st3)],
     };
     for (const era of [1, 2] as const) {
       const edge = paintRange(slabSource(onlyTile, era), 2, 2, 3, 4);

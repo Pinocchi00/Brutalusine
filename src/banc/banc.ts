@@ -11,7 +11,7 @@ import { finish, fromRows, outline, rim } from '../render/px/finish';
 import { box, chev, courses, crate, cyl, logEnds, moss } from '../render/px/volumes';
 import { build, castShadow, type Light } from '../render/px/sprite';
 import { drawLights } from '../render/px/lights';
-import { towerE1, towerE2 } from '../render/px/artTower';
+import { towerE1, towerE2, towerE3 } from '../render/px/artTower';
 import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../render/px/artWorks';
 import { beltTile, beltTileImage, pathPos, type PathTile } from '../render/px/belts';
 import { drawBuilderFrame } from '../render/px/builderArt';
@@ -659,6 +659,26 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  // --- la Tour de brique : la maquette ne l'expose pas dans ERA_ARTS, on la relit donc
+  // par les primitives de référence du portage (mêmes dessins, même finition d'un côté à l'autre).
+  CASES.push({
+    kind: 'pixels',
+    name: 'ère · towerE3 · image',
+    w: 74,
+    h: 74 + 72,
+    draw: (api, ctx) => ctx.drawImage(api.build(72, 72, 72, towerE3).img, 0, 0),
+    reference: (ref, ctx) => ctx.drawImage(ref.api.build(72, 72, 72, towerE3).img, 0, 0),
+  });
+  CASES.push({
+    kind: 'values',
+    name: 'ère · towerE3 · lumières',
+    compare: (refApi, port) =>
+      compareLightLists(
+        refApi.build(72, 72, 72, towerE3).lights,
+        port.build(72, 72, 72, towerE3).lights,
+      ),
+  });
 
   // --- le bâtisseur --------------------------------------------------------------------
   const BUILDER_X = 16;

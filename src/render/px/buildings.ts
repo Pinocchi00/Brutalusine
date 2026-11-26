@@ -7,7 +7,7 @@ import { BUILDINGS } from '../../sim/data';
 import type { Pen } from './pen';
 import { build, type Light, type Sprite } from './sprite';
 import { placeholderSprite } from './placeholders';
-import { towerE1, towerE2 } from './artTower';
+import { towerE1, towerE2, towerE3 } from './artTower';
 import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from './artWorks';
 import {
   splitterE1,
@@ -17,7 +17,7 @@ import {
   sawmillE1,
   sawmillE2,
 } from './artFirst';
-import { furnaceE2, sorterE2 } from './artStone';
+import { clayPitE2, furnaceE2, sorterE2, tanneryE2, trapE2, waterWheelE2 } from './artStone';
 import { eraFor, type Era } from './eras';
 
 /** Un dessin d'ère : sa hauteur au-dessus de l'emprise et sa fonction. */
@@ -30,10 +30,11 @@ export interface EraArt {
 const EXTINGUISHABLE = new Set(['bruleur', 'four', 'charbonniere']);
 
 /** Les dessins de la maquette, Bois puis Pierre, par clé de bâtiment. */
-const ARTS: Record<string, readonly [EraArt, EraArt]> = {
+const ARTS: Record<string, readonly EraArt[]> = {
   tour: [
     { up: 16, draw: towerE1 },
     { up: 30, draw: towerE2 },
+    { up: 72, draw: towerE3 },
   ],
   puits: [
     { up: 10, draw: (P, U, L) => shaftE1(P, U, L, false, true) },
@@ -67,10 +68,26 @@ const ARTS: Record<string, readonly [EraArt, EraArt]> = {
     { up: 8, draw: sorterE2 },
     { up: 8, draw: sorterE2 },
   ],
+  piege: [
+    { up: 16, draw: trapE2 },
+    { up: 16, draw: trapE2 },
+  ],
+  tannerie: [
+    { up: 20, draw: tanneryE2 },
+    { up: 20, draw: tanneryE2 },
+  ],
+  argiliere: [
+    { up: 24, draw: clayPitE2 },
+    { up: 24, draw: clayPitE2 },
+  ],
+  roue: [
+    { up: 26, draw: waterWheelE2 },
+    { up: 26, draw: waterWheelE2 },
+  ],
 };
 
-/** Les deux dessins d'un bâtiment, Bois puis Pierre, ou `null` s'il n'en a pas encore. */
-export function eraArts(key: string): readonly [EraArt, EraArt] | null {
+/** Les dessins d'un bâtiment, ère après ère, ou `null` s'il n'en a pas encore. */
+export function eraArts(key: string): readonly EraArt[] | null {
   return ARTS[key] ?? null;
 }
 
@@ -81,7 +98,7 @@ const sprites = new Map<string, Sprite>();
 export function buildingSprite(def: BuildingDef, w: number, h: number, era: Era, lit = true): Sprite | null {
   const arts = eraArts(def.key);
   if (!arts || w !== def.w || h !== def.h) return placeholderSprite(def, w, h);
-  const version = eraFor(era, 1);
+  const version = Math.min(eraFor(era, 1), arts.length);
   const off = !lit && EXTINGUISHABLE.has(def.key);
   const key = `${def.key}#${version}${off ? '#off' : ''}`;
   const cached = sprites.get(key);
@@ -95,7 +112,7 @@ export function buildingSprite(def: BuildingDef, w: number, h: number, era: Era,
 /** Le dessin complet d'un bâtiment pour son ombre et son aperçu : le Puits y garde sa corde et son seau. */
 export function buildingSilhouette(def: BuildingDef, w: number, h: number, era: Era): Sprite | null {
   if (def.key !== 'puits' || w !== def.w || h !== def.h) return buildingSprite(def, w, h, era);
-  const version = eraFor(era, 1);
+  const version = Math.min(eraFor(era, 1), 2);
   const key = `puits#${version}#silhouette`;
   const cached = sprites.get(key);
   if (cached) return cached;
@@ -117,6 +134,10 @@ export function prepareBuildings(): void {
     for (const era of [1, 2] as const) {
       buildingSprite(def, def.w, def.h, era);
       buildingSprite(def, def.w, def.h, era, false);
+    }
+    if (def.key === 'tour') {
+      buildingSprite(def, def.w, def.h, 3);
+      buildingSprite(def, def.w, def.h, 3, false);
     }
   }
 }

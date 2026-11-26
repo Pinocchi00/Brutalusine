@@ -5,7 +5,7 @@
 import { BUILDINGS, DEPOSITS, ITEMS } from '../sim/data';
 import { C } from '../render/px/palette';
 import { build, castShadow, type Sprite } from '../render/px/sprite';
-import { towerE1, towerE2 } from '../render/px/artTower';
+import { towerE1, towerE2, towerE3 } from '../render/px/artTower';
 import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../render/px/artWorks';
 import {
   splitterE1,
@@ -15,7 +15,7 @@ import {
   sawmillE1,
   sawmillE2,
 } from '../render/px/artFirst';
-import { furnaceE2, STONE_PREVIEWS, sorterE2 } from '../render/px/artStone';
+import { clayPitE2, furnaceE2, sorterE2, tanneryE2, trapE2, waterWheelE2 } from '../render/px/artStone';
 import { placeholderItem, placeholderSprite, type DepositType } from '../render/px/placeholders';
 import { drawBuilderFrame, lensForColor, PLAYER_COLORS } from '../render/px/builderArt';
 import { idlePose } from '../render/px/builderMotion';
@@ -131,6 +131,7 @@ const ERAS = section('Bâtiments Bois et Pierre');
 for (const [label, footprint, up, draw] of [
   ['Tour · Bois', 72, 16, towerE1],
   ['Tour · Pierre', 72, 30, towerE2],
+  ['Tour · Brique', 72, 72, towerE3],
   ['Puits · Bois', 72, 10, shaftE1],
   ['Puits · Pierre', 72, 42, shaftE2],
   ['Charbonnière · Bois', 48, 2, kilnE1],
@@ -152,10 +153,10 @@ for (const [label, footprint, up, draw] of [
   ['Répartiteur · Pierre', 24, 6, splitterE2],
   ['Four · Pierre', 48, 44, furnaceE2],
   ['Trieur · Pierre', 24, 8, sorterE2],
-  ['Piège · Pierre', 48, STONE_PREVIEWS.piege.up, STONE_PREVIEWS.piege.draw],
-  ['Argilière · Pierre', 48, STONE_PREVIEWS.argiliere.up, STONE_PREVIEWS.argiliere.draw],
-  ['Tannerie · Pierre', 48, STONE_PREVIEWS.tannerie.up, STONE_PREVIEWS.tannerie.draw],
-  ['Roue à eau · Pierre', 48, STONE_PREVIEWS.roue.up, STONE_PREVIEWS.roue.draw],
+  ['Piège · Pierre', 48, 16, trapE2],
+  ['Argilière · Pierre', 48, 24, clayPitE2],
+  ['Tannerie · Pierre', 48, 20, tanneryE2],
+  ['Roue à eau · Pierre', 48, 26, waterWheelE2],
 ] as const) {
   const sprite = build(footprint, footprint, up, draw);
   if (figure(TEMOINS, label, spriteTile(sprite))) count++;

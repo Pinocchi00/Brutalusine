@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../src/sim/data';
 import { HUD_ICON_KEYS, hudIconKey, type HudIconKey } from '../src/render/px/hudIcons';
 
-/** Les onze bâtiments qui ont leur propre dessin. */
+/** Les quinze bâtiments qui ont leur propre dessin. */
 const DRAWN: Readonly<Record<string, HudIconKey>> = {
   convoyeur: 'belt',
   puits: 'puits',
@@ -19,6 +19,10 @@ const DRAWN: Readonly<Record<string, HudIconKey>> = {
   four: 'furnace',
   bruleur: 'burner',
   tour: 'tower',
+  piege: 'trap',
+  tannerie: 'tannery',
+  argiliere: 'clayPit',
+  roue: 'waterWheel',
 };
 
 describe('icônes du HUD', () => {
@@ -28,7 +32,7 @@ describe('icônes du HUD', () => {
     }
   });
 
-  it('réserve un dessin propre aux onze bâtiments dessinés', () => {
+  it('réserve un dessin propre aux quinze bâtiments dessinés', () => {
     for (const [key, icon] of Object.entries(DRAWN)) {
       expect(BUILDINGS.some((def) => def.key === key)).toBe(true);
       expect(hudIconKey(key)).toBe(icon);
@@ -37,10 +41,9 @@ describe('icônes du HUD', () => {
     expect(drawnKeys.map((def) => def.key).sort()).toEqual(Object.keys(DRAWN).sort());
   });
 
-  it('renvoie neutral pour les bâtiments sans dessin propre', () => {
+  it('ne laisse plus aucun bâtiment sans dessin propre', () => {
     const neutralKeys = BUILDINGS.filter((def) => hudIconKey(def.key) === 'neutral');
-    expect(neutralKeys).toHaveLength(4);
-    for (const def of neutralKeys) expect(hudIconKey(def.key)).toBe('neutral');
+    expect(neutralKeys).toHaveLength(0);
   });
 
   it('traite les outils et les clés inconnues', () => {
@@ -51,8 +54,8 @@ describe('icônes du HUD', () => {
     expect(hudIconKey('')).toBe('neutral');
   });
 
-  it('liste quinze clés sans doublon', () => {
-    expect(HUD_ICON_KEYS).toHaveLength(15);
-    expect(new Set(HUD_ICON_KEYS).size).toBe(15);
+  it('liste dix-neuf clés sans doublon', () => {
+    expect(HUD_ICON_KEYS).toHaveLength(19);
+    expect(new Set(HUD_ICON_KEYS).size).toBe(19);
   });
 });

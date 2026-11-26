@@ -21,7 +21,8 @@ export type Light =
   | (LightBase & { k: 'win'; w: number; h: number; per?: number }) // une fenêtre éclairée qui vacille
   | (LightBase & { k: 'blink'; per?: number; c?: string; off?: string }) // un feu de signalisation
   | (LightBase & { k: 'fire'; w?: number }) // des flammes basses
-  | (LightBase & { k: 'ember'; w?: number; h?: number }); // des braises qui rougeoient
+  | (LightBase & { k: 'ember'; w?: number; h?: number }) // des braises qui rougeoient
+  | (LightBase & { k: 'glow'; r?: number; per?: number }); // une lueur de noyau, lente
 
 /** Un bâtiment dessiné : son image finie, son ombre, sa hauteur et ses lumières. */
 export interface Sprite {

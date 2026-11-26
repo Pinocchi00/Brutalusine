@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { eraFor, forcedEra, versionEra } from '../src/render/px/eras';
 import { eraArts } from '../src/render/px/buildings';
-import { towerE1, towerE2 } from '../src/render/px/artTower';
+import { towerE1, towerE2, towerE3 } from '../src/render/px/artTower';
 import { kilnE1, kilnE2, shaftE1, shaftE2, storeE1, storeE2 } from '../src/render/px/artWorks';
 import {
   splitterE1,
@@ -20,7 +20,6 @@ import {
   furnaceE2,
   trapE2,
   waterWheelE2,
-  STONE_PREVIEWS,
   tanneryE2,
   sorterE2,
 } from '../src/render/px/artStone';
@@ -67,26 +66,27 @@ describe('forcedEra', () => {
     expect(forcedEra('')).toBeNull();
   });
 
-  it('lit les deux ères et ignore les autres paramètres', () => {
+  it('lit les trois ères et ignore les autres paramètres', () => {
     expect(forcedEra('?ere=1')).toBe(1);
     expect(forcedEra('?ere=2')).toBe(2);
+    expect(forcedEra('?ere=3')).toBe(3);
     expect(forcedEra('?graine=7&ere=2')).toBe(2);
   });
 
   it('ne force rien pour une valeur invalide', () => {
-    expect(forcedEra('?ere=3')).toBeNull();
+    expect(forcedEra('?ere=4')).toBeNull();
     expect(forcedEra('?ere=abc')).toBeNull();
     expect(forcedEra('?ere=2.5')).toBeNull();
   });
 });
 
 describe('versionEra', () => {
-  it('dessine la Pierre au-delà de la première version', () => {
+  it('dessine la Pierre puis la Brique au-delà des premières versions', () => {
     expect(versionEra(0)).toBe(1);
     expect(versionEra(1)).toBe(1);
     expect(versionEra(2)).toBe(2);
-    expect(versionEra(3)).toBe(2);
-    expect(versionEra(8)).toBe(2);
+    expect(versionEra(3)).toBe(3);
+    expect(versionEra(8)).toBe(3);
   });
 });
 
@@ -96,12 +96,15 @@ describe('eraFor', () => {
     expect(eraFor(1, 2)).toBe(2);
     expect(eraFor(2, 1)).toBe(2);
     expect(eraFor(2, 2)).toBe(2);
+    expect(eraFor(3, 1)).toBe(3);
+    expect(eraFor(3, 2)).toBe(3);
+    expect(eraFor(1, 3)).toBe(3);
   });
 });
 
 describe('eraArts', () => {
   it('donne les hauteurs de la maquette', () => {
-    expect(eraArts('tour')?.map((art) => art.up)).toEqual([16, 30]);
+    expect(eraArts('tour')?.map((art) => art.up)).toEqual([16, 30, 72]);
     expect(eraArts('puits')?.map((art) => art.up)).toEqual([10, 42]);
     expect(eraArts('charbonniere')?.map((art) => art.up)).toEqual([2, 4]);
     expect(eraArts('entrepot')?.map((art) => art.up)).toEqual([2, 20]);
@@ -110,6 +113,10 @@ describe('eraArts', () => {
     expect(eraArts('aiguillage')?.map((art) => art.up)).toEqual([6, 6]);
     expect(eraArts('four')?.map((art) => art.up)).toEqual([44, 44]);
     expect(eraArts('trieur')?.map((art) => art.up)).toEqual([8, 8]);
+    expect(eraArts('piege')?.map((art) => art.up)).toEqual([16, 16]);
+    expect(eraArts('argiliere')?.map((art) => art.up)).toEqual([24, 24]);
+    expect(eraArts('tannerie')?.map((art) => art.up)).toEqual([20, 20]);
+    expect(eraArts('roue')?.map((art) => art.up)).toEqual([26, 26]);
   });
 
   it('renvoie null pour un bâtiment sans dessin', () => {
@@ -117,17 +124,10 @@ describe('eraArts', () => {
   });
 });
 
-describe('STONE_PREVIEWS', () => {
-  it('donne les hauteurs des quatre bâtiments à venir', () => {
-    expect(STONE_PREVIEWS.piege.up).toBe(16);
-    expect(STONE_PREVIEWS.argiliere.up).toBe(24);
-    expect(STONE_PREVIEWS.tannerie.up).toBe(20);
-    expect(STONE_PREVIEWS.roue.up).toBe(26);
-  });
-
-  it('ne les inscrit pas encore dans eraArts', () => {
+describe('les bâtiments de Pierre dessinés', () => {
+  it('inscrit le Piège, l’Argilière, la Tannerie et la Roue dans eraArts', () => {
     for (const key of ['piege', 'argiliere', 'tannerie', 'roue']) {
-      expect(eraArts(key)).toBeNull();
+      expect(eraArts(key)).not.toBeNull();
     }
   });
 });
@@ -139,6 +139,10 @@ describe('les lumières des dessins', () => {
 
   it('allume la Tour Pierre d’un œil puis du brasero', () => {
     expect(lightKinds(towerE2)).toEqual(['lens', 'fire']);
+  });
+
+  it('garde l’œil de la capsule dans la Tour de brique et éclaire deux fenêtres', () => {
+    expect(lightKinds(towerE3)).toEqual(['lens', 'win', 'win']);
   });
 
   it('pose une lanterne sur chaque Puits', () => {

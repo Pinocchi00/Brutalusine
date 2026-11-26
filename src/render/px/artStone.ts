@@ -431,11 +431,3 @@ export function waterWheelE2(P: Pen, U: number, L: Light[]): void {
   moss(P, 2, U + 36, 8, 8, 183, 6);
   moss(P, 39, U + 36, 8, 8, 184, 6);
 }
-
-/** Les dessins de Pierre que la simulation ne connaît pas encore, pour la planche du banc. */
-export const STONE_PREVIEWS = {
-  piege: { up: 16, draw: trapE2 },
-  argiliere: { up: 24, draw: clayPitE2 },
-  tannerie: { up: 20, draw: tanneryE2 },
-  roue: { up: 26, draw: waterWheelE2 },
-} as const;
