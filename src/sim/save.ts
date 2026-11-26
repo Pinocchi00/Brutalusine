@@ -2,17 +2,22 @@
 
 import { B, R, type Dir } from './data';
 import { Game } from './game';
+import type { Beast, Zone } from './fauna';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface SaveData {
-  v: 4; seed: number; tick: number; nextId: number;
+  v: 5; seed: number; tick: number; nextId: number;
   stock: Float64Array; delivered: Float64Array;
   quota: number; quotaStart: number; gathered: number;
   made: Uint8Array; wind: number;
   records: Game['records'];
   chunks: { cx: number; cy: number; canopy: Uint8Array; deposit: Uint8Array; amount: Uint16Array; slab: Uint8Array; loot: Uint8Array; cap: Uint8Array }[];
   ents: EntSave[];
+  beasts: Beast[];
+  zones: Zone[];
+  faunaRng: number;
+  beastNextId: number;
   extra?: unknown;
 }
 
@@ -64,7 +69,12 @@ export function serialize(g: Game, extra?: unknown): SaveData {
     quota: g.quota, quotaStart: g.quotaStart, gathered: g.gathered,
     made: g.made.slice(), wind: g.wind, records: g.records.slice(),
     chunks: g.world.list.map((c) => ({ cx: c.cx, cy: c.cy, canopy: c.canopy.slice(), deposit: c.deposit.slice(), amount: c.amount.slice(), slab: c.slab.slice(), loot: c.loot.slice(), cap: c.cap.slice() })),
-    ents, extra,
+    ents,
+    beasts: g.fauna.beasts.map((b) => ({ ...b })),
+    zones: g.fauna.zones.map((z) => ({ ...z })),
+    faunaRng: g.fauna.rng.state,
+    beastNextId: g.fauna.nextId,
+    extra,
   };
 }
 
@@ -95,6 +105,10 @@ export function deserialize(d: SaveData): Game {
   g.stock.set(d.stock); g.delivered.set(d.delivered);
   g.quota = d.quota; g.quotaStart = d.quotaStart; g.gathered = d.gathered;
   g.made.set(d.made); g.wind = d.wind; g.records = d.records.slice();
+  g.fauna.beasts = d.beasts.map((b) => ({ ...b }));
+  g.fauna.zones = d.zones.map((z) => ({ ...z }));
+  g.fauna.rng.state = d.faunaRng;
+  g.fauna.nextId = d.beastNextId;
   g.loading = false;
   g.topoDirty = true;
   g.refresh();          // les objets en transit retrouvent leur convoyeur dès le chargement

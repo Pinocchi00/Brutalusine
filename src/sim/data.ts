@@ -31,9 +31,12 @@ export const ITEMS: ItemDef[] = [
   item('bois', 'Bois', '#B9824A', 'boule', 'Un arbre abattu. Bâtit l’ère du Bois, se cuit en charbon, se brûle.'),
   item('pierre', 'Pierre', '#9C978E', 'bloc', 'De la roche taillée. Bâtit l’ère de la Pierre.'),
   item('carbone', 'Charbon', '#34343C', 'bloc', 'Du bois cuit sans flamme. Chauffe les fours et le Brûleur.'),
+  item('peau', 'Peau', '#B08A64', 'plaque', 'Prise sur une bête. Tannée, elle donne le cuir.'),
+  item('graisse', 'Graisse', '#E8D9A8', 'boule', 'Prise sur une bête. Graisse les rouages des machines.'),
+  item('os', 'Os', '#E9E2D0', 'bloc', 'Pris sur une bête. Calciné, il donnera la chaux.'),
+  item('cuir', 'Cuir', '#8A5A36', 'plaque', 'Une peau tannée. La bande des tapis de l’ère de la Pierre.'),
   item('argile', 'Argile', '#B5714A', 'boule', 'La terre grasse des berges. Cuite, elle donne la brique.'),
   item('brique', 'Brique', '#A4503A', 'bloc', 'De l’argile cuite au four.'),
-  item('cuir', 'Cuir', '#8A5A36', 'plaque', 'Une peau tannée. La bande des tapis de l’ère de la Pierre.'),
 ];
 ITEMS.forEach((it, i) => { it.id = i; });
 export const NITEMS = ITEMS.length;
